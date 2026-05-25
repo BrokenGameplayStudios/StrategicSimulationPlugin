@@ -70,3 +70,51 @@ void UResearchManagerSubsystem::OnDayPassed(int32 NewDay)
         }
     }
 }
+
+bool UResearchManagerSubsystem::IsResearchInProgress(EFactionType Faction, UResearchTechDefinition* Tech) const
+{
+    if (!Tech) return false;
+
+    const TArray<UActiveResearchProject*>& Queue = (Faction == EFactionType::Human) ? HumanResearchQueue : EnemyResearchQueue;
+    for (UActiveResearchProject* Proj : Queue)
+    {
+        if (Proj && Proj->ResearchDefinition == Tech && !Proj->bIsCompleted)
+            return true;
+    }
+    return false;
+}
+
+bool UResearchManagerSubsystem::HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const
+{
+    if (!Tech) return false;
+
+    const TArray<UActiveResearchProject*>& Queue = (Faction == EFactionType::Human) ? HumanResearchQueue : EnemyResearchQueue;
+    for (UActiveResearchProject* Proj : Queue)
+    {
+        if (Proj && Proj->ResearchDefinition == Tech && Proj->bIsCompleted)
+            return true;
+    }
+    return false;
+}
+
+void UResearchManagerSubsystem::AdvanceDay(EFactionType Faction)
+{
+    TArray<UActiveResearchProject*>& Queue = (Faction == EFactionType::Human) ? HumanResearchQueue : EnemyResearchQueue;
+
+    for (UActiveResearchProject* Proj : Queue)
+    {
+        if (Proj && !Proj->bIsCompleted)
+        {
+            Proj->RemainingDays--;
+            UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] %s %s progress: %d days left"),
+                *UEnum::GetValueAsString(Faction), *Proj->ResearchDefinition->ProjectName.ToString(), Proj->RemainingDays);
+
+            if (Proj->RemainingDays <= 0)
+            {
+                Proj->bIsCompleted = true;
+                UE_LOG(LogTemp, Display, TEXT("[RESEARCH] ✅ %s completed research: %s"),
+                    *UEnum::GetValueAsString(Faction), *Proj->ResearchDefinition->ProjectName.ToString());
+            }
+        }
+    }
+}

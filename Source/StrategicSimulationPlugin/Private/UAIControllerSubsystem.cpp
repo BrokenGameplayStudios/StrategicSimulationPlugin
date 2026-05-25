@@ -37,24 +37,30 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 {
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 
-    // 1. Always advance facility construction first
+    // 1. Advance facility construction
     if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
     {
         BaseMgr->AdvanceFacilityConstruction(Faction);
     }
 
-    // 2. Build order priority (data-driven from FacilityDatabase)
+    // 2. Advance research progress every day
+    if (UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>())
+    {
+        ResearchMgr->AdvanceDay(Faction);
+    }
+
+    // 3. Build facilities
     if (TryBuildFacility(Faction, EFacilityType::LivingQuarters)) return;
     if (TryBuildFacility(Faction, EFacilityType::Workshop)) return;
     if (TryBuildFacility(Faction, EFacilityType::Laboratory)) return;
 
-    // 3. TODO: Research (next phase)
-    // TryResearch(Faction);
+    // 4. Research
+    if (TryResearch(Faction)) return;
 
-    // 4. Recruit
+    // 5. Recruit
     TryRecruit(Faction);
 
-    // 5. Buy/equip gear (now tries multiple items per day)
+    // 6. Buy unlocked gear
     TryBuyAndEquip(Faction);
 }
 
@@ -211,6 +217,41 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s recruited a new soldier"), *UEnum::GetValueAsString(Faction));
         return true;
+    }
+    return false;
+}
+
+bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
+{
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+
+    if (!Campaign || !ResearchMgr || !ResourceMgr) return false;
+
+    UResearchDatabase* ResearchDB = Campaign->ResearchDatabaseAsset.Get();
+    if (!ResearchDB || ResearchDB->AvailableTechs.Num() == 0) return false;
+
+    for (const TSoftObjectPtr<UResearchTechDefinition>& SoftResearch : ResearchDB->AvailableTechs)
+    {
+        UResearchTechDefinition* ResearchDef = SoftResearch.Get();
+        if (!ResearchDef) continue;
+
+        // Skip if already in progress or completed
+        if (ResearchMgr->IsResearchInProgress(Faction, ResearchDef) || ResearchMgr->HasCompletedResearch(Faction, ResearchDef))
+            continue;
+
+        // Check cost
+        FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+        if (Res.Money >= ResearchDef->ResearchCost.Money)
+        {
+            if (ResearchMgr->StartResearch(Faction, ResearchDef))
+            {
+                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s started research: %s (%d days)"),
+                    *UEnum::GetValueAsString(Faction), *ResearchDef->ProjectName.ToString(), ResearchDef->ResearchDays);
+                return true;
+            }
+        }
     }
     return false;
 }

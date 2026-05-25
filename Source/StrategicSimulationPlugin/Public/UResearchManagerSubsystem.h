@@ -28,6 +28,19 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnResearchListChanged OnResearchListChanged;
+    
+    // Returns true if this research is currently active for the faction
+    UFUNCTION(BlueprintCallable, Category = "Research")
+    bool IsResearchInProgress(EFactionType Faction, UResearchTechDefinition* Tech) const;
+
+    // Returns true if this research has been completed
+    UFUNCTION(BlueprintCallable, Category = "Research")
+    bool HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const;
+
+    // Advance all active research for a faction (called every day by AI)
+    UFUNCTION(BlueprintCallable, Category = "Research")
+    void AdvanceDay(EFactionType Faction);
+
 
 private:
     // Two separate arrays (UHT-friendly)
