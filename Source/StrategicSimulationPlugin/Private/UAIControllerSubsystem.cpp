@@ -37,11 +37,17 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 {
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision"), *UEnum::GetValueAsString(Faction), CurrentDay);
 
-    // Priority 1: Build critical facilities (LivingQuarters first for recruitment)
-    if (TryBuildFacility(Faction, EFacilityType::LivingQuarters))
-        return;   // built something — end turn (remove 'return' if you want AI to do multiple actions per day)
+    // QUICK FIX: Always advance facility construction (reliable fallback since OnDayPassed binding is flaky)
+    if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+    {
+        BaseMgr->AdvanceFacilityConstruction(Faction);
+    }
 
-    // TODO Phase 22: Workshop, Laboratory, research, etc.
+    // Priority 1: Build critical facilities
+    if (TryBuildFacility(Faction, EFacilityType::LivingQuarters))
+        return;
+
+    // TODO Phase 22 (after databases): Workshop, Laboratory, research, etc.
 
     TryRecruit(Faction);
     TryBuyAndEquip(Faction);
