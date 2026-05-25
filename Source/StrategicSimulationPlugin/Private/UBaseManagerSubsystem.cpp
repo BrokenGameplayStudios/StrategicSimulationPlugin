@@ -101,3 +101,18 @@ void UBaseManagerSubsystem::OnDayPassed(int32 NewDay)
         }
     }
 }
+
+int32 UBaseManagerSubsystem::GetTotalBarracksCapacity(EFactionType Faction) const
+{
+    int32 Total = 0;
+    const TArray<UStrategyFacility*>& Facilities = (Faction == EFactionType::Human) ? HumanFacilities : EnemyFacilities;
+
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
+        {
+            Total += Fac->FacilityDefinition->Capacity;
+        }
+    }
+    return Total;
+}

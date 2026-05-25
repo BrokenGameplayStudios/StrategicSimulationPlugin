@@ -18,27 +18,31 @@ void AStrategyGameInitializer::BeginPlay()
         return;
     }
 
+    // === ITEM DATABASE (unchanged) ===
     if (ItemDatabaseAsset.IsValid())
     {
         Campaign->ItemDatabaseAsset = ItemDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: ItemDatabaseAsset successfully set to %s"), *ItemDatabaseAsset->GetName());
+        UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: ItemDatabaseAsset set"));
     }
     else if (!ItemDatabaseAsset.IsNull())
     {
-        // Force load if it's a valid soft reference but not yet loaded
         UItemDatabase* LoadedDB = ItemDatabaseAsset.LoadSynchronous();
         if (LoadedDB)
         {
             Campaign->ItemDatabaseAsset = ItemDatabaseAsset;
-            UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: ItemDatabaseAsset loaded synchronously and set"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("❌ GameInitializer: Failed to load ItemDatabaseAsset"));
+            UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: ItemDatabaseAsset loaded synchronously"));
         }
     }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("❌ GameInitializer: No ItemDatabaseAsset assigned in actor!"));
-    }
+
+    // === NEW: FACILITY DATABASE SETUP (data-driven) ===
+    if (BasicLivingQuartersAsset.IsValid()) Campaign->BasicLivingQuartersAsset = BasicLivingQuartersAsset;
+    if (BasicWorkshopAsset.IsValid())       Campaign->BasicWorkshopAsset = BasicWorkshopAsset;
+    if (BasicLaboratoryAsset.IsValid())     Campaign->BasicLaboratoryAsset = BasicLaboratoryAsset;
+    if (BasicMedicalBayAsset.IsValid())     Campaign->BasicMedicalBayAsset = BasicMedicalBayAsset;
+
+    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: Facility assets registered"));
+
+    // === START THE SIMULATION (AI now runs automatically every day) ===
+    Campaign->StartSimulation();
+    UE_LOG(LogTemp, Display, TEXT("🚀 Simulation STARTED — AI will act every day"));
 }

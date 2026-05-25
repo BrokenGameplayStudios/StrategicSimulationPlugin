@@ -1,5 +1,6 @@
 #include "USoldierManagerSubsystem.h"
 #include "UStrategyEventDispatcher.h"
+#include "UBaseManagerSubsystem.h"
 #include "Engine/Engine.h"
 
 void USoldierManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -19,6 +20,21 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
 {
     if (!ClassDef) return nullptr;
 
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (BaseMgr)
+    {
+        int32 CurrentCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
+        int32 CurrentSoldiers = GetRoster(Faction).Num();
+
+        if (CurrentSoldiers >= CurrentCapacity)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s barracks full (%d/%d) — cannot recruit"),
+                *UEnum::GetValueAsString(Faction), CurrentSoldiers, CurrentCapacity);
+            return nullptr;
+        }
+    }
+
+    // === REST OF ORIGINAL FUNCTION UNCHANGED ===
     UStrategySoldier* NewSoldier = NewObject<UStrategySoldier>();
     NewSoldier->SoldierName = FString::Printf(TEXT("%s %s"),
         Faction == EFactionType::Human ? TEXT("Sgt.") : TEXT("Overlord"),
@@ -27,7 +43,6 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
     NewSoldier->CurrentStats = ClassDef->BaseStats;
     NewSoldier->XP = ClassDef->StartingXP;
 
-    // Copy starting gear from the class definition
     for (const TSoftObjectPtr<UItemDefinition>& Gear : ClassDef->StartingGear)
     {
         if (UItemDefinition* Item = Gear.Get())

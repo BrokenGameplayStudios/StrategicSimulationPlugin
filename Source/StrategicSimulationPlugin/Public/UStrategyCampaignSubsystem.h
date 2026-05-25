@@ -12,6 +12,7 @@
 #include "UAIControllerSubsystem.h"
 #include "UItemDatabase.h"
 #include "UStrategyFacility.h"
+#include "UFacilityDefinition.h"
 #include "UStrategyCampaignSubsystem.generated.h"
 
 UCLASS()
@@ -54,6 +55,19 @@ public:
     // Configurable Item Database
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
     TSoftObjectPtr<UItemDatabase> ItemDatabaseAsset;
+
+    // Facility Definitions (populated by GameInitializer)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
+    TSoftObjectPtr<UFacilityDefinition> BasicLivingQuartersAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
+    TSoftObjectPtr<UFacilityDefinition> BasicWorkshopAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
+    TSoftObjectPtr<UFacilityDefinition> BasicLaboratoryAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
+    TSoftObjectPtr<UFacilityDefinition> BasicMedicalBayAsset;
 
     // Simulation control
     UFUNCTION(BlueprintCallable, Category = "Campaign")

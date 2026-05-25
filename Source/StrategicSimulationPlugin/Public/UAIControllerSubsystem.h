@@ -27,4 +27,5 @@ private:
 
     bool TryRecruit(EFactionType Faction);
     bool TryBuyAndEquip(EFactionType Faction);
+    bool TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild);
 };

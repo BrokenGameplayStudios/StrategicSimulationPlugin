@@ -37,6 +37,10 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnFacilityListChanged OnFacilityListChanged;
 
+    // Returns total barracks capacity across all operational facilities
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetTotalBarracksCapacity(EFactionType Faction) const;
+
 private:
     // Two separate arrays (UHT-friendly)
     UPROPERTY(VisibleAnywhere, Transient, Category = "Base")
