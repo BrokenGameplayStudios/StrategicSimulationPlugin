@@ -1,0 +1,50 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Subsystems/GameInstanceSubsystem.h"
+#include "StrategicSimulationTypes.h"
+#include "UStrategyFacility.h"
+#include "UFacilityDefinition.h"
+#include "UTimeManagerSubsystem.h"
+#include "UBaseManagerSubsystem.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFacilityListChanged, EFactionType, Faction);
+
+UCLASS()
+class STRATEGICSIMULATIONPLUGIN_API UBaseManagerSubsystem : public UGameInstanceSubsystem
+{
+    GENERATED_BODY()
+
+public:
+    virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+    // Build a new facility
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    UStrategyFacility* BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef);
+
+    // Get all facilities for a faction
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    TArray<UStrategyFacility*> GetFacilities(EFactionType Faction) const;
+
+    // Power grid stats
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetTotalPowerProvided(EFactionType Faction) const;
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetTotalPowerDrawn(EFactionType Faction) const;
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetNetPower(EFactionType Faction) const;   // positive = surplus
+
+    UPROPERTY(BlueprintAssignable, Category = "Events")
+    FOnFacilityListChanged OnFacilityListChanged;
+
+private:
+    // Two separate arrays (UHT-friendly)
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Base")
+    TArray<UStrategyFacility*> HumanFacilities;
+
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Base")
+    TArray<UStrategyFacility*> EnemyFacilities;
+
+    UFUNCTION()
+    void OnDayPassed(int32 NewDay);
+};
