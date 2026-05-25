@@ -49,6 +49,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     void AdvanceFacilityConstruction(EFactionType Faction);
 
+    // Public accessor so other subsystems can read built facilities
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;
+
 private:
     // Two separate arrays (UHT-friendly)
     UPROPERTY(VisibleAnywhere, Transient, Category = "Base")

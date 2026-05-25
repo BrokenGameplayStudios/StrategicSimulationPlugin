@@ -169,3 +169,8 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
         }
     }
 }
+
+const TArray<UStrategyFacility*>& UBaseManagerSubsystem::GetFacilities(EFactionType Faction) const
+{
+    return (Faction == EFactionType::Human) ? HumanFacilities : EnemyFacilities;
+}

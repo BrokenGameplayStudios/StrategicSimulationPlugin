@@ -124,3 +124,28 @@ void UStrategyCampaignSubsystem::Debug_RunAI()
         UE_LOG(LogTemp, Warning, TEXT("Debug_RunAI: AI subsystem not found"));
     }
 }
+
+bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefinition* ItemDef) const
+{
+    if (!ItemDef) return false;
+
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return false;
+
+    const TArray<UStrategyFacility*>& Facilities = BaseMgr->GetFacilities(Faction);
+
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
+        {
+            for (const TSoftObjectPtr<UItemDefinition>& UnlockedItem : Fac->FacilityDefinition->UnlocksItems)
+            {
+                if (UnlockedItem.Get() == ItemDef)
+                    return true;
+            }
+        }
+    }
+
+    // TODO: Add research check here later
+    return false;
+}

@@ -12,6 +12,7 @@
 #include "UAIControllerSubsystem.h"
 #include "UItemDatabase.h"
 #include "UFacilityDatabase.h"
+#include "UFacilityDefinition.h"
 #include "UResearchDatabase.h"
 #include "USoldierClassDatabase.h"
 #include "UStrategyCampaignSubsystem.generated.h"
@@ -79,6 +80,10 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Campaign")
     TArray<class UStrategySaveGame*> GetAllSaveMetadata() const;
+
+    // Returns true if the faction can use/purchase this item based on built facilities + completed research
+    UFUNCTION(BlueprintCallable, Category = "Unlocks")
+    bool IsItemUnlocked(EFactionType Faction, UItemDefinition* ItemDef) const;
 
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void Debug_RunAI();

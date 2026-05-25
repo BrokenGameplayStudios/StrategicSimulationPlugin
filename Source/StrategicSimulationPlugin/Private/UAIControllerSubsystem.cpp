@@ -35,21 +35,26 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
 
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision"), *UEnum::GetValueAsString(Faction), CurrentDay);
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 
-    // QUICK FIX: Always advance facility construction (reliable fallback since OnDayPassed binding is flaky)
+    // 1. Always advance facility construction first
     if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
     {
         BaseMgr->AdvanceFacilityConstruction(Faction);
     }
 
-    // Priority 1: Build critical facilities
-    if (TryBuildFacility(Faction, EFacilityType::LivingQuarters))
-        return;
+    // 2. Build order priority (data-driven from FacilityDatabase)
+    if (TryBuildFacility(Faction, EFacilityType::LivingQuarters)) return;
+    if (TryBuildFacility(Faction, EFacilityType::Workshop)) return;
+    if (TryBuildFacility(Faction, EFacilityType::Laboratory)) return;
 
-    // TODO Phase 22 (after databases): Workshop, Laboratory, research, etc.
+    // 3. TODO: Research (next phase)
+    // TryResearch(Faction);
 
+    // 4. Recruit
     TryRecruit(Faction);
+
+    // 5. Buy/equip gear (now tries multiple items per day)
     TryBuyAndEquip(Faction);
 }
 
@@ -66,41 +71,64 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
     const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(Faction);
     if (Roster.Num() == 0) return false;
 
-    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+    UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (spreading gear) ==="),
+        *UEnum::GetValueAsString(Faction));
 
-    // Find the soldier with the fewest items (spreads gear)
-    UStrategySoldier* TargetSoldier = nullptr;
-    int32 MinItems = INT_MAX;
-    for (UStrategySoldier* Soldier : Roster)
+    bool bBoughtAnything = false;
+    int32 PurchasesThisDay = 0;
+    const int32 MaxPurchasesPerDay = 3;
+
+    while (PurchasesThisDay < MaxPurchasesPerDay)
     {
-        if (Soldier && Soldier->CurrentLoadout.Num() < MinItems)
+        // Re-select poorest soldier every purchase
+        UStrategySoldier* TargetSoldier = nullptr;
+        int32 MinItems = INT_MAX;
+        for (UStrategySoldier* Soldier : Roster)
         {
-            MinItems = Soldier->CurrentLoadout.Num();
-            TargetSoldier = Soldier;
-        }
-    }
-    if (!TargetSoldier) return false;
-
-    UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s attempting to buy item (spreading to soldier with %d items) ==="),
-        *UEnum::GetValueAsString(Faction), TargetSoldier->CurrentLoadout.Num());
-
-    // Try to buy the first affordable item from the database
-    for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
-    {
-        UItemDefinition* ItemDef = SoftItem.Get();
-        if (!ItemDef) continue;
-
-        if (Res.Money >= ItemDef->PurchaseCost.Money)
-        {
-            if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
+            if (Soldier && Soldier->CurrentLoadout.Num() < MinItems)
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s bought and equipped %s on soldier with %d items"),
-                    *UEnum::GetValueAsString(Faction), *ItemDef->ItemName.ToString(), TargetSoldier->CurrentLoadout.Num());
-                return true;
+                MinItems = Soldier->CurrentLoadout.Num();
+                TargetSoldier = Soldier;
             }
         }
+        if (!TargetSoldier) break;
+
+        // Safety: stop over-equipping one soldier
+        if (MinItems >= 4) break;
+
+        FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+
+        bool bPurchasedThisLoop = false;
+
+        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
+        {
+            UItemDefinition* ItemDef = SoftItem.Get();
+            if (!ItemDef) continue;
+
+            // NEW: Respect unlocks!
+            if (!Campaign->IsItemUnlocked(Faction, ItemDef))
+            {
+                continue;
+            }
+
+            if (Res.Money >= ItemDef->PurchaseCost.Money)
+            {
+                if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Bought %s on soldier (now has %d items)"),
+                        *ItemDef->ItemName.ToString(), TargetSoldier->CurrentLoadout.Num());
+                    bPurchasedThisLoop = true;
+                    bBoughtAnything = true;
+                    PurchasesThisDay++;
+                    break;
+                }
+            }
+        }
+
+        if (!bPurchasedThisLoop) break;
     }
-    return false;
+
+    return bBoughtAnything;
 }
 
 void UAIControllerSubsystem::Debug_RunAI()

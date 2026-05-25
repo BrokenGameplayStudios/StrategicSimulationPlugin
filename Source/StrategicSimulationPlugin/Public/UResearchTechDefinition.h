@@ -2,9 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "StrategicSimulationTypes.h"
-#include "UStrategyTechDefinition.h"     // <-- Fixed: added this
-#include "UFacilityDefinition.h"         // <-- Fixed: added this
+#include "UItemDefinition.h"
 #include "UResearchTechDefinition.generated.h"
 
 UCLASS(BlueprintType)
@@ -13,18 +11,23 @@ class STRATEGICSIMULATIONPLUGIN_API UResearchTechDefinition : public UPrimaryDat
     GENERATED_BODY()
 
 public:
+    // OLD PROPERTIES (kept for compatibility)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Research")
     FText ProjectName;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Research")
-    FResourceStockpile ResearchCost;   // ResearchPoints mostly
+    FText Description;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Research")
-    int32 ResearchDays = 10;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cost")
+    FResourceStockpile ResearchCost;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progress")
+    int32 ResearchDays = 5;   // renamed from ResearchTimeDays for compatibility
+
+    // NEW: What this research unlocks
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
+    TArray<TSoftObjectPtr<UItemDefinition>> UnlocksItems;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
-    TSoftObjectPtr<UStrategyTechDefinition> UnlocksTech;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
-    TArray<TSoftObjectPtr<UFacilityDefinition>> UnlocksFacility;
+    TArray<TSoftObjectPtr<UFacilityDefinition>> UnlocksFacilities;
 };
