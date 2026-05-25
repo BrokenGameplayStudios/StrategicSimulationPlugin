@@ -3,11 +3,8 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "StrategicSimulationTypes.h"
+#include "UResearchTechDefinition.h"
 #include "UFacilityDefinition.generated.h"
-
-// Forward declarations to avoid circular includes
-class UResearchTechDefinition;
-class UItemDefinition;
 
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UFacilityDefinition : public UPrimaryDataAsset
@@ -35,9 +32,6 @@ public:
     // What this facility unlocks
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
     TArray<TSoftObjectPtr<UResearchTechDefinition>> UnlocksResearch;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
-    TArray<TSoftObjectPtr<UItemDefinition>> UnlocksItems;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Capacity")
     int32 Capacity = 0;

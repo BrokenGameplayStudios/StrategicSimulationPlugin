@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "UItemDefinition.h"
+#include "UStrategyTechDefinition.h"
 #include "UFacilityDefinition.h"
 #include "UResearchTechDefinition.generated.h"
 
@@ -12,7 +13,6 @@ class STRATEGICSIMULATIONPLUGIN_API UResearchTechDefinition : public UPrimaryDat
     GENERATED_BODY()
 
 public:
-    // OLD PROPERTIES (kept for compatibility)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Research")
     FText ProjectName;
 
@@ -23,12 +23,15 @@ public:
     FResourceStockpile ResearchCost;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progress")
-    int32 ResearchDays = 5;   // renamed from ResearchTimeDays for compatibility
+    int32 ResearchDays = 5;
 
-    // NEW: What this research unlocks
+    // Research unlocks the next layer (Tech)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
-    TArray<TSoftObjectPtr<UItemDefinition>> UnlocksItems;
+    TArray<TSoftObjectPtr<UStrategyTechDefinition>> UnlocksTech;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
     TArray<TSoftObjectPtr<UFacilityDefinition>> UnlocksFacilities;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
+    TArray<TSoftObjectPtr<UResearchTechDefinition>> UnlocksResearch;
 };

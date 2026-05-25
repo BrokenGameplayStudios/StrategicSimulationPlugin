@@ -80,7 +80,6 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
     while (PurchasesThisDay < MaxPurchasesPerDay)
     {
-        // Re-select poorest soldier every purchase
         UStrategySoldier* TargetSoldier = nullptr;
         int32 MinItems = INT_MAX;
         for (UStrategySoldier* Soldier : Roster)
@@ -93,7 +92,6 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
         }
         if (!TargetSoldier) break;
 
-        // Safety: stop over-equipping one soldier
         if (MinItems >= 4) break;
 
         FResourceStockpile Res = ResourceMgr->GetResources(Faction);
@@ -105,11 +103,8 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
             UItemDefinition* ItemDef = SoftItem.Get();
             if (!ItemDef) continue;
 
-            // NEW: Respect unlocks!
             if (!Campaign->IsItemUnlocked(Faction, ItemDef))
-            {
                 continue;
-            }
 
             if (Res.Money >= ItemDef->PurchaseCost.Money)
             {

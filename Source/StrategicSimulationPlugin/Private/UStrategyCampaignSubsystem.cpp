@@ -125,6 +125,16 @@ void UStrategyCampaignSubsystem::Debug_RunAI()
     }
 }
 
+bool UStrategyCampaignSubsystem::HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const
+{
+    if (!Tech) return false;
+
+    // TODO: Once we have a real research queue, check completed research here.
+    // For now we assume that if the facility that unlocks the research is built, the tech is available.
+    // This is the "Research unlocks Tech" step.
+    return true; // placeholder for Phase 22 research automation
+}
+
 bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefinition* ItemDef) const
 {
     if (!ItemDef) return false;
@@ -138,14 +148,24 @@ bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefin
     {
         if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
         {
-            for (const TSoftObjectPtr<UItemDefinition>& UnlockedItem : Fac->FacilityDefinition->UnlocksItems)
+            for (const TSoftObjectPtr<UResearchTechDefinition>& ResearchSoft : Fac->FacilityDefinition->UnlocksResearch)
             {
-                if (UnlockedItem.Get() == ItemDef)
-                    return true;
+                UResearchTechDefinition* Research = ResearchSoft.Get();
+                if (!Research) continue;
+
+                for (const TSoftObjectPtr<UStrategyTechDefinition>& TechSoft : Research->UnlocksTech)
+                {
+                    UStrategyTechDefinition* Tech = TechSoft.Get();
+                    if (!Tech) continue;
+
+                    for (const TSoftObjectPtr<UItemDefinition>& UnlockedItem : Tech->UnlocksItems)
+                    {
+                        if (UnlockedItem.Get() == ItemDef) return true;
+                    }
+                }
             }
         }
     }
 
-    // TODO: Add research check here later
     return false;
 }

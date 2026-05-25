@@ -81,7 +81,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Campaign")
     TArray<class UStrategySaveGame*> GetAllSaveMetadata() const;
 
-    // Returns true if the faction can use/purchase this item based on built facilities + completed research
+    // Returns true if the faction has completed this research/tech
+    UFUNCTION(BlueprintCallable, Category = "Unlocks")
+    bool HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const;
+
+    // Full unlock chain check: Facility → Research → Tech → Item
     UFUNCTION(BlueprintCallable, Category = "Unlocks")
     bool IsItemUnlocked(EFactionType Faction, UItemDefinition* ItemDef) const;
 

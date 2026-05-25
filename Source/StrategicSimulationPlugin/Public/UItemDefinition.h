@@ -13,10 +13,7 @@ class STRATEGICSIMULATIONPLUGIN_API UItemDefinition : public UPrimaryDataAsset
 
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
-    FText ItemName;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
-    TSoftObjectPtr<UStrategyTechDefinition> LinkedTech;   // Required tech to produce/buy this item
+    FText ItemName; 
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cost")
     FResourceStockpile PurchaseCost;
