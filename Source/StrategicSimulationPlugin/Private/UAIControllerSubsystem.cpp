@@ -80,6 +80,7 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
     while (PurchasesThisDay < MaxPurchasesPerDay)
     {
+        // Re-select the soldier with the fewest items every purchase
         UStrategySoldier* TargetSoldier = nullptr;
         int32 MinItems = INT_MAX;
         for (UStrategySoldier* Soldier : Roster)
@@ -92,7 +93,7 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
         }
         if (!TargetSoldier) break;
 
-        if (MinItems >= 4) break;
+        if (MinItems >= 4) break; // stop over-equipping one soldier
 
         FResourceStockpile Res = ResourceMgr->GetResources(Faction);
 
@@ -103,7 +104,12 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
             UItemDefinition* ItemDef = SoftItem.Get();
             if (!ItemDef) continue;
 
+            // FULL UNLOCK CHAIN CHECK
             if (!Campaign->IsItemUnlocked(Faction, ItemDef))
+                continue;
+
+            // NEW: Prevent buying duplicates on the same soldier
+            if (TargetSoldier->CurrentLoadout.Contains(ItemDef))
                 continue;
 
             if (Res.Money >= ItemDef->PurchaseCost.Money)
