@@ -45,6 +45,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     bool HasFacilityOfType(EFactionType Faction, EFacilityType FacilityType) const;
 
+    // Called every day to advance construction of all facilities (reliable fallback)
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    void AdvanceFacilityConstruction(EFactionType Faction);
+
 private:
     // Two separate arrays (UHT-friendly)
     UPROPERTY(VisibleAnywhere, Transient, Category = "Base")

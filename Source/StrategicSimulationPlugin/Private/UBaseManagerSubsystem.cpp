@@ -138,3 +138,34 @@ bool UBaseManagerSubsystem::HasFacilityOfType(EFactionType Faction, EFacilityTyp
     }
     return false;
 }
+
+void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
+{
+    TArray<UStrategyFacility*>& Facilities = (Faction == EFactionType::Human) ? HumanFacilities : EnemyFacilities;
+
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && !Fac->bIsOperational && Fac->FacilityDefinition)
+        {
+            int32 OldProgress = Fac->BuildProgressDays;
+            Fac->BuildProgressDays--;
+
+            UE_LOG(LogTemp, Display, TEXT("[BASE] %s %s progress: %d → %d days left"),
+                *UEnum::GetValueAsString(Faction),
+                *Fac->FacilityDefinition->FacilityName.ToString(),
+                OldProgress, Fac->BuildProgressDays);
+
+            if (Fac->BuildProgressDays <= 0)
+            {
+                Fac->bIsOperational = true;
+                if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                    EventDisp->OnFacilityCompleted.Broadcast(Faction, Fac);
+
+                UE_LOG(LogTemp, Display, TEXT("[BASE] ✅ %s facility COMPLETED: %s (Capacity now %d)"),
+                    *UEnum::GetValueAsString(Faction),
+                    *Fac->FacilityDefinition->FacilityName.ToString(),
+                    GetTotalBarracksCapacity(Faction));
+            }
+        }
+    }
+}

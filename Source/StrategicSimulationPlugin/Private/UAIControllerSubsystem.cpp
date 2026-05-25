@@ -23,6 +23,13 @@ void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("🔥 [AI] === ENEMY AI DECISION TRIGGERED — Real Day %d ==="), NewDay);
+
+    // NEW: Always advance ALL facility construction first (reliable)
+    if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+    {
+        BaseMgr->AdvanceFacilityConstruction(EFactionType::Enemy);
+    }
+
     RunAIForFaction(EFactionType::Enemy, NewDay);
 }
 
