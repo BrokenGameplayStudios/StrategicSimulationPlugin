@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "UItemDefinition.h"
-#include "StrategicSimulationTypes.h"
+#include "StrategicSimulationTypes.h" 
 #include "UStrategyTechDefinition.generated.h"
+
+// Forward declaration only — breaks the circular include with UItemDefinition
+class UItemDefinition;
 
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategyTechDefinition : public UPrimaryDataAsset
@@ -22,9 +24,9 @@ public:
     ETechTier Tier = ETechTier::Tier1;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    FText Description;    
+    FText Description;
 
-	// What this Tech unlocks
+    // Tech ONLY unlocks Items (this is the final layer of the chain)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
-    TArray<TSoftObjectPtr<UItemDefinition>> UnlocksItem;
+    TArray<TSoftObjectPtr<UItemDefinition>> UnlocksItems;
 };

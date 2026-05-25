@@ -2,10 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "UItemDefinition.h"
-#include "UStrategyTechDefinition.h"
-#include "UFacilityDefinition.h"
+#include "StrategicSimulationTypes.h"
 #include "UResearchTechDefinition.generated.h"
+
+// Forward declarations only — no full includes
+class UStrategyTechDefinition;
+class UFacilityDefinition;
+class UResearchTechDefinition;
 
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UResearchTechDefinition : public UPrimaryDataAsset
@@ -25,7 +28,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progress")
     int32 ResearchDays = 5;
 
-    // Research unlocks the next layer (Tech)
+    // Research unlocks the next layer
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
     TArray<TSoftObjectPtr<UStrategyTechDefinition>> UnlocksTech;
 

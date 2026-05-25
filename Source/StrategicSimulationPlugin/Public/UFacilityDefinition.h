@@ -3,8 +3,10 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "StrategicSimulationTypes.h"
-#include "UResearchTechDefinition.h"
 #include "UFacilityDefinition.generated.h"
+
+// Forward declaration only
+class UResearchTechDefinition;
 
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UFacilityDefinition : public UPrimaryDataAsset
@@ -29,7 +31,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Power")
     int32 PowerDraw = 0;
 
-    // What this facility unlocks
+    // Facility ONLY unlocks Research Projects (as you specified)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
     TArray<TSoftObjectPtr<UResearchTechDefinition>> UnlocksResearch;
 
