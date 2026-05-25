@@ -35,7 +35,7 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
     return NewFacility;
 }
 
-TArray<UStrategyFacility*> UBaseManagerSubsystem::GetFacilities(EFactionType Faction) const
+const TArray<UStrategyFacility*>& UBaseManagerSubsystem::GetFacilities(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? HumanFacilities : EnemyFacilities;
 }
@@ -168,9 +168,4 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
             }
         }
     }
-}
-
-const TArray<UStrategyFacility*>& UBaseManagerSubsystem::GetFacilities(EFactionType Faction) const
-{
-    return (Faction == EFactionType::Human) ? HumanFacilities : EnemyFacilities;
 }

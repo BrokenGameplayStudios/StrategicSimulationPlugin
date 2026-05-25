@@ -22,10 +22,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     UStrategyFacility* BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef);
 
-    // Get all facilities for a faction
-    UFUNCTION(BlueprintCallable, Category = "Base")
-    TArray<UStrategyFacility*> GetFacilities(EFactionType Faction) const;
-
     // Power grid stats
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalPowerProvided(EFactionType Faction) const;

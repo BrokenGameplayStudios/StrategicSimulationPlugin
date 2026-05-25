@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "UItemDefinition.h"
+#include "UFacilityDefinition.h"
 #include "UResearchTechDefinition.generated.h"
 
 UCLASS(BlueprintType)
