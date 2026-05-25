@@ -34,23 +34,26 @@ void AStrategyGameInitializer::BeginPlay()
         }
     }
 
-    // === NEW DATABASES (data-driven) ===
-    if (!FacilityDatabaseAsset.IsNull())
+    // === DATABASES (force-load everything to prevent "not set" warnings) ===
+    if (UFacilityDatabase* FacDB = FacilityDatabaseAsset.Get())
     {
-        FacilityDatabaseAsset.LoadSynchronous();
+        for (TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacDB->AvailableFacilities)
+            SoftDef.LoadSynchronous();
         Campaign->FacilityDatabaseAsset = FacilityDatabaseAsset;
     }
-    if (!SoldierClassDatabaseAsset.IsNull())
+    if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
     {
-        SoldierClassDatabaseAsset.LoadSynchronous();
+        for (TSoftObjectPtr<USoldierClassDefinition>& SoftClass : SoldierDB->AvailableSoldierClasses)
+            SoftClass.LoadSynchronous();
         Campaign->SoldierClassDatabaseAsset = SoldierClassDatabaseAsset;
     }
-    if (!ResearchDatabaseAsset.IsNull())
+    if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
     {
-        ResearchDatabaseAsset.LoadSynchronous();
+        for (TSoftObjectPtr<UResearchTechDefinition>& SoftTech : ResearchDB->AvailableTechs)
+            SoftTech.LoadSynchronous();
         Campaign->ResearchDatabaseAsset = ResearchDatabaseAsset;
     }
-    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases registered"));
+    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases registered and pre-loaded"));
 
     // === START THE SIMULATION (AI now runs automatically every day) ===
     Campaign->StartSimulation();

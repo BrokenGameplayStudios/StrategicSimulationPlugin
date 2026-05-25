@@ -56,36 +56,47 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    UEngineeringManagerSubsystem* EngineeringMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     UItemDatabase* ItemDB = Campaign ? Campaign->ItemDatabaseAsset.Get() : nullptr;
 
-    UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
-    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (!SoldierMgr || !EngineeringMgr || !ResourceMgr || !ItemDB) return false;
 
-    if (!EngMgr || !SoldierMgr || !ResourceMgr || !ItemDB)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] %s — Missing managers or ItemDatabase!"), *UEnum::GetValueAsString(Faction));
-        return false;
-    }
-
-    TArray<UStrategySoldier*> Roster = SoldierMgr->GetRoster(Faction);
+    const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(Faction);
     if (Roster.Num() == 0) return false;
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
 
+    // Find the soldier with the fewest items (spreads gear)
+    UStrategySoldier* TargetSoldier = nullptr;
+    int32 MinItems = INT_MAX;
+    for (UStrategySoldier* Soldier : Roster)
+    {
+        if (Soldier && Soldier->CurrentLoadout.Num() < MinItems)
+        {
+            MinItems = Soldier->CurrentLoadout.Num();
+            TargetSoldier = Soldier;
+        }
+    }
+    if (!TargetSoldier) return false;
+
+    UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s attempting to buy item (spreading to soldier with %d items) ==="),
+        *UEnum::GetValueAsString(Faction), TargetSoldier->CurrentLoadout.Num());
+
+    // Try to buy the first affordable item from the database
     for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
     {
-        if (UItemDefinition* Item = SoftItem.Get())
+        UItemDefinition* ItemDef = SoftItem.Get();
+        if (!ItemDef) continue;
+
+        if (Res.Money >= ItemDef->PurchaseCost.Money)
         {
-            if (Res.Money >= Item->PurchaseCost.Money)
+            if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
             {
-                UStrategySoldier* Soldier = Roster[0];
-                if (EngMgr->PurchaseItem(Faction, Item, Soldier))
-                {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] ✅ SUCCESS — %s bought and equipped %s on %s"),
-                        *UEnum::GetValueAsString(Faction), *Item->ItemName.ToString(), *Soldier->SoldierName);
-                    return true;
-                }
+                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s bought and equipped %s on soldier with %d items"),
+                    *UEnum::GetValueAsString(Faction), *ItemDef->ItemName.ToString(), TargetSoldier->CurrentLoadout.Num());
+                return true;
             }
         }
     }
