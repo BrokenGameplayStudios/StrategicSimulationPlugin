@@ -3,8 +3,8 @@
 #include "USoldierManagerSubsystem.h"
 #include "UEngineeringManagerSubsystem.h"
 #include "UItemDatabase.h"
+#include "USoldierClassDatabase.h"
 #include "UStrategyCampaignSubsystem.h"
-#include "USoldierClassDefinition.h"
 #include "Engine/Engine.h"
 
 void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -51,30 +51,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     TryRecruit(Faction);
     TryBuyAndEquip(Faction);
-}
-
-bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
-{
-    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-
-    if (!SoldierMgr || !ResourceMgr || !Campaign) return false;
-
-    USoldierClassDefinition* RookieClass = Campaign->BasicRookieClassAsset.Get();
-    if (!RookieClass)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] Missing BasicRookieClassAsset — assign in GameInitializer!"));
-        return false;
-    }
-
-    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-    if (Res.Money >= 500 && SoldierMgr->RecruitSoldier(Faction, RookieClass))
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s recruited a new soldier (cost 500 Money)"), *UEnum::GetValueAsString(Faction));
-        return true;
-    }
-    return false;
 }
 
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
@@ -130,32 +106,33 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
 
     if (!Campaign || !BaseMgr || !ResourceMgr) return false;
 
+    // Find the first facility in the database that matches the requested type
     UFacilityDefinition* FacilityDef = nullptr;
-    if (FacilityTypeToBuild == EFacilityType::LivingQuarters)
-        FacilityDef = Campaign->BasicLivingQuartersAsset.Get();
-    else if (FacilityTypeToBuild == EFacilityType::Workshop)
-        FacilityDef = Campaign->BasicWorkshopAsset.Get();
-    else if (FacilityTypeToBuild == EFacilityType::Laboratory)
-        FacilityDef = Campaign->BasicLaboratoryAsset.Get();
-    else if (FacilityTypeToBuild == EFacilityType::Special)
-        FacilityDef = Campaign->BasicMedicalBayAsset.Get();
-    else
-        return false;
+    if (UFacilityDatabase* DB = Campaign->FacilityDatabaseAsset.Get())
+    {
+        for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : DB->AvailableFacilities)
+        {
+            if (UFacilityDefinition* Def = SoftDef.Get())
+            {
+                if (Def->FacilityType == FacilityTypeToBuild)
+                {
+                    FacilityDef = Def;
+                    break;
+                }
+            }
+        }
+    }
 
     if (!FacilityDef)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] Missing FacilityDefinition for %s — assign in GameInitializer!"),
+        UE_LOG(LogTemp, Warning, TEXT("[AI] No facility of type %s in FacilityDatabase!"),
             *UEnum::GetValueAsString(FacilityTypeToBuild));
         return false;
     }
 
-    // FIXED: Stop building duplicates (building OR completed)
     if (BaseMgr->HasFacilityOfType(Faction, FacilityTypeToBuild))
-    {
         return false;
-    }
 
-    // Resource check
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < FacilityDef->BuildCost.Money) return false;
 
@@ -163,6 +140,36 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s started construction of %s (%d days)"),
             *UEnum::GetValueAsString(Faction), *FacilityDef->FacilityName.ToString(), FacilityDef->BuildTimeDays);
+        return true;
+    }
+    return false;
+}
+
+bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
+{
+    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+
+    if (!SoldierMgr || !ResourceMgr || !Campaign) return false;
+
+    USoldierClassDefinition* RookieClass = nullptr;
+    if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
+    {
+        if (DB->AvailableSoldierClasses.Num() > 0)
+            RookieClass = DB->AvailableSoldierClasses[0].Get();
+    }
+
+    if (!RookieClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AI] No soldier class in SoldierClassDatabase!"));
+        return false;
+    }
+
+    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+    if (Res.Money >= 500 && SoldierMgr->RecruitSoldier(Faction, RookieClass))
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s recruited a new soldier"), *UEnum::GetValueAsString(Faction));
         return true;
     }
     return false;

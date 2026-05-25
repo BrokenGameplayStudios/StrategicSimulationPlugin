@@ -3,8 +3,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "UItemDatabase.h"
-#include "UFacilityDefinition.h"
-#include "USoldierClassDefinition.h"
+#include "UFacilityDatabase.h"
+#include "USoldierClassDatabase.h"
+#include "UResearchDatabase.h"
 #include "AStrategyGameInitializer.generated.h"
 
 UCLASS()
@@ -17,24 +18,16 @@ public:
 
     virtual void BeginPlay() override;
 
-    // Drag your DA_ItemDatabase here in the level
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
+    // === DATABASES ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UItemDatabase> ItemDatabaseAsset;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<UFacilityDatabase> FacilityDatabaseAsset;
 
-    // === Facility Definitions (data-driven, same pattern as ItemDatabase) ===
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facilities")
-    TSoftObjectPtr<UFacilityDefinition> BasicLivingQuartersAsset;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<USoldierClassDatabase> SoldierClassDatabaseAsset;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facilities")
-    TSoftObjectPtr<UFacilityDefinition> BasicWorkshopAsset;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facilities")
-    TSoftObjectPtr<UFacilityDefinition> BasicLaboratoryAsset;
-
-    // Optional: MedicalBay can be added later if you want AI to build it
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facilities")
-    TSoftObjectPtr<UFacilityDefinition> BasicMedicalBayAsset;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facilities")
-    TSoftObjectPtr<USoldierClassDefinition> BasicRookieClassAsset;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<UResearchDatabase> ResearchDatabaseAsset;
 };

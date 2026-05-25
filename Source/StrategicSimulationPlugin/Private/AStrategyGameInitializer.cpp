@@ -34,36 +34,23 @@ void AStrategyGameInitializer::BeginPlay()
         }
     }
 
-    // === FACILITY ASSETS (synchronous load to prevent "not set" warnings) ===
-    if (!BasicLivingQuartersAsset.IsNull())
+    // === NEW DATABASES (data-driven) ===
+    if (!FacilityDatabaseAsset.IsNull())
     {
-        BasicLivingQuartersAsset.LoadSynchronous();
-        Campaign->BasicLivingQuartersAsset = BasicLivingQuartersAsset;
+        FacilityDatabaseAsset.LoadSynchronous();
+        Campaign->FacilityDatabaseAsset = FacilityDatabaseAsset;
     }
-    if (!BasicWorkshopAsset.IsNull())
+    if (!SoldierClassDatabaseAsset.IsNull())
     {
-        BasicWorkshopAsset.LoadSynchronous();
-        Campaign->BasicWorkshopAsset = BasicWorkshopAsset;
+        SoldierClassDatabaseAsset.LoadSynchronous();
+        Campaign->SoldierClassDatabaseAsset = SoldierClassDatabaseAsset;
     }
-    if (!BasicLaboratoryAsset.IsNull())
+    if (!ResearchDatabaseAsset.IsNull())
     {
-        BasicLaboratoryAsset.LoadSynchronous();
-        Campaign->BasicLaboratoryAsset = BasicLaboratoryAsset;
+        ResearchDatabaseAsset.LoadSynchronous();
+        Campaign->ResearchDatabaseAsset = ResearchDatabaseAsset;
     }
-    if (!BasicMedicalBayAsset.IsNull())
-    {
-        BasicMedicalBayAsset.LoadSynchronous();
-        Campaign->BasicMedicalBayAsset = BasicMedicalBayAsset;
-    }
-    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: Facility assets registered"));
-
-    // === ROOKIE SOLDIER CLASS ===
-    if (!BasicRookieClassAsset.IsNull())
-    {
-        BasicRookieClassAsset.LoadSynchronous();
-        Campaign->BasicRookieClassAsset = BasicRookieClassAsset;
-    }
-    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: Rookie soldier class registered"));
+    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases registered"));
 
     // === START THE SIMULATION (AI now runs automatically every day) ===
     Campaign->StartSimulation();

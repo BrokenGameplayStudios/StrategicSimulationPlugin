@@ -11,9 +11,9 @@
 #include "UResearchManagerSubsystem.h"
 #include "UAIControllerSubsystem.h"
 #include "UItemDatabase.h"
-#include "UStrategyFacility.h"
-#include "UFacilityDefinition.h"
-#include "USoldierClassDefinition.h"
+#include "UFacilityDatabase.h"
+#include "UResearchDatabase.h"
+#include "USoldierClassDatabase.h"
 #include "UStrategyCampaignSubsystem.generated.h"
 
 UCLASS()
@@ -57,22 +57,15 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
     TSoftObjectPtr<UItemDatabase> ItemDatabaseAsset;
 
-    // Facility Definitions (populated by GameInitializer)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
-    TSoftObjectPtr<UFacilityDefinition> BasicLivingQuartersAsset;
+    // === DATABASES (Phase 22 - fully data-driven) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<UFacilityDatabase> FacilityDatabaseAsset;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
-    TSoftObjectPtr<UFacilityDefinition> BasicWorkshopAsset;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<USoldierClassDatabase> SoldierClassDatabaseAsset;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
-    TSoftObjectPtr<UFacilityDefinition> BasicLaboratoryAsset;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
-    TSoftObjectPtr<UFacilityDefinition> BasicMedicalBayAsset;
-
-    // Soldier Class for AI recruitment (data-driven, same pattern as facilities)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
-    TSoftObjectPtr<USoldierClassDefinition> BasicRookieClassAsset;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<UResearchDatabase> ResearchDatabaseAsset;
 
     // Simulation control
     UFUNCTION(BlueprintCallable, Category = "Campaign")
