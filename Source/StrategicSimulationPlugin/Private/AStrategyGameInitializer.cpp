@@ -42,6 +42,9 @@ void AStrategyGameInitializer::BeginPlay()
 
     UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: Facility assets registered"));
 
+    if (BasicRookieClassAsset.IsValid()) Campaign->BasicRookieClassAsset = BasicRookieClassAsset;
+    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: Rookie soldier class registered"));
+
     // === START THE SIMULATION (AI now runs automatically every day) ===
     Campaign->StartSimulation();
     UE_LOG(LogTemp, Display, TEXT("🚀 Simulation STARTED — AI will act every day"));

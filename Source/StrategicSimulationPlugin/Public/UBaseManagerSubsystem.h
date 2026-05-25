@@ -32,7 +32,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalPowerDrawn(EFactionType Faction) const;
     UFUNCTION(BlueprintCallable, Category = "Base")
-    int32 GetNetPower(EFactionType Faction) const;   // positive = surplus
+    int32 GetNetPower(EFactionType Faction) const;   // positive = surplus 
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnFacilityListChanged OnFacilityListChanged;
@@ -40,6 +40,10 @@ public:
     // Returns total barracks capacity across all operational facilities
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalBarracksCapacity(EFactionType Faction) const;
+
+    // Returns true if the faction already has this facility type (building OR completed)
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    bool HasFacilityOfType(EFactionType Faction, EFacilityType FacilityType) const;
 
 private:
     // Two separate arrays (UHT-friendly)

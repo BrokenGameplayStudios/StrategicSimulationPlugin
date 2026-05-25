@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "UItemDatabase.h"
 #include "UFacilityDefinition.h"
+#include "USoldierClassDefinition.h"
 #include "AStrategyGameInitializer.generated.h"
 
 UCLASS()
@@ -33,4 +34,7 @@ public:
     // Optional: MedicalBay can be added later if you want AI to build it
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facilities")
     TSoftObjectPtr<UFacilityDefinition> BasicMedicalBayAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facilities")
+    TSoftObjectPtr<USoldierClassDefinition> BasicRookieClassAsset;
 };

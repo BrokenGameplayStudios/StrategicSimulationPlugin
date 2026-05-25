@@ -44,21 +44,22 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
 
-    if (!SoldierMgr || !ResourceMgr) return false;
+    if (!SoldierMgr || !ResourceMgr || !Campaign) return false;
+
+    USoldierClassDefinition* RookieClass = Campaign->BasicRookieClassAsset.Get();
+    if (!RookieClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AI] Missing BasicRookieClassAsset — assign in GameInitializer!"));
+        return false;
+    }
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-
-    if (Res.Money >= 500)
+    if (Res.Money >= 500 && SoldierMgr->RecruitSoldier(Faction, RookieClass))
     {
-        // Update this path if your Rookie asset has a different name
-        USoldierClassDefinition* RookieClass = LoadObject<USoldierClassDefinition>(nullptr, TEXT("/StrategicSimulationPlugin/Data/DA_Soldier_Rookie.DA_Soldier_Rookie_C"));
-
-        if (RookieClass && SoldierMgr->RecruitSoldier(Faction, RookieClass))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s recruited a new soldier (cost 500 Money)"), *UEnum::GetValueAsString(Faction));
-            return true;
-        }
+        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s recruited a new soldier (cost 500 Money)"), *UEnum::GetValueAsString(Faction));
+        return true;
     }
     return false;
 }
@@ -117,28 +118,29 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
     if (!Campaign || !BaseMgr || !ResourceMgr) return false;
 
     UFacilityDefinition* FacilityDef = nullptr;
-
     if (FacilityTypeToBuild == EFacilityType::LivingQuarters)
         FacilityDef = Campaign->BasicLivingQuartersAsset.Get();
     else if (FacilityTypeToBuild == EFacilityType::Workshop)
         FacilityDef = Campaign->BasicWorkshopAsset.Get();
     else if (FacilityTypeToBuild == EFacilityType::Laboratory)
         FacilityDef = Campaign->BasicLaboratoryAsset.Get();
-    else if (FacilityTypeToBuild == EFacilityType::Special) // MedicalBay example
+    else if (FacilityTypeToBuild == EFacilityType::Special)
         FacilityDef = Campaign->BasicMedicalBayAsset.Get();
     else
         return false;
 
     if (!FacilityDef)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] Missing FacilityDefinition for %s — assign it in GameInitializer!"),
+        UE_LOG(LogTemp, Warning, TEXT("[AI] Missing FacilityDefinition for %s — assign in GameInitializer!"),
             *UEnum::GetValueAsString(FacilityTypeToBuild));
         return false;
     }
 
-    // Simple guard: don't rebuild LivingQuarters if we already have capacity
-    if (FacilityTypeToBuild == EFacilityType::LivingQuarters && BaseMgr->GetTotalBarracksCapacity(Faction) > 0)
+    // FIXED: Stop building duplicates (building OR completed)
+    if (BaseMgr->HasFacilityOfType(Faction, FacilityTypeToBuild))
+    {
         return false;
+    }
 
     // Resource check
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
@@ -146,8 +148,8 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
 
     if (BaseMgr->BuildFacility(Faction, FacilityDef))
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s started construction of %s"),
-            *UEnum::GetValueAsString(Faction), *FacilityDef->FacilityName.ToString());
+        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s started construction of %s (%d days)"),
+            *UEnum::GetValueAsString(Faction), *FacilityDef->FacilityName.ToString(), FacilityDef->BuildTimeDays);
         return true;
     }
     return false;

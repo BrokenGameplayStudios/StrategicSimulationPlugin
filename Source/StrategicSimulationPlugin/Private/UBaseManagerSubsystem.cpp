@@ -71,32 +71,42 @@ int32 UBaseManagerSubsystem::GetNetPower(EFactionType Faction) const
 
 void UBaseManagerSubsystem::OnDayPassed(int32 NewDay)
 {
+    // Human facilities
     for (UStrategyFacility* Fac : HumanFacilities)
     {
-        if (Fac && !Fac->bIsOperational)
+        if (Fac && !Fac->bIsOperational && Fac->FacilityDefinition)
         {
+            int32 OldProgress = Fac->BuildProgressDays;
             Fac->BuildProgressDays--;
+            UE_LOG(LogTemp, Display, TEXT("[BASE] Human %s progress: %d → %d days left"),
+                *Fac->FacilityDefinition->FacilityName.ToString(), OldProgress, Fac->BuildProgressDays);
+
             if (Fac->BuildProgressDays <= 0)
             {
                 Fac->bIsOperational = true;
                 if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                     EventDisp->OnFacilityCompleted.Broadcast(EFactionType::Human, Fac);
-                UE_LOG(LogTemp, Display, TEXT("[BASE] Human facility completed: %s"), *Fac->FacilityDefinition->FacilityName.ToString());
+                UE_LOG(LogTemp, Display, TEXT("[BASE] ✅ Human facility COMPLETED: %s"), *Fac->FacilityDefinition->FacilityName.ToString());
             }
         }
     }
 
-    for (UStrategyFacility* Fac : EnemyFacilities)
+    // Enemy facilities
+    for (UStrategyFacility* Fac : EnemyFacilities)   
     {
-        if (Fac && !Fac->bIsOperational)
+        if (Fac && !Fac->bIsOperational && Fac->FacilityDefinition)
         {
+            int32 OldProgress = Fac->BuildProgressDays;
             Fac->BuildProgressDays--;
+            UE_LOG(LogTemp, Display, TEXT("[BASE] Enemy %s progress: %d → %d days left"),
+                *Fac->FacilityDefinition->FacilityName.ToString(), OldProgress, Fac->BuildProgressDays);
+
             if (Fac->BuildProgressDays <= 0)
             {
                 Fac->bIsOperational = true;
                 if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                     EventDisp->OnFacilityCompleted.Broadcast(EFactionType::Enemy, Fac);
-                UE_LOG(LogTemp, Display, TEXT("[BASE] Enemy facility completed: %s"), *Fac->FacilityDefinition->FacilityName.ToString());
+                UE_LOG(LogTemp, Display, TEXT("[BASE] ✅ Enemy facility COMPLETED: %s"), *Fac->FacilityDefinition->FacilityName.ToString());
             }
         }
     }
@@ -115,4 +125,16 @@ int32 UBaseManagerSubsystem::GetTotalBarracksCapacity(EFactionType Faction) cons
         }
     }
     return Total;
+}
+
+bool UBaseManagerSubsystem::HasFacilityOfType(EFactionType Faction, EFacilityType FacilityType) const
+{
+    const TArray<UStrategyFacility*>& Facilities = (Faction == EFactionType::Human) ? HumanFacilities : EnemyFacilities;
+
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityType)
+            return true;
+    }
+    return false;
 }

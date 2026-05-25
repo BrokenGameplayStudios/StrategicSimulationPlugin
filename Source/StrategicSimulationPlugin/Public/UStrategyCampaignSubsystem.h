@@ -13,6 +13,7 @@
 #include "UItemDatabase.h"
 #include "UStrategyFacility.h"
 #include "UFacilityDefinition.h"
+#include "USoldierClassDefinition.h"
 #include "UStrategyCampaignSubsystem.generated.h"
 
 UCLASS()
@@ -68,6 +69,10 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
     TSoftObjectPtr<UFacilityDefinition> BasicMedicalBayAsset;
+
+    // Soldier Class for AI recruitment (data-driven, same pattern as facilities)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
+    TSoftObjectPtr<USoldierClassDefinition> BasicRookieClassAsset;
 
     // Simulation control
     UFUNCTION(BlueprintCallable, Category = "Campaign")
