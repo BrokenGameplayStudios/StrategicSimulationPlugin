@@ -76,7 +76,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === EXPLICIT DAILY CONSTRUCTION PROGRESS ===
+    // === EXPLICIT DAILY CONSTRUCTION + INCOME PROGRESS (fixes stuck jobs and money) ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
 
     // === PHASE 4: BASE EXPANSION ===
@@ -96,7 +96,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DEVELOP EVERY BASE - STAGED BUILD ORDER ===
+    // === DEVELOP EVERY BASE IN PARALLEL (no early return) ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base) continue;
@@ -109,40 +109,58 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational)"), *Base->BaseName.ToString());
 
-        // 1. Ensure power
+        // 1. Power first
         if (!Base->HasFacilityOfType(EFacilityType::PowerPlant))
         {
-            if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base)) return;
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying PowerPlant in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
         }
 
-        // 2. ONE of each core facility first
+        // 2. Core facilities (one of each)
         if (!Base->HasFacilityOfType(EFacilityType::LivingQuarters))
-            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying LivingQuarters in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base);
+        }
 
         if (!Base->HasFacilityOfType(EFacilityType::Storage))
-            if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Storage in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::Storage, Base);
+        }
 
         if (!Base->HasFacilityOfType(EFacilityType::Workshop))
-            if (TryBuildFacility(Faction, EFacilityType::Workshop, Base)) return;
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Workshop in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::Workshop, Base);
+        }
 
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory))
-            if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base)) return;
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Laboratory in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
+        }
 
         if (!Base->HasFacilityOfType(EFacilityType::Hanger))
-            if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Hanger in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::Hanger, Base);
+        }
 
         // 3. Extras only after core is complete
         if (Base->GetTotalCapacityForType(EFacilityType::LivingQuarters) < 12)
         {
-            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra LivingQuarters in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base);
         }
 
-        // Extra Storage / Hangers for future transport capacity
-        if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
-        if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
+        // Extra storage and hangers for future transport
+        UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger in '%s'"), *Base->BaseName.ToString());
+        TryBuildFacility(Faction, EFacilityType::Storage, Base);
+        TryBuildFacility(Faction, EFacilityType::Hanger, Base);
     }
 
-    // === RECRUIT SOLDIERS ===
+    // === RECRUIT, RESEARCH, PURCHASE, PRODUCTION ===
     if (SoldierMgr)
     {
         USoldierClassDefinition* GruntClass = nullptr;
@@ -164,7 +182,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === RESEARCH, PURCHASE, PRODUCTION ===
     if (ResearchMgr && TryResearch(Faction)) return;
     if (TryBuyAndEquip(Faction)) return;
     if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) return;
