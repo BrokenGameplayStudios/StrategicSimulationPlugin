@@ -1,0 +1,54 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UObject/NoExportTypes.h"
+#include "StrategicSimulationTypes.h"
+#include "UStrategyFacility.h"
+#include "UFacilityDefinition.h"
+#include "UStrategyBase.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBaseFacilitiesChanged, UStrategyBase*, Base);
+
+UCLASS(BlueprintType)
+class STRATEGICSIMULATIONPLUGIN_API UStrategyBase : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Base")
+    FText BaseName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Base")
+    FVector2D MapLocation;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Facilities")
+    TArray<UStrategyFacility*> Facilities;
+
+    UPROPERTY(BlueprintAssignable, Category = "Events")
+    FOnBaseFacilitiesChanged OnFacilitiesChanged;
+
+    // === COMMAND & OPERATIONAL GATES (used by Research + Soldier) ===
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    bool HasOperationalCommandCenter() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    bool HasOperationalFacilityOfType(EFacilityType FacilityType) const;   // <-- THIS IS THE NEW ONE WE NEED
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetTotalProductionSlots() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetTotalCapacityForType(EFacilityType FacilityType) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    bool HasFacilityOfType(EFacilityType FacilityType) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetCountOfType(EFacilityType FacilityType) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    bool IsOperational() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    void AddFacility(UStrategyFacility* NewFacility);
+};

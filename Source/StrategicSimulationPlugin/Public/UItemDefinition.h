@@ -13,7 +13,11 @@ class STRATEGICSIMULATIONPLUGIN_API UItemDefinition : public UPrimaryDataAsset
 
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
-    FText ItemName; 
+    FText ItemName;
+
+    // NEW: This is what you asked for — will power better AI loadout logic later
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
+    ETechCategory ItemCategory = ETechCategory::Ballistic;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cost")
     FResourceStockpile PurchaseCost;

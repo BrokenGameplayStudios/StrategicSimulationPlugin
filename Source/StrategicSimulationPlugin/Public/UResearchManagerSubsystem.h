@@ -6,6 +6,7 @@
 #include "UActiveResearchProject.h"
 #include "UResearchTechDefinition.h"
 #include "UTimeManagerSubsystem.h"
+#include "UBaseManagerSubsystem.h"
 #include "UResearchManagerSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResearchListChanged, EFactionType, Faction);

@@ -33,7 +33,9 @@ enum class ETechCategory : uint8
     Energy,
     Bio,
     Gas,
-    Psychic
+    Psychic,
+	Medical,
+	Utility
 };
 
 // Tech tiers

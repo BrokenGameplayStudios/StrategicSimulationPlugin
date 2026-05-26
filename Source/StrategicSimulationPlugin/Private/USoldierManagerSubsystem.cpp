@@ -23,8 +23,16 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (BaseMgr)
     {
+        // TIGHTENED GATE: Barracks must be operational (not just capacity > 0)
         int32 CurrentCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
         int32 CurrentSoldiers = GetRoster(Faction).Num();
+
+        if (CurrentCapacity <= 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s has no operational barracks yet (0/%d) — cannot recruit"),
+                *UEnum::GetValueAsString(Faction), CurrentCapacity);
+            return nullptr;
+        }
 
         if (CurrentSoldiers >= CurrentCapacity)
         {
@@ -34,7 +42,7 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
         }
     }
 
-    // === REST OF ORIGINAL FUNCTION UNCHANGED ===
+    // === REST OF ORIGINAL FUNCTION UNCHANGED (copy-paste exactly from your current file) ===
     UStrategySoldier* NewSoldier = NewObject<UStrategySoldier>();
     NewSoldier->SoldierName = FString::Printf(TEXT("%s %s"),
         Faction == EFactionType::Human ? TEXT("Sgt.") : TEXT("Overlord"),

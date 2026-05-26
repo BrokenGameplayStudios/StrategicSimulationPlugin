@@ -18,6 +18,20 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
 {
     if (!ProjectDef) return nullptr;
 
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (BaseMgr)
+    {
+        // NEW GATE: Research Lab must be operational
+        if (!BaseMgr->HasFacilityOfType(Faction, EFacilityType::Laboratory) ||
+            !BaseMgr->GetBases(Faction).Num() ||
+            !BaseMgr->GetBases(Faction)[0]->HasOperationalFacilityOfType(EFacilityType::Laboratory))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — Research Lab must be operational first!"),
+                *ProjectDef->ProjectName.ToString());
+            return nullptr;
+        }
+    }
+
     UActiveResearchProject* NewProject = NewObject<UActiveResearchProject>();
     NewProject->ResearchDefinition = ProjectDef;
     NewProject->RemainingDays = ProjectDef->ResearchDays;

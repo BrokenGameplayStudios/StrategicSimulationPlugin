@@ -5,6 +5,7 @@
 #include "StrategicSimulationTypes.h"
 #include "UItemDefinition.h"
 #include "UTimeManagerSubsystem.h"
+#include "UBaseManagerSubsystem.h"
 #include "UAIControllerSubsystem.generated.h"
 
 UCLASS()
@@ -38,6 +39,6 @@ private:
 
     bool TryRecruit(EFactionType Faction);
     bool TryBuyAndEquip(EFactionType Faction);
-    bool TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild);
+    bool TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase = nullptr);
     bool TryResearch(EFactionType Faction);
 };

@@ -5,10 +5,12 @@
 #include "StrategicSimulationTypes.h"
 #include "UStrategyFacility.h"
 #include "UFacilityDefinition.h"
+#include "UStrategyBase.h"
 #include "UTimeManagerSubsystem.h"
 #include "UBaseManagerSubsystem.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFacilityListChanged, EFactionType, Faction);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFacilityListChanged, EFactionType, Faction);  // kept for backward compat
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBaseListChanged, EFactionType, Faction);
 
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UBaseManagerSubsystem : public UGameInstanceSubsystem
@@ -18,49 +20,64 @@ class STRATEGICSIMULATIONPLUGIN_API UBaseManagerSubsystem : public UGameInstance
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-    // Build a new facility
+    // === NEW: Multiple Bases ===
     UFUNCTION(BlueprintCallable, Category = "Base")
-    UStrategyFacility* BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef);
+    UStrategyBase* BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation);
 
-    // Power grid stats
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    const TArray<UStrategyBase*>& GetBases(EFactionType Faction) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    bool CanBuildNewBase(EFactionType Faction) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetNumberOfOperationalHangers(EFactionType Faction) const;
+
+    // === Legacy functions (now aggregate across all bases) ===
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    UStrategyFacility* BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase = nullptr);
+
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalPowerProvided(EFactionType Faction) const;
+
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalPowerDrawn(EFactionType Faction) const;
+
     UFUNCTION(BlueprintCallable, Category = "Base")
-    int32 GetNetPower(EFactionType Faction) const;   // positive = surplus 
+    int32 GetNetPower(EFactionType Faction) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetTotalBarracksCapacity(EFactionType Faction) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    bool HasFacilityOfType(EFactionType Faction, EFacilityType FacilityType) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetCurrentCountOfType(EFactionType Faction, EFacilityType FacilityType) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    void AdvanceFacilityConstruction(EFactionType Faction);
+
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;  // returns all facilities across bases (for compatibility)
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnFacilityListChanged OnFacilityListChanged;
 
-    // Returns total barracks capacity across all operational facilities
-    UFUNCTION(BlueprintCallable, Category = "Base")
-    int32 GetTotalBarracksCapacity(EFactionType Faction) const;
-
-    // Returns true if the faction already has this facility type (building OR completed)
-    UFUNCTION(BlueprintCallable, Category = "Base")
-    bool HasFacilityOfType(EFactionType Faction, EFacilityType FacilityType) const;
-
-    // Called every day to advance construction of all facilities (reliable fallback)
-    UFUNCTION(BlueprintCallable, Category = "Base")
-    void AdvanceFacilityConstruction(EFactionType Faction);
-
-    // Public accessor so other subsystems can read built facilities
-    UFUNCTION(BlueprintCallable, Category = "Base")
-    const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;
-
-    // Returns how many facilities of this type the faction currently has (building or completed)
-    UFUNCTION(BlueprintCallable, Category = "Base")
-    int32 GetCurrentCountOfType(EFactionType Faction, EFacilityType FacilityType) const;
+    UPROPERTY(BlueprintAssignable, Category = "Events")
+    FOnBaseListChanged OnBaseListChanged;
 
 private:
-    // Two separate arrays (UHT-friendly)
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Base")
-    TArray<UStrategyFacility*> HumanFacilities;
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Bases")
+    TArray<UStrategyBase*> HumanBases;
 
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Base")
-    TArray<UStrategyFacility*> EnemyFacilities;
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Bases")
+    TArray<UStrategyBase*> EnemyBases;
 
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
+
+    // Internal helper
+    TArray<UStrategyBase*>& GetMutableBases(EFactionType Faction);
+    const TArray<UStrategyBase*>& GetBasesInternal(EFactionType Faction) const;
 };
