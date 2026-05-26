@@ -56,6 +56,19 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 
+    // === SPECIAL CASE: Create the VERY FIRST base if none exist ===
+    if (BaseMgr->GetBases(Faction).Num() == 0)
+    {
+        FVector2D NewLocation = FVector2D(960.0f, 540.0f);
+        FText BaseName = FText::FromString("Command Center");
+
+        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s built initial base 'Command Center' at (960, 540)"), *UEnum::GetValueAsString(Faction));
+            return; // one major action per day
+        }
+    }
+
     // === PHASE 4: BASE EXPANSION (one base per hanger, max 10) ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
@@ -74,7 +87,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DEVELOP EVERY BASE - AGGRESSIVE BARRACKS PRIORITY ===
+    // === DEVELOP EVERY BASE - AGGRESSIVE LIVINGQUARTERS PRIORITY ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base || !Base->HasOperationalCommandCenter()) continue;
@@ -85,17 +98,17 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base)) return;
         }
 
-        // 2. Build multiple LivingQuarters (this is your barracks enum name)
+        // 2. Build multiple LivingQuarters (your barracks enum name)
         if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
 
-        // 3. Finish the rest of the base (your exact enum names)
+        // 3. Finish the rest of the base
         if (!Base->HasFacilityOfType(EFacilityType::Storage))     if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
         if (!Base->HasFacilityOfType(EFacilityType::Workshop))    if (TryBuildFacility(Faction, EFacilityType::Workshop, Base)) return;
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory))  if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base)) return;
         if (!Base->HasFacilityOfType(EFacilityType::Hanger))      if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
     }
 
-    // === RECRUIT SOLDIERS (matches your exact RecruitSoldier signature) ===
+    // === RECRUIT SOLDIERS ===
     if (SoldierMgr)
     {
         USoldierClassDefinition* GruntClass = nullptr;
@@ -132,6 +145,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (no major action taken)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
+
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
