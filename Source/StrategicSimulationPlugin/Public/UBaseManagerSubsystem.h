@@ -49,6 +49,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;
 
+    // Returns how many facilities of this type the faction currently has (building or completed)
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetCurrentCountOfType(EFactionType Faction, EFacilityType FacilityType) const;
+
 private:
     // Two separate arrays (UHT-friendly)
     UPROPERTY(VisibleAnywhere, Transient, Category = "Base")

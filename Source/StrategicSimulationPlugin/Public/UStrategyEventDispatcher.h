@@ -9,12 +9,14 @@
 #include "UStrategyFacility.h"
 #include "UStrategyEventDispatcher.generated.h"
 
+// Ensure the multicast delegate type is declared before use.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierRecruited, EFactionType, Faction, UStrategySoldier*, Soldier);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierDismissed, EFactionType, Faction, UStrategySoldier*, Soldier);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnResearchCompleted, EFactionType, Faction, UResearchTechDefinition*, Tech);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnProductionCompleted, EFactionType, Faction, UItemDefinition*, Item);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnFacilityCompleted, EFactionType, Faction, UStrategyFacility*, Facility);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthlyEvent, int32, Month);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierLoadoutChanged, EFactionType, Faction, UStrategySoldier*, Soldier);
 
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UStrategyEventDispatcher : public UGameInstanceSubsystem
@@ -41,4 +43,8 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnMonthlyEvent OnMonthlyEvent;
+
+    UPROPERTY(BlueprintAssignable, Category = "Events")
+    FOnSoldierLoadoutChanged OnSoldierLoadoutChanged;
+
 };

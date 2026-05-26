@@ -148,24 +148,36 @@ bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefin
     {
         if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
         {
-            for (const TSoftObjectPtr<UResearchTechDefinition>& ResearchSoft : Fac->FacilityDefinition->UnlocksResearch)
+            // 1. Facility → UnlocksResearch
+            for (const auto& ResearchSoft : Fac->FacilityDefinition->UnlocksResearch)
             {
                 UResearchTechDefinition* Research = ResearchSoft.Get();
                 if (!Research) continue;
 
-                for (const TSoftObjectPtr<UStrategyTechDefinition>& TechSoft : Research->UnlocksTech)
+                if (HasCompletedResearch(Faction, Research))
                 {
-                    UStrategyTechDefinition* Tech = TechSoft.Get();
-                    if (!Tech) continue;
-
-                    for (const TSoftObjectPtr<UItemDefinition>& UnlockedItem : Tech->UnlocksItems)
+                    // 2. Research → UnlocksTech
+                    for (const auto& TechSoft : Research->UnlocksTech)
                     {
-                        if (UnlockedItem.Get() == ItemDef) return true;
+                        UStrategyTechDefinition* Tech = TechSoft.Get();
+                        if (!Tech) continue;
+
+                        // 3. Tech → UnlocksItems
+                        for (const auto& UnlockedItem : Tech->UnlocksItems)
+                        {
+                            if (UnlockedItem.Get() == ItemDef)
+                            {
+                                UE_LOG(LogTemp, Display, TEXT("[UNLOCK] ✅ %s unlocked via Tech %s"),
+                                    *ItemDef->ItemName.ToString(), *Tech->TechName.ToString());
+                                return true;
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
+    UE_LOG(LogTemp, Verbose, TEXT("[UNLOCK] ❌ %s is NOT unlocked yet"), *ItemDef->ItemName.ToString());
     return false;
 }

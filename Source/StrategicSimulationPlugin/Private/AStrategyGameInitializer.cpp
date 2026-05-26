@@ -34,26 +34,30 @@ void AStrategyGameInitializer::BeginPlay()
         }
     }
 
-    // === DATABASES (force-load everything to prevent "not set" warnings) ===
+    // === DATABASES — FORCE LOAD EVERYTHING (fixes the persistent "No facility of type" bug) ===
     if (UFacilityDatabase* FacDB = FacilityDatabaseAsset.Get())
     {
-        for (TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacDB->AvailableFacilities)
-            SoftDef.LoadSynchronous();
+        for (auto& Soft : FacDB->AvailableFacilities)
+            Soft.LoadSynchronous();
         Campaign->FacilityDatabaseAsset = FacilityDatabaseAsset;
+        UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d facilities from FacilityDatabase"), FacDB->AvailableFacilities.Num());
     }
     if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
     {
-        for (TSoftObjectPtr<USoldierClassDefinition>& SoftClass : SoldierDB->AvailableSoldierClasses)
-            SoftClass.LoadSynchronous();
+        for (auto& Soft : SoldierDB->AvailableSoldierClasses)
+            Soft.LoadSynchronous();
         Campaign->SoldierClassDatabaseAsset = SoldierClassDatabaseAsset;
+        UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d soldier classes from SoldierClassDatabase"), SoldierDB->AvailableSoldierClasses.Num());
     }
     if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
     {
-        for (TSoftObjectPtr<UResearchTechDefinition>& SoftTech : ResearchDB->AvailableTechs)
-            SoftTech.LoadSynchronous();
+        for (auto& Soft : ResearchDB->AvailableTechs)
+            Soft.LoadSynchronous();
         Campaign->ResearchDatabaseAsset = ResearchDatabaseAsset;
+        UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d research projects from ResearchDatabase"), ResearchDB->AvailableTechs.Num());
     }
-    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases registered and pre-loaded"));
+    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases force-loaded and registered"));
+
 
     // === START THE SIMULATION (AI now runs automatically every day) ===
     Campaign->StartSimulation();

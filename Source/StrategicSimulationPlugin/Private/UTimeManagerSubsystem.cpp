@@ -40,9 +40,6 @@ void UTimeManagerSubsystem::RealTimeTick()
         {
             AI->RunAIForFaction(EFactionType::Enemy, CurrentDayNum);
         }
-
-        UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-        if (ResourceMgr) ResourceMgr->TickResources(1.0f);
     }
 }
 
@@ -70,13 +67,6 @@ void UTimeManagerSubsystem::AdvanceDays(int32 NumDays)
 
     CurrentGameDate += FTimespan::FromDays(NumDays);
     OnDayPassed.Broadcast(CurrentGameDate.GetDay());
-
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    if (ResourceMgr)
-    {
-        for (int32 i = 0; i < NumDays; i++)
-            ResourceMgr->TickResources(1.0f);
-    }
 
     UE_LOG(LogTemp, Display, TEXT("Advanced %d days — Current Day: %d"), NumDays, CurrentGameDate.GetDay());
 }

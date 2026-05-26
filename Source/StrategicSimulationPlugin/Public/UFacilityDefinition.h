@@ -37,4 +37,16 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Capacity")
     int32 Capacity = 0;
+
+    // Economy & Power (Phase 23)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy")
+    int32 MoneyIncomePerDay = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy")
+    int32 SuppliesIncomePerDay = 0;
+
+    // Maximum number of this facility type the faction can build (Phase 23)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Build")
+    int32 MaxBuilt = 1;
+
 };

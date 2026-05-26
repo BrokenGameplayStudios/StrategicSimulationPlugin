@@ -1,4 +1,5 @@
 #include "UResourceManagerSubsystem.h"
+#include "UBaseManagerSubsystem.h"
 #include "Engine/Engine.h"
 
 void UResourceManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -26,18 +27,6 @@ void UResourceManagerSubsystem::AddResources(EFactionType Faction, const FResour
     Current.ResearchPoints += Amount.ResearchPoints;
 }
 
-void UResourceManagerSubsystem::TickResources(float DeltaTime)
-{
-    // Simple monthly-style income (we'll make this more realistic in Phase 5)
-    FResourceStockpile HumanIncome{ 500, 300, 20, 50 };
-    FResourceStockpile EnemyIncome{ 400, 250, 30, 30 };
-
-    AddResources(EFactionType::Human, HumanIncome);
-    AddResources(EFactionType::Enemy, EnemyIncome);
-
-    UE_LOG(LogTemp, Display, TEXT("Resources ticked — income added to both factions"));
-}
-
 void UResourceManagerSubsystem::PrintAllResources() const
 {
     UE_LOG(LogTemp, Display, TEXT("=== RESOURCE MANAGER DEBUG ==="));
@@ -57,4 +46,36 @@ void UResourceManagerSubsystem::SetResources(EFactionType Faction, const FResour
 {
     FactionResources.FindOrAdd(Faction) = NewStock;
     UE_LOG(LogTemp, Display, TEXT("Resources set for %s"), *UEnum::GetValueAsString(Faction));
+}
+
+void UResourceManagerSubsystem::ApplyFacilityIncome(EFactionType Faction)
+{
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return;
+
+    const TArray<UStrategyFacility*>& Facilities = BaseMgr->GetFacilities(Faction);
+
+    int32 TotalMoney = 0;
+    int32 TotalSupplies = 0;
+
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
+        {
+            TotalMoney += Fac->FacilityDefinition->MoneyIncomePerDay;
+            TotalSupplies += Fac->FacilityDefinition->SuppliesIncomePerDay;
+        }
+    }
+
+    if (TotalMoney > 0 || TotalSupplies > 0)
+    {
+        FResourceStockpile Income;
+        Income.Money = TotalMoney;
+        Income.Supplies = TotalSupplies;
+
+        AddResources(Faction, Income);
+
+        UE_LOG(LogTemp, Display, TEXT("[INCOME] %s gained %d Money and %d Supplies from facilities"),
+            *UEnum::GetValueAsString(Faction), TotalMoney, TotalSupplies);
+    }
 }

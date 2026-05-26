@@ -21,13 +21,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Resources")
     void AddResources(EFactionType Faction, const FResourceStockpile& Amount);
 
-    // Simple tick — will be called by Time Manager later (income over time)
-    UFUNCTION(BlueprintCallable, Category = "Resources")
-    void TickResources(float DeltaTime);   // for now we ignore DeltaTime and just give flat income
-
     // Set resources to exact values (used by save/load)
     UFUNCTION(BlueprintCallable, Category = "Resources")
     void SetResources(EFactionType Faction, const FResourceStockpile& NewStock);
+
+    // Calculate and add income from all operational facilities
+    UFUNCTION(BlueprintCallable, Category = "Resources")
+    void ApplyFacilityIncome(EFactionType Faction);
 
     // Debug helper
     UFUNCTION(BlueprintCallable, Category = "Debug")

@@ -169,3 +169,16 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
         }
     }
 }
+
+int32 UBaseManagerSubsystem::GetCurrentCountOfType(EFactionType Faction, EFacilityType FacilityType) const
+{
+    const TArray<UStrategyFacility*>& Facilities = (Faction == EFactionType::Human) ? HumanFacilities : EnemyFacilities;
+    int32 Count = 0;
+
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityType)
+            Count++;
+    }
+    return Count;
+}
