@@ -94,7 +94,7 @@ void UStrategyBase::UpdatePowerFromFacilities()
 
     for (UStrategyFacility* Facility : Facilities)
     {
-        if (Facility && Facility->bIsOperational)
+        if (Facility && Facility->bIsOperational && Facility->FacilityDefinition)
         {
             PowerProvided += Facility->FacilityDefinition->PowerProvided;
             PowerDraw += Facility->FacilityDefinition->PowerDraw;

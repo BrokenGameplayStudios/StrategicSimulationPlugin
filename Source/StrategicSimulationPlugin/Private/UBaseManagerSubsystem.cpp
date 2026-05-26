@@ -260,7 +260,7 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
                     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                         EventDisp->OnFacilityCompleted.Broadcast(Faction, Fac);
 
-                    // Immediately update per-base power numbers
+                    // Immediately update per-base power
                     Base->UpdatePowerFromFacilities();
                 }
                 else
