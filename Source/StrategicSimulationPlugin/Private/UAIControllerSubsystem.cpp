@@ -76,7 +76,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === CRITICAL DAILY PROGRESS ===
+    // === CRITICAL DAILY PROGRESS (construction + income) ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
@@ -110,56 +110,56 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational)"), *Base->BaseName.ToString());
 
-        // 1. POWER IS THE HIGHEST PRIORITY — always build until we have at least one
+        // 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY
         if (!Base->HasFacilityOfType(EFacilityType::PowerPlant))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying PowerPlant in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS PowerPlant started in '%s'"), *Base->BaseName.ToString());
+            bool Success = TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
+            UE_LOG(LogTemp, Display, TEXT("[AI] → PowerPlant in '%s' %s"), *Base->BaseName.ToString(), Success ? TEXT("SUCCESS") : TEXT("FAILED"));
         }
 
         // 2. Core facilities (one of each)
         if (!Base->HasFacilityOfType(EFacilityType::LivingQuarters))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying LivingQuarters in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS LivingQuarters started in '%s'"), *Base->BaseName.ToString());
+            bool Success = TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base);
+            UE_LOG(LogTemp, Display, TEXT("[AI] → LivingQuarters in '%s' %s"), *Base->BaseName.ToString(), Success ? TEXT("SUCCESS") : TEXT("FAILED"));
         }
 
         if (!Base->HasFacilityOfType(EFacilityType::Storage))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Storage in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::Storage, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Storage started in '%s'"), *Base->BaseName.ToString());
+            bool Success = TryBuildFacility(Faction, EFacilityType::Storage, Base);
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Storage in '%s' %s"), *Base->BaseName.ToString(), Success ? TEXT("SUCCESS") : TEXT("FAILED"));
         }
 
         if (!Base->HasFacilityOfType(EFacilityType::Workshop))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Workshop in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::Workshop, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Workshop started in '%s'"), *Base->BaseName.ToString());
+            bool Success = TryBuildFacility(Faction, EFacilityType::Workshop, Base);
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Workshop in '%s' %s"), *Base->BaseName.ToString(), Success ? TEXT("SUCCESS") : TEXT("FAILED"));
         }
 
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Laboratory in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Laboratory started in '%s'"), *Base->BaseName.ToString());
+            bool Success = TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Laboratory in '%s' %s"), *Base->BaseName.ToString(), Success ? TEXT("SUCCESS") : TEXT("FAILED"));
         }
 
         if (!Base->HasFacilityOfType(EFacilityType::Hanger))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Hanger in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::Hanger, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Hanger started in '%s'"), *Base->BaseName.ToString());
+            bool Success = TryBuildFacility(Faction, EFacilityType::Hanger, Base);
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Hanger in '%s' %s"), *Base->BaseName.ToString(), Success ? TEXT("SUCCESS") : TEXT("FAILED"));
         }
 
         // 3. Extras only after core is complete
         if (Base->GetTotalCapacityForType(EFacilityType::LivingQuarters) < 12)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra LivingQuarters in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
+            bool Success = TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base);
+            UE_LOG(LogTemp, Display, TEXT("[AI] → extra LivingQuarters in '%s' %s"), *Base->BaseName.ToString(), Success ? TEXT("SUCCESS") : TEXT("FAILED"));
         }
 
         // Extra storage and hangers
