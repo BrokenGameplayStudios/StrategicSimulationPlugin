@@ -55,24 +55,22 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     if (!BaseMgr || !ResearchMgr || !EngMgr || !ResourceMgr || !SoldierMgr) return;
 
-    // 1. Daily maintenance (always happens)
+    // 1. Daily maintenance
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResearchMgr->AdvanceDay(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
     EngMgr->OnDayPassed(CurrentDay);
 
-    // Power status
     int32 NetPower = BaseMgr->GetNetPower(Faction);
     UE_LOG(LogTemp, Display, TEXT("[POWER] %s Net Power: %d (Provided %d | Draw %d)"),
         *UEnum::GetValueAsString(Faction), NetPower, BaseMgr->GetTotalPowerProvided(Faction), BaseMgr->GetTotalPowerDrawn(Faction));
 
-    // 2. Emergency power fix
     if (NetPower < 0)
     {
         if (TryBuildFacility(Faction, EFacilityType::PowerPlant)) return;
     }
 
-    // === PHASE 4: AI BASE EXPANSION (your exact rules) ===
+    // === BASE EXPANSION ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
         if (BaseMgr->HasFacilityOfType(Faction, EFacilityType::Hanger) &&
@@ -84,75 +82,54 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             FText BaseName = FText::FromString(FString::Printf(TEXT("Forward Base %d"), BaseMgr->GetBases(Faction).Num() + 1));
 
             UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation);
-            if (NewBase)
-            {
-                // No need to call TryBuildFacility — BuildNewBase now automatically starts the Command Center
-                return; // only one major action per day
-            }
+            if (NewBase) return;
         }
     }
 
-    // === NEW HIGH-PRIORITY: Finish Command Centers in ANY incomplete base ===
-    // This prevents the AI from trying to build Power/anything else in a new base before its Command Center
+    // === DEVELOP EVERY BASE (this is the key improvement) ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
-        if (Base && !Base->HasOperationalCommandCenter())
+        if (!Base || !Base->HasOperationalCommandCenter()) continue;
+
+        // Build missing key facilities in this specific base
+        if (!Base->HasFacilityOfType(EFacilityType::PowerPlant))
         {
-            if (TryBuildFacility(Faction, EFacilityType::Command, Base))
-            {
-                UE_LOG(LogTemp, Display, TEXT("[AI] Prioritizing Command Center completion in base '%s'"), *Base->BaseName.ToString());
-                return; // only one major action per day
-            }
+            if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base)) return;
+        }
+        if (!Base->HasFacilityOfType(EFacilityType::LivingQuarters))
+        {
+            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
+        }
+        if (!Base->HasFacilityOfType(EFacilityType::Workshop))
+        {
+            if (TryBuildFacility(Faction, EFacilityType::Workshop, Base)) return;
+        }
+        if (!Base->HasFacilityOfType(EFacilityType::Laboratory))
+        {
+            if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base)) return;
+        }
+        if (!Base->HasFacilityOfType(EFacilityType::Storage))
+        {
+            if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
+        }
+        if (!Base->HasFacilityOfType(EFacilityType::Hanger))
+        {
+            if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
         }
     }
 
-    // 3. Early game priority (get the base running fast)
-    if (BaseMgr->GetCurrentCountOfType(Faction, EFacilityType::Command) == 0)
-    {
-        if (TryBuildFacility(Faction, EFacilityType::Command)) return;
-    }
-    if (BaseMgr->GetCurrentCountOfType(Faction, EFacilityType::PowerPlant) == 0)
-    {
-        if (TryBuildFacility(Faction, EFacilityType::PowerPlant)) return;
-    }
-
-    // 4. Get at least 2 barracks quickly
-    int32 BarracksCount = BaseMgr->GetCurrentCountOfType(Faction, EFacilityType::LivingQuarters);
-    if (BarracksCount < 2)
-    {
-        if (TryBuildFacility(Faction, EFacilityType::LivingQuarters)) return;
-    }
-
-    // 5. Recruit as soon as we have barracks
+    // Recruit / outfit / research / production (faction-wide for now)
     int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
     int32 MaxCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
-    if (CurrentSoldiers < MaxCapacity && BarracksCount >= 1)
+    if (CurrentSoldiers < MaxCapacity)
     {
         TryRecruit(Faction);
     }
 
-    // 6. Research and production once we have a basic base
-    if (BarracksCount >= 1)
-    {
-        TryResearch(Faction);
-        EngMgr->TryProduce(Faction);
-    }
-
-    // 7. Expand the base (after we have soldiers and basic research)
-    if (CurrentSoldiers >= 4)
-    {
-        TryBuildFacility(Faction, EFacilityType::Medical);
-        TryBuildFacility(Faction, EFacilityType::Workshop);
-        TryBuildFacility(Faction, EFacilityType::Laboratory);
-        TryBuildFacility(Faction, EFacilityType::Storage);
-        TryBuildFacility(Faction, EFacilityType::Defense);
-        TryBuildFacility(Faction, EFacilityType::Hanger);
-    }
-
-    // 8. Always try to outfit soldiers
     TryBuyAndEquip(Faction);
+    TryResearch(Faction);
+    EngMgr->TryProduce(Faction);
 
-    // Optional: extra power if still low
     if (NetPower < 20)
     {
         TryBuildFacility(Faction, EFacilityType::PowerPlant);
@@ -268,12 +245,10 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return false;
     }
 
-    // Respect per-facility MaxBuilt limit
+    // Respect MaxBuilt limit
     int32 CurrentCount = BaseMgr->GetCurrentCountOfType(Faction, FacilityTypeToBuild);
     if (CurrentCount >= FacilityDef->MaxBuilt)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI] %s already has max %d of %s"),
-            *UEnum::GetValueAsString(Faction), FacilityDef->MaxBuilt, *FacilityDef->FacilityName.ToString());
         return false;
     }
 
@@ -281,11 +256,12 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < FacilityDef->BuildCost.Money) return false;
 
-    // FIXED: Pass TargetBase when building in a new base
+    // Use the provided target base (or let BuildFacility decide)
     if (BaseMgr->BuildFacility(Faction, FacilityDef, TargetBase))
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s started construction of %s (%d days)"),
-            *UEnum::GetValueAsString(Faction), *FacilityDef->FacilityName.ToString(), FacilityDef->BuildTimeDays);
+        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s started construction of %s in base '%s' (%d days)"),
+            *UEnum::GetValueAsString(Faction), *FacilityDef->FacilityName.ToString(),
+            TargetBase ? *TargetBase->BaseName.ToString() : TEXT("default base"), FacilityDef->BuildTimeDays);
         return true;
     }
     return false;

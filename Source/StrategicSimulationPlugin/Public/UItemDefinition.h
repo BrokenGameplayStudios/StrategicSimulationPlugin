@@ -36,4 +36,7 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     int32 QuantityPerStack = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Production")
+    int32 ProductionDays = 5;
 };

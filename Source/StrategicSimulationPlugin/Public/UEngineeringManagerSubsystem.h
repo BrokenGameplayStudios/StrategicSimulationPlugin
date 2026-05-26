@@ -5,7 +5,7 @@
 #include "StrategicSimulationTypes.h"
 #include "UActiveProductionJob.h"
 #include "UItemDefinition.h"
-#include "UTimeManagerSubsystem.h"
+#include "UStrategyBase.h"
 #include "UEngineeringManagerSubsystem.generated.h"
 
 UCLASS()
@@ -19,13 +19,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Procurement")
     bool PurchaseItem(EFactionType Faction, UItemDefinition* ItemDef, UStrategySoldier* TargetSoldier = nullptr);
 
+    // PRODUCTION WITH PER-BASE SLOTS
     UFUNCTION(BlueprintCallable, Category = "Production")
-    UActiveProductionJob* StartProduction(EFactionType Faction, UItemDefinition* ItemDef, int32 Quantity = 1);
+    UActiveProductionJob* StartProduction(EFactionType Faction, UItemDefinition* ItemDef, int32 Quantity = 1, UStrategyBase* TargetBase = nullptr);
 
     UFUNCTION(BlueprintCallable, Category = "Production")
     TArray<UActiveProductionJob*> GetActiveProduction(EFactionType Faction) const;
 
-    // AI helper - smart production decision
     UFUNCTION(BlueprintCallable, Category = "Production")
     bool TryProduce(EFactionType Faction);
 

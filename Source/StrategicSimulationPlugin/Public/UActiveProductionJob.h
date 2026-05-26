@@ -5,6 +5,7 @@
 #include "StrategicSimulationTypes.h"
 #include "UItemDefinition.h"
 #include "UStrategyTechDefinition.h"
+#include "UStrategyBase.h"
 #include "UActiveProductionJob.generated.h"
 
 UCLASS(BlueprintType)
@@ -24,4 +25,7 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     bool bIsCompleted = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Production")
+    UStrategyBase* OwningBase = nullptr;
 };
