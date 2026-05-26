@@ -5,6 +5,7 @@
 #include "StrategicSimulationTypes.h"
 #include "USoldierClassDefinition.h"
 #include "UItemDefinition.h"
+#include "UStrategyBase.h"
 #include "UStrategySoldier.generated.h"
 
 UCLASS(BlueprintType)
@@ -33,6 +34,10 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     int32 DaysUntilRecovered = 0;
+
+    /** Which base this soldier is currently stationed at (null = in transit or unassigned) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Location")
+    UStrategyBase* StationedBase = nullptr;
 
     // Soldier carries Items (weapons, armor, grenades, etc.)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Loadout")

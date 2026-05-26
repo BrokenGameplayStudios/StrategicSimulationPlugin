@@ -1,12 +1,13 @@
 #include "UAIControllerSubsystem.h"
 #include "UResourceManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
+#include "USoldierClassDatabase.h"
 #include "UEngineeringManagerSubsystem.h"
 #include "UStrategyEventDispatcher.h"
 #include "UItemDatabase.h"
-#include "USoldierClassDatabase.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UFacilityDatabase.h"
+#include "UStrategyBase.h"
 #include "Engine/Engine.h"
 
 void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -45,97 +46,92 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 {
     if (!bAIEnabled || Faction != EFactionType::Enemy) return;
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order)"), *UEnum::GetValueAsString(Faction), CurrentDay);
-
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-    UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
-    UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
+    UEngineeringManagerSubsystem* EngineeringMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
 
-    if (!BaseMgr || !ResearchMgr || !EngMgr || !ResourceMgr || !SoldierMgr) return;
+    if (!BaseMgr || !ResourceMgr) return;
 
-    // 1. Daily maintenance
-    BaseMgr->AdvanceFacilityConstruction(Faction);
-    ResearchMgr->AdvanceDay(Faction);
-    ResourceMgr->ApplyFacilityIncome(Faction);
-    EngMgr->OnDayPassed(CurrentDay);
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 
-    int32 NetPower = BaseMgr->GetNetPower(Faction);
-    UE_LOG(LogTemp, Display, TEXT("[POWER] %s Net Power: %d (Provided %d | Draw %d)"),
-        *UEnum::GetValueAsString(Faction), NetPower, BaseMgr->GetTotalPowerProvided(Faction), BaseMgr->GetTotalPowerDrawn(Faction));
-
-    if (NetPower < 0)
-    {
-        if (TryBuildFacility(Faction, EFacilityType::PowerPlant)) return;
-    }
-
-    // === BASE EXPANSION ===
+    // === PHASE 4: BASE EXPANSION (one base per hanger, max 10) ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
-        if (BaseMgr->HasFacilityOfType(Faction, EFacilityType::Hanger) &&
-            BaseMgr->HasFacilityOfType(Faction, EFacilityType::Workshop) &&
-            BaseMgr->HasFacilityOfType(Faction, EFacilityType::Laboratory) &&
-            BaseMgr->HasFacilityOfType(Faction, EFacilityType::LivingQuarters))
+        int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
+        if (OperationalHangers >= 1)
         {
-            FVector2D NewLocation = FVector2D(FMath::RandRange(100.f, 1820.f), FMath::RandRange(100.f, 980.f));
+            FVector2D NewLocation = FVector2D(FMath::RandRange(100.0f, 1820.0f), FMath::RandRange(100.0f, 980.0f));
             FText BaseName = FText::FromString(FString::Printf(TEXT("Forward Base %d"), BaseMgr->GetBases(Faction).Num() + 1));
 
-            UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation);
-            if (NewBase) return;
+            if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
+            {
+                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s expanded to new base '%s' at (%.0f, %.0f)"),
+                    *UEnum::GetValueAsString(Faction), *BaseName.ToString(), NewLocation.X, NewLocation.Y);
+                return; // one major action per day
+            }
         }
     }
 
-    // === DEVELOP EVERY BASE (this is the key improvement) ===
+    // === DEVELOP EVERY BASE - AGGRESSIVE BARRACKS PRIORITY ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base || !Base->HasOperationalCommandCenter()) continue;
 
-        // Build missing key facilities in this specific base
+        // 1. Emergency power
         if (!Base->HasFacilityOfType(EFacilityType::PowerPlant))
         {
             if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base)) return;
         }
-        if (!Base->HasFacilityOfType(EFacilityType::LivingQuarters))
-        {
-            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
-        }
-        if (!Base->HasFacilityOfType(EFacilityType::Workshop))
-        {
-            if (TryBuildFacility(Faction, EFacilityType::Workshop, Base)) return;
-        }
-        if (!Base->HasFacilityOfType(EFacilityType::Laboratory))
-        {
-            if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base)) return;
-        }
-        if (!Base->HasFacilityOfType(EFacilityType::Storage))
-        {
-            if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
-        }
-        if (!Base->HasFacilityOfType(EFacilityType::Hanger))
-        {
-            if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
-        }
+
+        // 2. Build multiple LivingQuarters (this is your barracks enum name)
+        if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
+
+        // 3. Finish the rest of the base (your exact enum names)
+        if (!Base->HasFacilityOfType(EFacilityType::Storage))     if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
+        if (!Base->HasFacilityOfType(EFacilityType::Workshop))    if (TryBuildFacility(Faction, EFacilityType::Workshop, Base)) return;
+        if (!Base->HasFacilityOfType(EFacilityType::Laboratory))  if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base)) return;
+        if (!Base->HasFacilityOfType(EFacilityType::Hanger))      if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
     }
 
-    // Recruit / outfit / research / production (faction-wide for now)
-    int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
-    int32 MaxCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
-    if (CurrentSoldiers < MaxCapacity)
+    // === RECRUIT SOLDIERS (matches your exact RecruitSoldier signature) ===
+    if (SoldierMgr)
     {
-        TryRecruit(Faction);
+        USoldierClassDefinition* GruntClass = nullptr;
+
+        if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
+            {
+                if (DB->AvailableSoldierClasses.Num() > 0)
+                    GruntClass = DB->AvailableSoldierClasses[0].Get();
+            }
+        }
+
+        if (GruntClass)
+        {
+            if (SoldierMgr->RecruitSoldier(Faction, GruntClass))
+            {
+                return; // one recruit per day
+            }
+        }
     }
 
-    TryBuyAndEquip(Faction);
-    TryResearch(Faction);
-    EngMgr->TryProduce(Faction);
+    // === RESEARCH ===
+    if (ResearchMgr && TryResearch(Faction))
+        return;
 
-    if (NetPower < 20)
-    {
-        TryBuildFacility(Faction, EFacilityType::PowerPlant);
-    }
+    // === SMART PURCHASE / OUTFIT SOLDIERS ===
+    if (TryBuyAndEquip(Faction))
+        return;
+
+    // === PRODUCTION (per-base slots + queue) ===
+    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction))
+        return;
+
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (no major action taken)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
-
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
