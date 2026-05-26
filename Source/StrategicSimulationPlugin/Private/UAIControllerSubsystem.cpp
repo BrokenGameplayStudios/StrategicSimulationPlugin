@@ -42,56 +42,86 @@ void UAIControllerSubsystem::Debug_RunAI()
 
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
-    if (!bAIEnabled || Faction != EFactionType::Enemy)
-        return;
+    if (!bAIEnabled || Faction != EFactionType::Enemy) return;
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 
-    // 1. Advance construction and research every day
-    if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
-        BaseMgr->AdvanceFacilityConstruction(Faction);
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
+    UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
 
-    if (UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>())
-        ResearchMgr->AdvanceDay(Faction);
+    if (!BaseMgr || !ResearchMgr || !EngMgr || !ResourceMgr || !SoldierMgr) return;
 
-    // Production - AI decision to start new jobs
-    if (UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>())
+    // 1. Daily maintenance (always happens)
+    BaseMgr->AdvanceFacilityConstruction(Faction);
+    ResearchMgr->AdvanceDay(Faction);
+    ResourceMgr->ApplyFacilityIncome(Faction);
+    EngMgr->OnDayPassed(CurrentDay);   // your existing production progress
+
+    // Power status
+    int32 NetPower = BaseMgr->GetNetPower(Faction);
+    UE_LOG(LogTemp, Display, TEXT("[POWER] %s Net Power: %d (Provided %d | Draw %d)"),
+        *UEnum::GetValueAsString(Faction), NetPower, BaseMgr->GetTotalPowerProvided(Faction), BaseMgr->GetTotalPowerDrawn(Faction));
+
+    // 2. Emergency power fix
+    if (NetPower < 0)
     {
-        EngMgr->TryProduce(Faction);
+        if (TryBuildFacility(Faction, EFacilityType::PowerPlant)) return;
     }
 
-    // 2. Facility-based income (Phase 23 — only this should add resources now)
-    if (UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>())
-        ResourceMgr->ApplyFacilityIncome(Faction);
-    
-    // Power status logging
-    if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+    // 3. Early game priority (get the base running fast)
+    if (BaseMgr->GetCurrentCountOfType(Faction, EFacilityType::Command) == 0)
     {
-        int32 NetPower = BaseMgr->GetNetPower(Faction);
-        UE_LOG(LogTemp, Display, TEXT("[POWER] %s Net Power: %d (Provided %d | Draw %d)"),
-            *UEnum::GetValueAsString(Faction), NetPower, BaseMgr->GetTotalPowerProvided(Faction), BaseMgr->GetTotalPowerDrawn(Faction));
+        if (TryBuildFacility(Faction, EFacilityType::Command)) return;
+    }
+    if (BaseMgr->GetCurrentCountOfType(Faction, EFacilityType::PowerPlant) == 0)
+    {
+        if (TryBuildFacility(Faction, EFacilityType::PowerPlant)) return;
     }
 
-    // 3. Build order — prioritize basic barracks early for recruiting
-    if (TryBuildFacility(Faction, EFacilityType::Command)) return;
-    if (TryBuildFacility(Faction, EFacilityType::PowerPlant)) return;
-    if (TryBuildFacility(Faction, EFacilityType::LivingQuarters)) return;   // recruit as soon as possible
-    if (TryBuildFacility(Faction, EFacilityType::Medical)) return;
-    if (TryBuildFacility(Faction, EFacilityType::Workshop)) return;
-    if (TryBuildFacility(Faction, EFacilityType::Laboratory)) return;
-    if (TryBuildFacility(Faction, EFacilityType::Storage)) return;
-    if (TryBuildFacility(Faction, EFacilityType::Defense)) return;
+    // 4. Get at least 2 barracks quickly so we can recruit
+    int32 BarracksCount = BaseMgr->GetCurrentCountOfType(Faction, EFacilityType::LivingQuarters);
+    if (BarracksCount < 2)
+    {
+        if (TryBuildFacility(Faction, EFacilityType::LivingQuarters)) return;
+    }
 
-    if (TryBuildFacility(Faction, EFacilityType::Special)) return;
+    // 5. Recruit as soon as we have barracks (this is the key change)
+    int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
+    int32 MaxCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
+    if (CurrentSoldiers < MaxCapacity && BarracksCount >= 1)
+    {
+        TryRecruit(Faction);
+    }
 
-    // 4. Research
-    if (TryResearch(Faction)) return;
+    // 6. Research and production once we have a basic base
+    if (BarracksCount >= 1)
+    {
+        if (TryResearch(Faction)) {}   // no return — continue to other actions
+        if (EngMgr->TryProduce(Faction)) {}   // no return
+    }
 
-    // 5. Recruit
-    TryRecruit(Faction);
+    // 7. Expand the base (after we have soldiers and basic research)
+    if (CurrentSoldiers >= 4)
+    {
+        if (TryBuildFacility(Faction, EFacilityType::Medical)) {}
+        if (TryBuildFacility(Faction, EFacilityType::Workshop)) {}
+        if (TryBuildFacility(Faction, EFacilityType::Laboratory)) {}
+        if (TryBuildFacility(Faction, EFacilityType::Storage)) {}
+        if (TryBuildFacility(Faction, EFacilityType::Defense)) {}
+        if (TryBuildFacility(Faction, EFacilityType::Hanger)) {}   // or whatever your enum name is
+    }
 
-    // 6. Buy unlocked gear
+    // 8. Always try to outfit soldiers
     TryBuyAndEquip(Faction);
+
+    // Optional: build extra power if still low
+    if (NetPower < 20)
+    {
+        TryBuildFacility(Faction, EFacilityType::PowerPlant);
+    }
 }
 
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)

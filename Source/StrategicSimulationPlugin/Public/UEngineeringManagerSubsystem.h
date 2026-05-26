@@ -29,13 +29,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Production")
     bool TryProduce(EFactionType Faction);
 
+    UFUNCTION()
+    void OnDayPassed(int32 NewDay);
+
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Production")
     TArray<UActiveProductionJob*> HumanProductionQueue;
 
     UPROPERTY(VisibleAnywhere, Transient, Category = "Production")
     TArray<UActiveProductionJob*> EnemyProductionQueue;
-
-    UFUNCTION()
-    void OnDayPassed(int32 NewDay);
 };

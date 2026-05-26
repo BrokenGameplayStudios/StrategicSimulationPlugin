@@ -57,6 +57,7 @@ enum class EFacilityType : uint8
     Workshop,
     Storage,
     Defense,
+    Hanger,
     Medical,
     PowerPlant,
     Special

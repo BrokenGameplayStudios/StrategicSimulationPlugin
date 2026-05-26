@@ -22,6 +22,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "AI Control")
     bool IsAIEnabled() const;
 
+    UFUNCTION()
+    void OnDayPassed(int32 NewDay);
+
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void Debug_RunAI();
 
@@ -32,9 +35,6 @@ private:
 
     UPROPERTY(VisibleAnywhere, Category = "AI Control")
     bool bAIEnabled = true;
-
-    UFUNCTION()
-    void OnDayPassed(int32 NewDay);
 
     bool TryRecruit(EFactionType Faction);
     bool TryBuyAndEquip(EFactionType Faction);
