@@ -86,3 +86,21 @@ void UStrategyBase::AddFacility(UStrategyFacility* NewFacility)
         OnFacilitiesChanged.Broadcast(this);
     }
 }
+
+void UStrategyBase::UpdatePowerFromFacilities()
+{
+    PowerProvided = 0;
+    PowerDraw = 0;
+
+    for (UStrategyFacility* Facility : Facilities)
+    {
+        if (Facility && Facility->bIsOperational)
+        {
+            PowerProvided += Facility->FacilityDefinition->PowerProvided;
+            PowerDraw += Facility->FacilityDefinition->PowerDraw;
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[POWER] Base '%s' net power updated to %d (Provided %d | Draw %d)"),
+        *BaseName.ToString(), GetNetPower(), PowerProvided, PowerDraw);
+}

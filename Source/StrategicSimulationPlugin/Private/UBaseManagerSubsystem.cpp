@@ -228,12 +228,13 @@ int32 UBaseManagerSubsystem::GetCurrentCountOfType(EFactionType Faction, EFacili
     return Count;
 }
 
-// === FIXED: AdvanceFacilityConstruction with proper completion logging ===
+// === FIXED: AdvanceFacilityConstruction with immediate per-base power update ===
 void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 {
     for (UStrategyBase* Base : GetBasesInternal(Faction))
     {
         if (!Base) continue;
+
         for (UStrategyFacility* Fac : Base->Facilities)
         {
             if (!Fac || Fac->bIsOperational || !Fac->FacilityDefinition) continue;
@@ -242,8 +243,8 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 
             if (Fac->BuildProgressDays <= 0)
             {
-                // Power check (Command is self-powered)
-                int32 CurrentNet = GetNetPower(Faction);
+                // Per-base power check
+                int32 CurrentNet = Base->GetNetPower();
                 int32 NetWithThis = CurrentNet + Fac->FacilityDefinition->PowerProvided - Fac->FacilityDefinition->PowerDraw;
 
                 Fac->bIsOperational = (NetWithThis >= 0);
@@ -258,6 +259,9 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 
                     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                         EventDisp->OnFacilityCompleted.Broadcast(Faction, Fac);
+
+                    // Immediately update per-base power numbers
+                    Base->UpdatePowerFromFacilities();
                 }
                 else
                 {

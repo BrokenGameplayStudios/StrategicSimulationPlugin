@@ -97,7 +97,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DEVELOP EVERY BASE IN PARALLEL (no early return) ===
+    // === DEVELOP EVERY BASE IN PARALLEL ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base) continue;
@@ -108,7 +108,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             continue;
         }
 
-        UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational)"), *Base->BaseName.ToString());
+        UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational, Net Power: %d)"),
+            *Base->BaseName.ToString(), Base->GetNetPower());
 
         // 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY
         if (!Base->HasFacilityOfType(EFacilityType::PowerPlant))

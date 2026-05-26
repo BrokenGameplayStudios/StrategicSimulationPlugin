@@ -24,6 +24,19 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Facilities")
     TArray<UStrategyFacility*> Facilities;
 
+    /** Per-base power tracking */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Power")
+    int32 PowerProvided = 0;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Power")
+    int32 PowerDraw = 0;
+
+    UFUNCTION(BlueprintCallable, Category = "Power")
+    int32 GetNetPower() const { return PowerProvided - PowerDraw; }
+
+    UFUNCTION(BlueprintCallable, Category = "Power")
+    void UpdatePowerFromFacilities();
+
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnBaseFacilitiesChanged OnFacilitiesChanged;
 
