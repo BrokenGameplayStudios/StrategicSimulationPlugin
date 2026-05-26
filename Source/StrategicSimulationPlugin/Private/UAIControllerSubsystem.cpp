@@ -54,22 +54,32 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     if (!BaseMgr || !ResourceMgr) return;
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order)"), *UEnum::GetValueAsString(Faction), CurrentDay);
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order) - Bases: %d"),
+        *UEnum::GetValueAsString(Faction), CurrentDay, BaseMgr->GetBases(Faction).Num());
 
-    // === SPECIAL CASE: Create the VERY FIRST base if none exist ===
+    // === FORCE INITIAL BASE CREATION ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
     {
+        UE_LOG(LogTemp, Display, TEXT("[AI] No bases exist — creating initial Command Center base"));
         FVector2D NewLocation = FVector2D(960.0f, 540.0f);
         FText BaseName = FText::FromString("Command Center");
 
         if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s built initial base 'Command Center' at (960, 540)"), *UEnum::GetValueAsString(Faction));
-            return; // one major action per day
+            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial 'Command Center' base created successfully"));
+            return;
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("[AI] FAILED to create initial base!"));
+            return;
         }
     }
 
-    // === PHASE 4: BASE EXPANSION (one base per hanger, max 10) ===
+    // === EXPLICIT DAILY CONSTRUCTION PROGRESS ===
+    BaseMgr->AdvanceFacilityConstruction(Faction);
+
+    // === PHASE 4: BASE EXPANSION ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
         int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
@@ -80,39 +90,62 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s expanded to new base '%s' at (%.0f, %.0f)"),
-                    *UEnum::GetValueAsString(Faction), *BaseName.ToString(), NewLocation.X, NewLocation.Y);
-                return; // one major action per day
+                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Expanded to new base '%s'"), *BaseName.ToString());
+                return;
             }
         }
     }
 
-    // === DEVELOP EVERY BASE - AGGRESSIVE LIVINGQUARTERS PRIORITY ===
+    // === DEVELOP EVERY BASE - STAGED BUILD ORDER ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
-        if (!Base || !Base->HasOperationalCommandCenter()) continue;
+        if (!Base) continue;
 
-        // 1. Emergency power
+        if (!Base->HasOperationalCommandCenter())
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] Skipping base '%s' — Command Center not yet operational"), *Base->BaseName.ToString());
+            continue;
+        }
+
+        UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational)"), *Base->BaseName.ToString());
+
+        // 1. Ensure power
         if (!Base->HasFacilityOfType(EFacilityType::PowerPlant))
         {
             if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base)) return;
         }
 
-        // 2. Build multiple LivingQuarters (your barracks enum name)
-        if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
+        // 2. ONE of each core facility first
+        if (!Base->HasFacilityOfType(EFacilityType::LivingQuarters))
+            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
 
-        // 3. Finish the rest of the base
-        if (!Base->HasFacilityOfType(EFacilityType::Storage))     if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
-        if (!Base->HasFacilityOfType(EFacilityType::Workshop))    if (TryBuildFacility(Faction, EFacilityType::Workshop, Base)) return;
-        if (!Base->HasFacilityOfType(EFacilityType::Laboratory))  if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base)) return;
-        if (!Base->HasFacilityOfType(EFacilityType::Hanger))      if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
+        if (!Base->HasFacilityOfType(EFacilityType::Storage))
+            if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
+
+        if (!Base->HasFacilityOfType(EFacilityType::Workshop))
+            if (TryBuildFacility(Faction, EFacilityType::Workshop, Base)) return;
+
+        if (!Base->HasFacilityOfType(EFacilityType::Laboratory))
+            if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base)) return;
+
+        if (!Base->HasFacilityOfType(EFacilityType::Hanger))
+            if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
+
+        // 3. Extras only after core is complete
+        if (Base->GetTotalCapacityForType(EFacilityType::LivingQuarters) < 12)
+        {
+            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base)) return;
+        }
+
+        // Extra Storage / Hangers for future transport capacity
+        if (TryBuildFacility(Faction, EFacilityType::Storage, Base)) return;
+        if (TryBuildFacility(Faction, EFacilityType::Hanger, Base)) return;
     }
 
     // === RECRUIT SOLDIERS ===
     if (SoldierMgr)
     {
         USoldierClassDefinition* GruntClass = nullptr;
-
         if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
         {
             if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
@@ -126,22 +159,15 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         {
             if (SoldierMgr->RecruitSoldier(Faction, GruntClass))
             {
-                return; // one recruit per day
+                return;
             }
         }
     }
 
-    // === RESEARCH ===
-    if (ResearchMgr && TryResearch(Faction))
-        return;
-
-    // === SMART PURCHASE / OUTFIT SOLDIERS ===
-    if (TryBuyAndEquip(Faction))
-        return;
-
-    // === PRODUCTION (per-base slots + queue) ===
-    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction))
-        return;
+    // === RESEARCH, PURCHASE, PRODUCTION ===
+    if (ResearchMgr && TryResearch(Faction)) return;
+    if (TryBuyAndEquip(Faction)) return;
+    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) return;
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (no major action taken)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
