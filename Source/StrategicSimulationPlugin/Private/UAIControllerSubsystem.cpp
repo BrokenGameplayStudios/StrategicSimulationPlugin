@@ -42,6 +42,9 @@ void UAIControllerSubsystem::Debug_RunAI()
 
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
+    if (!bAIEnabled || Faction != EFactionType::Enemy)
+        return;
+
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 
     // 1. Advance construction and research every day
@@ -51,9 +54,23 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     if (UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>())
         ResearchMgr->AdvanceDay(Faction);
 
+    // Production - AI decision to start new jobs
+    if (UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>())
+    {
+        EngMgr->TryProduce(Faction);
+    }
+
     // 2. Facility-based income (Phase 23 — only this should add resources now)
     if (UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>())
         ResourceMgr->ApplyFacilityIncome(Faction);
+    
+    // Power status logging
+    if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+    {
+        int32 NetPower = BaseMgr->GetNetPower(Faction);
+        UE_LOG(LogTemp, Display, TEXT("[POWER] %s Net Power: %d (Provided %d | Draw %d)"),
+            *UEnum::GetValueAsString(Faction), NetPower, BaseMgr->GetTotalPowerProvided(Faction), BaseMgr->GetTotalPowerDrawn(Faction));
+    }
 
     // 3. Build order — prioritize basic barracks early for recruiting
     if (TryBuildFacility(Faction, EFacilityType::Command)) return;
@@ -309,4 +326,15 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
         }
     }
     return false;
+}
+
+void UAIControllerSubsystem::SetAIEnabled(bool bEnable)
+{
+    bAIEnabled = bEnable;
+    UE_LOG(LogTemp, Display, TEXT("AI Controller %s for Enemy faction"), bAIEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
+}
+
+bool UAIControllerSubsystem::IsAIEnabled() const
+{
+    return bAIEnabled;
 }

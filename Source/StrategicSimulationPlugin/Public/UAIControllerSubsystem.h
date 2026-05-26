@@ -15,6 +15,13 @@ class STRATEGICSIMULATIONPLUGIN_API UAIControllerSubsystem : public UGameInstanc
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
+    // Phase 23 - AI Control Toggle (for StateTree / manual / player control later)
+    UFUNCTION(BlueprintCallable, Category = "AI Control")
+    void SetAIEnabled(bool bEnable);
+
+    UFUNCTION(BlueprintCallable, Category = "AI Control")
+    bool IsAIEnabled() const;
+
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void Debug_RunAI();
 
@@ -22,6 +29,10 @@ public:
     void RunAIForFaction(EFactionType Faction, int32 CurrentDay);
 
 private:
+
+    UPROPERTY(VisibleAnywhere, Category = "AI Control")
+    bool bAIEnabled = true;
+
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 

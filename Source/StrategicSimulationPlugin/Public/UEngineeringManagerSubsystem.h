@@ -25,6 +25,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Production")
     TArray<UActiveProductionJob*> GetActiveProduction(EFactionType Faction) const;
 
+    // AI helper - smart production decision
+    UFUNCTION(BlueprintCallable, Category = "Production")
+    bool TryProduce(EFactionType Faction);
+
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Production")
     TArray<UActiveProductionJob*> HumanProductionQueue;

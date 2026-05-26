@@ -157,14 +157,31 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 
             if (Fac->BuildProgressDays <= 0)
             {
-                Fac->bIsOperational = true;
-                if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-                    EventDisp->OnFacilityCompleted.Broadcast(Faction, Fac);
+                // FIXED: Temporarily include THIS facility's power contribution when checking
+                int32 TempProvided = Fac->FacilityDefinition->PowerProvided;
+                int32 TempDraw = Fac->FacilityDefinition->PowerDraw;
 
-                UE_LOG(LogTemp, Display, TEXT("[BASE] ✅ %s facility COMPLETED: %s (Capacity now %d)"),
-                    *UEnum::GetValueAsString(Faction),
-                    *Fac->FacilityDefinition->FacilityName.ToString(),
-                    GetTotalBarracksCapacity(Faction));
+                int32 CurrentNetPower = GetNetPower(Faction);           // current operational facilities
+                int32 NetPowerWithThisFacility = CurrentNetPower + TempProvided - TempDraw;
+
+                Fac->bIsOperational = (NetPowerWithThisFacility >= 0);
+
+                if (Fac->bIsOperational)
+                {
+                    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                        EventDisp->OnFacilityCompleted.Broadcast(Faction, Fac);
+
+                    UE_LOG(LogTemp, Display, TEXT("[BASE] ✅ %s facility COMPLETED: %s (Net Power: %d)"),
+                        *UEnum::GetValueAsString(Faction),
+                        *Fac->FacilityDefinition->FacilityName.ToString(),
+                        NetPowerWithThisFacility);
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[BASE] ⚠️ %s facility completed but has INSUFFICIENT POWER (Net Power: %d)"),
+                        *UEnum::GetValueAsString(Faction),
+                        NetPowerWithThisFacility);
+                }
             }
         }
     }

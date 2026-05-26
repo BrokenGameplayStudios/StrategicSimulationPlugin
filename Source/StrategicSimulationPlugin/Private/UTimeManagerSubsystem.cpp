@@ -38,7 +38,10 @@ void UTimeManagerSubsystem::RealTimeTick()
         // Direct AI call every day (this is the reliable way)
         if (UAIControllerSubsystem* AI = GetGameInstance()->GetSubsystem<UAIControllerSubsystem>())
         {
-            AI->RunAIForFaction(EFactionType::Enemy, CurrentDayNum);
+            if (AI->IsAIEnabled())
+            {
+                AI->RunAIForFaction(EFactionType::Enemy, CurrentDayNum);
+            }
         }
     }
 }

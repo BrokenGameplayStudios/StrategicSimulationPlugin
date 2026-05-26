@@ -1,7 +1,10 @@
 #include "UEngineeringManagerSubsystem.h"
 #include "UResourceManagerSubsystem.h"
+#include "UStrategyCampaignSubsystem.h"
+#include "UBaseManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategyEventDispatcher.h"
+#include "UItemDatabase.h"
 #include "Engine/Engine.h"
 
 void UEngineeringManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -119,4 +122,43 @@ void UEngineeringManagerSubsystem::OnDayPassed(int32 NewDay)
             }
         }
     }
+}
+
+bool UEngineeringManagerSubsystem::TryProduce(EFactionType Faction)
+{
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+
+    if (!Campaign || !BaseMgr) return false;
+
+    // Only produce if we have at least one operational Workshop
+    if (!BaseMgr->HasFacilityOfType(Faction, EFacilityType::Workshop))
+    {
+        return false;
+    }
+
+    UItemDatabase* ItemDB = Campaign->ItemDatabaseAsset.Get();
+    if (!ItemDB) return false;
+
+    // Try to produce the highest-value unlocked item we don't have too many of yet
+    for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
+    {
+        UItemDefinition* ItemDef = SoftItem.Get();
+        if (!ItemDef) continue;
+
+        if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
+
+        // Simple rule: produce rifles/armor first
+        if (ItemDef->ItemName.ToString().Contains("Rifle") ||
+            ItemDef->ItemName.ToString().Contains("Armor"))
+        {
+            if (StartProduction(Faction, ItemDef, 1))
+            {
+                UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] ✅ %s started production of %s"),
+                    *UEnum::GetValueAsString(Faction), *ItemDef->ItemName.ToString());
+                return true;
+            }
+        }
+    }
+    return false;
 }
