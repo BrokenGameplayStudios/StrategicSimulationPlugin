@@ -80,7 +80,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // === PHASE 4: BASE EXPANSION (staggered — new base only when we have operational hangers) ===
+    // === PHASE 4: BASE EXPANSION (staggered by operational hangers) ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
         int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
@@ -97,7 +97,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DEVELOP EVERY BASE IN PARALLEL (AGGRESSIVE BARRACKS FOR FORWARD BASES) ===
+    // === DEVELOP EVERY BASE IN PARALLEL ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base) continue;
@@ -123,22 +123,18 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             }
         }
 
-        // 2. AGGRESSIVE BARRACKS — every base (especially forward bases) should keep building LivingQuarters
+        // 2. AGGRESSIVE BARRACKS (every base keeps expanding capacity)
         int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
         int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-
-        // Build extra barracks until each base has at least 20-30 capacity
-        if (CurrentCapacity < 25 || CurrentSoldiers >= CurrentCapacity - 6)
+        if (CurrentCapacity < 30 || CurrentSoldiers >= CurrentCapacity - 6)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — Trying extra LivingQuarters in '%s'"),
                 CurrentSoldiers, CurrentCapacity, *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
-            {
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
-            }
         }
 
-        // 3. Core facilities (one of each)
+        // 3. CORE FACILITIES (one of each — Hanger now uses operational check to guarantee it gets built)
         if (!Base->HasFacilityOfType(EFacilityType::Storage))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Storage in '%s'"), *Base->BaseName.ToString());
@@ -160,7 +156,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Laboratory started in '%s'"), *Base->BaseName.ToString());
         }
 
-        if (!Base->HasFacilityOfType(EFacilityType::Hanger))
+        // HANGER IS NOW HIGHER PRIORITY — use operational check so it always builds at least one
+        if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Hanger in '%s'"), *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::Hanger, Base))
@@ -170,7 +167,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         // 4. Extras (always try these)
         UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
         TryBuildFacility(Faction, EFacilityType::Storage, Base);
-        TryBuildFacility(Faction, EFacilityType::Hanger, Base);
+        TryBuildFacility(Faction, EFacilityType::Hanger, Base);   // extra hangers allowed
         if (Base->GetNetPower() < 100)
             TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
     }
