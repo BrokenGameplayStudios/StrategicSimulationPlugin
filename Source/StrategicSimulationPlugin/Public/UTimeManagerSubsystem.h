@@ -7,6 +7,7 @@
 #include "UTimeManagerSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDayPassed, int32, NewDay);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSimulationStarted);
 
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UTimeManagerSubsystem : public UGameInstanceSubsystem
@@ -17,11 +18,28 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
-    UFUNCTION(BlueprintCallable, Category = "Time")
-    void SetStartingDate(FDateTime NewStartDate);
+    /** The in-game date/time when the current simulation run was started */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Simulation")
+    FDateTime SimulationStartDate;
+
+    /** Fires when SetStartingDate or StartSimulation is called (perfect for New Game / Reset logic) */
+    UPROPERTY(BlueprintAssignable, Category = "Simulation")
+    FOnSimulationStarted OnSimulationStarted;
+
+    /** Returns true if the simulation is actively running */
+    UFUNCTION(BlueprintCallable, Category = "Simulation")
+    bool IsSimulating() const;
+
+    /** Returns how many days the current simulation run has been active */
+    UFUNCTION(BlueprintCallable, Category = "Simulation")
+    int32 GetTotalSimulationDays() const;
+
+    /** Starts (or resumes) the simulation — does NOT change dates */
+    UFUNCTION(BlueprintCallable, Category = "Simulation")
+    void StartSimulation();
 
     UFUNCTION(BlueprintCallable, Category = "Time")
-    void StartSimulation();
+    void SetStartingDate(FDateTime NewStartDate);
 
     UFUNCTION(BlueprintCallable, Category = "Time")
     void StopSimulation();

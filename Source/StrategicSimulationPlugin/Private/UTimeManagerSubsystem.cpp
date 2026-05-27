@@ -8,6 +8,7 @@ void UTimeManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     Super::Initialize(Collection);
 
     CurrentGameDate = FDateTime(2026, 1, 1, 0, 0, 0);
+    SimulationStartDate = CurrentGameDate;
 
     UE_LOG(LogTemp, Display, TEXT("UTimeManagerSubsystem initialized — Game started on %s (Paused by default)"), *CurrentGameDate.ToString());
 
@@ -35,7 +36,6 @@ void UTimeManagerSubsystem::RealTimeTick()
         OnDayPassed.Broadcast(CurrentDayNum);
         LastDay = CurrentDayNum;
 
-        // Direct AI call every day (this is the reliable way)
         if (UAIControllerSubsystem* AI = GetGameInstance()->GetSubsystem<UAIControllerSubsystem>())
         {
             if (AI->IsAIEnabled())
@@ -46,16 +46,36 @@ void UTimeManagerSubsystem::RealTimeTick()
     }
 }
 
-void UTimeManagerSubsystem::SetStartingDate(FDateTime NewStartDate)
+bool UTimeManagerSubsystem::IsSimulating() const
 {
-    CurrentGameDate = NewStartDate;
-    UE_LOG(LogTemp, Display, TEXT("Starting date set to %s"), *CurrentGameDate.ToString());
+    return GetTimeScale() > 0.0f && !IsPaused();
+}
+
+int32 UTimeManagerSubsystem::GetTotalSimulationDays() const
+{
+    if (SimulationStartDate.GetTicks() == 0)
+        return 0;
+
+    FTimespan Elapsed = GetCurrentGameDate() - SimulationStartDate;
+    return Elapsed.GetDays();
 }
 
 void UTimeManagerSubsystem::StartSimulation()
 {
+    SetTimeScale(1.0f);
     bIsPaused = false;
-    UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED"));
+
+    UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED (unpaused) — Current date remains %s"), *CurrentGameDate.ToString());
+    OnSimulationStarted.Broadcast();
+}
+
+void UTimeManagerSubsystem::SetStartingDate(FDateTime NewStartDate)
+{
+    CurrentGameDate = NewStartDate;
+    SimulationStartDate = NewStartDate;
+
+    UE_LOG(LogTemp, Display, TEXT("Starting date set to %s"), *CurrentGameDate.ToString());
+    OnSimulationStarted.Broadcast();   // UI / systems can now reset soldiers, resources, etc.
 }
 
 void UTimeManagerSubsystem::StopSimulation()
