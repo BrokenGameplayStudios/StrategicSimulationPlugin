@@ -112,11 +112,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 continue;
         }
 
-        // 2. BARRACKS — ENFORCE YOUR REAL LIMIT (60 capacity target = close to 68 max)
+        // 2. BARRACKS — STRICT LIMIT (36 from 6x LivingQuarters)
         int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
         int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
 
-        if (CurrentCapacity < 60 || CurrentSoldiers >= CurrentCapacity - 4)
+        if (CurrentCapacity < 36 || CurrentSoldiers >= CurrentCapacity - 4)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — Trying extra LivingQuarters in '%s'"),
                 CurrentSoldiers, CurrentCapacity, *Base->BaseName.ToString());
@@ -130,7 +130,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory)) TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
         if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
 
-        // 4. Extras (respect MaxBuilt)
+        // 4. Extras
+        UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
         TryBuildFacility(Faction, EFacilityType::Storage, Base);
         TryBuildFacility(Faction, EFacilityType::Hanger, Base);
         if (Base->GetNetPower() < 100) TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
@@ -222,7 +223,7 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
     return bBoughtAnything;
 }
 
-bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase /*= nullptr*/)
+bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -256,30 +257,22 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return false;
     }
 
-    // === PER-BASE MaxBuilt CHECK (this is the critical fix) ===
-    // LivingQuarters can be built many times per base (soldier scaling)
-    // Hanger respects MaxBuilt (4 per base, as defined in your data asset)
-    if (FacilityTypeToBuild != EFacilityType::LivingQuarters)
+    // === RESPECT MaxBuilt FROM DATA ASSETS (no special cases) ===
+    if (TargetBase)
     {
         int32 CurrentCountInBase = 0;
-        if (TargetBase)
+        for (UStrategyFacility* Fac : TargetBase->Facilities)
         {
-            // Count how many of this type already exist in THIS specific base
-            for (UStrategyFacility* Fac : TargetBase->Facilities)
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityTypeToBuild)
             {
-                if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityTypeToBuild)
-                {
-                    CurrentCountInBase++;
-                }
+                CurrentCountInBase++;
             }
         }
 
         if (CurrentCountInBase >= FacilityDef->MaxBuilt)
         {
             UE_LOG(LogTemp, Verbose, TEXT("[AI] MaxBuilt reached for %s in base '%s' (%d/%d) — skipping"),
-                *UEnum::GetValueAsString(FacilityTypeToBuild),
-                TargetBase ? *TargetBase->BaseName.ToString() : TEXT("unknown"),
-                CurrentCountInBase, FacilityDef->MaxBuilt);
+                *UEnum::GetValueAsString(FacilityTypeToBuild), *TargetBase->BaseName.ToString(), CurrentCountInBase, FacilityDef->MaxBuilt);
             return false;
         }
     }
@@ -288,12 +281,10 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < FacilityDef->BuildCost.Money)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI] Not enough money for %s (needs %d)"),
-            *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money);
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] Not enough money for %s (needs %d)"), *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money);
         return false;
     }
 
-    // Build it
     if (BaseMgr->BuildFacility(Faction, FacilityDef, TargetBase))
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] %s started construction of %s in base '%s' (%d days)"),
@@ -334,7 +325,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // === IMPROVED: Pick the base with the MOST available barracks capacity (spreads soldiers) ===
+    // === Pick the base with the MOST available barracks capacity ===
     UStrategyBase* TargetBase = nullptr;
     int32 BestAvailableSlots = 0;
 
@@ -370,8 +361,13 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 
     if (SoldierMgr->RecruitSoldier(Faction, ClassDef, TargetBase))
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited a new soldier (%s) at base '%s'"),
-            *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(), *TargetBase->BaseName.ToString());
+        int32 CurrentCapacity = TargetBase->GetTotalCapacityForType(EFacilityType::LivingQuarters);
+        int32 CurrentSoldiers = SoldierMgr->GetNumSoldiersStationedAt(TargetBase, Faction);
+
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited a new soldier (%s) at base '%s' - Capacity %d/%d"),
+            *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(), *TargetBase->BaseName.ToString(),
+            CurrentSoldiers, CurrentCapacity);
+
         return true;
     }
 
