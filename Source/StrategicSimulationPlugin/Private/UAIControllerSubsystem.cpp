@@ -111,8 +111,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational, Net Power: %d)"),
             *Base->BaseName.ToString(), Base->GetNetPower());
 
-        // 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY
-        if (Base->GetNetPower() < 50 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
+        // 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY (Was Spamming)
+        if (Base->GetNetPower() < 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → POWER CRITICAL (%d) — Trying PowerPlant in '%s'"),
                 Base->GetNetPower(), *Base->BaseName.ToString());
@@ -373,8 +373,10 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // NEW: Find a base with available barracks capacity (strictly per-base)
+    // === IMPROVED: Pick the base with the MOST available barracks capacity (spreads soldiers) ===
     UStrategyBase* TargetBase = nullptr;
+    int32 BestAvailableSlots = 0;
+
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
     for (UStrategyBase* Base : Bases)
     {
@@ -382,15 +384,17 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         {
             int32 Cap = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
             int32 Stationed = SoldierMgr->GetNumSoldiersStationedAt(Base, Faction);
-            if (Stationed < Cap)
+            int32 Available = Cap - Stationed;
+
+            if (Available > BestAvailableSlots)
             {
+                BestAvailableSlots = Available;
                 TargetBase = Base;
-                break; // first base with space
             }
         }
     }
 
-    if (!TargetBase)
+    if (!TargetBase || BestAvailableSlots <= 0)
     {
         UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No base with available barracks capacity for %s"), *UEnum::GetValueAsString(Faction));
         return false;
