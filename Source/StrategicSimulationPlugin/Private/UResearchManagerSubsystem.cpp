@@ -19,17 +19,27 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
     if (!ProjectDef) return nullptr;
 
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+
+    // IMPROVED: Check ANY base has an operational Laboratory (fixes multi-base issue)
+    bool bHasOperationalLab = false;
     if (BaseMgr)
     {
-        // NEW GATE: Research Lab must be operational
-        if (!BaseMgr->HasFacilityOfType(Faction, EFacilityType::Laboratory) ||
-            !BaseMgr->GetBases(Faction).Num() ||
-            !BaseMgr->GetBases(Faction)[0]->HasOperationalFacilityOfType(EFacilityType::Laboratory))
+        const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+        for (UStrategyBase* Base : Bases)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — Research Lab must be operational first!"),
-                *ProjectDef->ProjectName.ToString());
-            return nullptr;
+            if (Base && Base->HasOperationalFacilityOfType(EFacilityType::Laboratory))
+            {
+                bHasOperationalLab = true;
+                break;
+            }
         }
+    }
+
+    if (!bHasOperationalLab)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — No operational Research Lab found in any base!"),
+            *ProjectDef->ProjectName.ToString());
+        return nullptr;
     }
 
     UActiveResearchProject* NewProject = NewObject<UActiveResearchProject>();
@@ -42,7 +52,8 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
         EnemyResearchQueue.Add(NewProject);
 
     OnResearchListChanged.Broadcast(Faction);
-    UE_LOG(LogTemp, Display, TEXT("Started research '%s' for %s (%d days)"), *ProjectDef->ProjectName.ToString(), *UEnum::GetValueAsString(Faction), NewProject->RemainingDays);
+    UE_LOG(LogTemp, Display, TEXT("Started research '%s' for %s (%d days)"),
+        *ProjectDef->ProjectName.ToString(), *UEnum::GetValueAsString(Faction), NewProject->RemainingDays);
 
     return NewProject;
 }

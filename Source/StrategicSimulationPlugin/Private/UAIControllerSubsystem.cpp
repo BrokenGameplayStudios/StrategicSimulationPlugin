@@ -407,32 +407,56 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
     UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
 
-    if (!Campaign || !ResearchMgr || !ResourceMgr) return false;
+    if (!Campaign || !ResearchMgr || !ResourceMgr)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Missing required subsystems!"));
+        return false;
+    }
 
     UResearchDatabase* ResearchDB = Campaign->ResearchDatabaseAsset.Get();
-    if (!ResearchDB || ResearchDB->AvailableTechs.Num() == 0) return false;
+    if (!ResearchDB)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] ResearchDatabaseAsset not loaded!"));
+        return false;
+    }
+    if (ResearchDB->AvailableTechs.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] No AvailableTechs in ResearchDatabase!"));
+        return false;
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s checking %d available techs..."),
+        *UEnum::GetValueAsString(Faction), ResearchDB->AvailableTechs.Num());
+
+    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
 
     for (const TSoftObjectPtr<UResearchTechDefinition>& SoftResearch : ResearchDB->AvailableTechs)
     {
         UResearchTechDefinition* ResearchDef = SoftResearch.Get();
         if (!ResearchDef) continue;
 
-        // Skip if already in progress or completed
         if (ResearchMgr->IsResearchInProgress(Faction, ResearchDef) || ResearchMgr->HasCompletedResearch(Faction, ResearchDef))
-            continue;
-
-        // Check cost
-        FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-        if (Res.Money >= ResearchDef->ResearchCost.Money)
         {
-            if (ResearchMgr->StartResearch(Faction, ResearchDef))
-            {
-                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s started research: %s (%d days)"),
-                    *UEnum::GetValueAsString(Faction), *ResearchDef->ProjectName.ToString(), ResearchDef->ResearchDays);
-                return true;
-            }
+            UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] Skipping %s — already in progress or completed"), *ResearchDef->ProjectName.ToString());
+            continue;
+        }
+
+        if (Res.Money < ResearchDef->ResearchCost.Money)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] Skipping %s — not enough money (%d needed)"),
+                *ResearchDef->ProjectName.ToString(), ResearchDef->ResearchCost.Money);
+            continue;
+        }
+
+        if (ResearchMgr->StartResearch(Faction, ResearchDef))
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] %s started research: %s (%d days)"),
+                *UEnum::GetValueAsString(Faction), *ResearchDef->ProjectName.ToString(), ResearchDef->ResearchDays);
+            return true;
         }
     }
+
+    UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] No suitable tech found this day"));
     return false;
 }
 
