@@ -57,7 +57,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
             if (CommandDef)
             {
-                // === NEW AFFORDABILITY CHECK ===
+                // === AFFORDABILITY CHECK (prevents negative money) ===
                 UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
                 if (ResourceMgr)
                 {
@@ -155,7 +155,7 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 {
     if (!FacilityDef) return nullptr;
 
-    // === NEW AFFORDABILITY CHECK ===
+    // === NEW AFFORDABILITY CHECK (prevents negative money) ===
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (ResourceMgr)
     {
@@ -387,6 +387,7 @@ int32 UBaseManagerSubsystem::GetNumberOfOperationalHangers(EFactionType Faction)
     return Count;
 }
 
+// NEW FUNCTION
 void UBaseManagerSubsystem::ResetAllBases()
 {
     for (UStrategyBase* Base : HumanBases)

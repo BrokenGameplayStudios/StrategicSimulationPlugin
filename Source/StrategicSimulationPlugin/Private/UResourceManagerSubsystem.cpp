@@ -8,10 +8,10 @@ void UResourceManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     // === TIGHTER STARTING RESOURCES (much more strategic early game) ===
     // Human (player) - enough to build first base + 1-2 facilities, but must choose carefully
-    FactionResources.Add(EFactionType::Human, FResourceStockpile{ 4500, 1800, 100, 50 });
+    FactionResources.Add(EFactionType::Human, FResourceStockpile{ 9500, 1800, 100, 50 });
 
     // Enemy (AI) - slightly weaker start so they don't snowball too fast
-    FactionResources.Add(EFactionType::Enemy, FResourceStockpile{ 3500, 1400, 150, 30 });
+    FactionResources.Add(EFactionType::Enemy, FResourceStockpile{ 8500, 1400, 150, 30 });
 
     UE_LOG(LogTemp, Display, TEXT("UResourceManagerSubsystem initialized — both factions ready!"));
 }
