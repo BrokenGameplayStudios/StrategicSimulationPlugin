@@ -80,7 +80,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // === PHASE 4: BASE EXPANSION ===
+    // === PHASE 4: BASE EXPANSION (staggered — one new base per operational hanger) ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
         int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
@@ -97,7 +97,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DEVELOP EVERY BASE IN PARALLEL ===
+    // === DEVELOP EVERY BASE IN PARALLEL (POWER-FIRST + CORE PRIORITIES) ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base) continue;
@@ -111,18 +111,21 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational, Net Power: %d)"),
             *Base->BaseName.ToString(), Base->GetNetPower());
 
-        // 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY
-        if (!Base->HasFacilityOfType(EFacilityType::PowerPlant))
+        // === 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY (build more aggressively) ===
+        if (Base->GetNetPower() <= 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying PowerPlant in '%s'"), *Base->BaseName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[AI] → POWER CRITICAL — Trying PowerPlant in '%s'"), *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base))
+            {
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS PowerPlant started in '%s'"), *Base->BaseName.ToString());
+                continue; // power first — don't do anything else this day
+            }
         }
 
-        // 2. Core facilities (one of each)
+        // === 2. CORE FACILITIES (one of each — LivingQuarters first for soldier cap) ===
         if (!Base->HasFacilityOfType(EFacilityType::LivingQuarters))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying LivingQuarters in '%s'"), *Base->BaseName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying LivingQuarters (barracks) in '%s'"), *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS LivingQuarters started in '%s'"), *Base->BaseName.ToString());
         }
@@ -155,7 +158,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Hanger started in '%s'"), *Base->BaseName.ToString());
         }
 
-        // 3. Extras only after core is complete
+        // === 3. EXTRAS (after core is complete) ===
         if (Base->GetTotalCapacityForType(EFacilityType::LivingQuarters) < 12)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra LivingQuarters in '%s'"), *Base->BaseName.ToString());
@@ -163,14 +166,15 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
         }
 
-        // Extra storage and hangers
-        UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger in '%s'"), *Base->BaseName.ToString());
+        // Extra storage / hangers / power buffer
+        UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
         TryBuildFacility(Faction, EFacilityType::Storage, Base);
         TryBuildFacility(Faction, EFacilityType::Hanger, Base);
+        if (Base->GetNetPower() < 100) // extra power buffer
+            TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
     }
 
     // === RECRUIT, RESEARCH, PURCHASE, PRODUCTION ===
-    // Now uses the new TryRecruit() which handles per-base barracks capacity + TargetBase
     if (SoldierMgr && TryRecruit(Faction))
     {
         return;
