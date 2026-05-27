@@ -34,137 +34,68 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     {
         AI->RunAIForFaction(EFactionType::Enemy, NewDay);
     }
-
-    // === ONE-TIME DATA ASSET DEBUG PRINT (runs only the FIRST time OnDayPassed is called) ===
-    static bool bDebugPrinted = false;
-    if (!bDebugPrinted)
-    {
-        bDebugPrinted = true;
-
-        UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));
-
-        // 1. Facility Database (force load + print)
-        if (FacilityDatabaseAsset.IsValid())
-        {
-            UFacilityDatabase* FacilityDB = FacilityDatabaseAsset.LoadSynchronous();
-            if (FacilityDB)
-            {
-                UE_LOG(LogTemp, Display, TEXT("[FACILITY DATABASE] Loaded %d facilities:"), FacilityDB->AvailableFacilities.Num());
-                for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
-                {
-                    if (UFacilityDefinition* Def = SoftDef.Get())
-                    {
-                        UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days"),
-                            *Def->FacilityName.ToString(),
-                            *UEnum::GetValueAsString(Def->FacilityType),
-                            Def->Capacity,
-                            Def->MaxBuilt,
-                            Def->PowerProvided,
-                            Def->PowerDraw,
-                            Def->BuildCost.Money,
-                            Def->BuildCost.Supplies,
-                            Def->BuildTimeDays);
-                    }
-                }
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[FACILITY DATABASE] FacilityDatabaseAsset is NULL even after LoadSynchronous!"));
-        }
-
-        // 2. Soldier Class Database
-        if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
-        {
-            UE_LOG(LogTemp, Display, TEXT("[SOLDIER DATABASE] Loaded %d soldier classes:"), SoldierDB->AvailableSoldierClasses.Num());
-            for (const TSoftObjectPtr<USoldierClassDefinition>& SoftClass : SoldierDB->AvailableSoldierClasses)
-            {
-                if (USoldierClassDefinition* ClassDef = SoftClass.Get())
-                {
-                    UE_LOG(LogTemp, Display, TEXT("  • %s | Starting XP: %d"), *ClassDef->ClassName.ToString(), ClassDef->StartingXP);
-                }
-            }
-        }
-
-        // 3. Research Database
-        if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
-        {
-            UE_LOG(LogTemp, Display, TEXT("[RESEARCH DATABASE] Loaded %d research techs:"), ResearchDB->AvailableTechs.Num());
-        }
-
-        // 4. Item Database
-        if (UItemDatabase* ItemDB = ItemDatabaseAsset.Get())
-        {
-            UE_LOG(LogTemp, Display, TEXT("[ITEM DATABASE] Loaded %d buyable items:"), ItemDB->BuyableItems.Num());
-        }
-
-        UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));
-    }
-}
-
-UResourceManagerSubsystem* UStrategyCampaignSubsystem::GetResourceManager() const { return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>(); }
-USoldierManagerSubsystem* UStrategyCampaignSubsystem::GetSoldierManager() const { return GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>(); }
-UResearchManagerSubsystem* UStrategyCampaignSubsystem::GetResearchManager() const { return GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>(); }
-UEngineeringManagerSubsystem* UStrategyCampaignSubsystem::GetEngineeringManager() const { return GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>(); }
-UBaseManagerSubsystem* UStrategyCampaignSubsystem::GetBaseManager() const { return GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>(); }
-UTimeManagerSubsystem* UStrategyCampaignSubsystem::GetTimeManager() const { return GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>(); }
-UAIControllerSubsystem* UStrategyCampaignSubsystem::GetAIController() const { return GetGameInstance()->GetSubsystem<UAIControllerSubsystem>(); }
-
-void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)
-{
-    if (SlotIndex < 1) SlotIndex = 1;
-    FString SlotName = FString::Printf(TEXT("SaveSlot%02d"), SlotIndex);
-
-    UStrategySaveGame* SaveGame = Cast<UStrategySaveGame>(UGameplayStatics::CreateSaveGameObject(UStrategySaveGame::StaticClass()));
-    if (!SaveGame) return;
-
-    SaveGame->CurrentDay = GetTimeManager()->GetCurrentDay();
-    SaveGame->HumanResources = GetResourceManager()->GetResources(EFactionType::Human);
-    SaveGame->EnemyResources = GetResourceManager()->GetResources(EFactionType::Enemy);
-    SaveGame->LastSavedTime = FDateTime::Now();
-    SaveGame->HumanSoldierCount = GetSoldierManager()->GetRoster(EFactionType::Human).Num();
-    SaveGame->HumanSummary = FText::FromString(FString::Printf(TEXT("%d Soldiers"), SaveGame->HumanSoldierCount));
-
-    UGameplayStatics::SaveGameToSlot(SaveGame, SlotName, 0);
-    UE_LOG(LogTemp, Display, TEXT("CAMPAIGN SAVED to slot %d (Day %d)"), SlotIndex, SaveGame->CurrentDay);
-}
-
-void UStrategyCampaignSubsystem::LoadCampaign(int32 SlotIndex)
-{
-    if (SlotIndex < 1) SlotIndex = 1;
-    FString SlotName = FString::Printf(TEXT("SaveSlot%02d"), SlotIndex);
-
-    UStrategySaveGame* Loaded = Cast<UStrategySaveGame>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
-    if (!Loaded)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No save found in slot %d — starting fresh"), SlotIndex);
-        return;
-    }
-
-    GetTimeManager()->AdvanceDays(Loaded->CurrentDay - GetTimeManager()->GetCurrentDay());
-    GetResourceManager()->SetResources(EFactionType::Human, Loaded->HumanResources);
-    GetResourceManager()->SetResources(EFactionType::Enemy, Loaded->EnemyResources);
-
-    UE_LOG(LogTemp, Display, TEXT("CAMPAIGN LOADED from slot %d (Day %d)"), SlotIndex, Loaded->CurrentDay);
-}
-
-TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() const
-{
-    TArray<UStrategySaveGame*> Saves;
-    for (int32 i = 1; i <= 10; ++i)
-    {
-        FString SlotName = FString::Printf(TEXT("SaveSlot%02d"), i);
-        UStrategySaveGame* Save = Cast<UStrategySaveGame>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
-        if (Save)
-            Saves.Add(Save);
-    }
-    return Saves;
 }
 
 void UStrategyCampaignSubsystem::StartSimulation()
 {
     GetTimeManager()->SetTimeScale(1.0f);
     UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED"));
+
+    // === ONE-TIME DATA ASSET DEBUG PRINT (runs right after GameInitializer) ===
+    UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));
+
+    // 1. Facility Database
+    if (UFacilityDatabase* FacilityDB = FacilityDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[FACILITY DATABASE] Loaded %d facilities:"), FacilityDB->AvailableFacilities.Num());
+        for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
+        {
+            if (UFacilityDefinition* Def = SoftDef.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days"),
+                    *Def->FacilityName.ToString(),
+                    *UEnum::GetValueAsString(Def->FacilityType),
+                    Def->Capacity,
+                    Def->MaxBuilt,
+                    Def->PowerProvided,
+                    Def->PowerDraw,
+                    Def->BuildCost.Money,
+                    Def->BuildCost.Supplies,
+                    Def->BuildTimeDays);
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[FACILITY DATABASE] FacilityDatabaseAsset is NULL!"));
+    }
+
+    // 2. Soldier Class Database
+    if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER DATABASE] Loaded %d soldier classes:"), SoldierDB->AvailableSoldierClasses.Num());
+        for (const TSoftObjectPtr<USoldierClassDefinition>& SoftClass : SoldierDB->AvailableSoldierClasses)
+        {
+            if (USoldierClassDefinition* ClassDef = SoftClass.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Starting XP: %d"), *ClassDef->ClassName.ToString(), ClassDef->StartingXP);
+            }
+        }
+    }
+
+    // 3. Research Database
+    if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[RESEARCH DATABASE] Loaded %d research techs:"), ResearchDB->AvailableTechs.Num());
+    }
+
+    // 4. Item Database
+    if (UItemDatabase* ItemDB = ItemDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[ITEM DATABASE] Loaded %d buyable items:"), ItemDB->BuyableItems.Num());
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));
 }
 
 void UStrategyCampaignSubsystem::StopSimulation()
@@ -239,4 +170,63 @@ bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefin
 
     UE_LOG(LogTemp, Verbose, TEXT("[UNLOCK] ❌ %s is NOT unlocked yet"), *ItemDef->ItemName.ToString());
     return false;
+}
+
+UResourceManagerSubsystem* UStrategyCampaignSubsystem::GetResourceManager() const { return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>(); }
+USoldierManagerSubsystem* UStrategyCampaignSubsystem::GetSoldierManager() const { return GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>(); }
+UResearchManagerSubsystem* UStrategyCampaignSubsystem::GetResearchManager() const { return GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>(); }
+UEngineeringManagerSubsystem* UStrategyCampaignSubsystem::GetEngineeringManager() const { return GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>(); }
+UBaseManagerSubsystem* UStrategyCampaignSubsystem::GetBaseManager() const { return GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>(); }
+UTimeManagerSubsystem* UStrategyCampaignSubsystem::GetTimeManager() const { return GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>(); }
+UAIControllerSubsystem* UStrategyCampaignSubsystem::GetAIController() const { return GetGameInstance()->GetSubsystem<UAIControllerSubsystem>(); }
+
+void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)
+{
+    if (SlotIndex < 1) SlotIndex = 1;
+    FString SlotName = FString::Printf(TEXT("SaveSlot%02d"), SlotIndex);
+
+    UStrategySaveGame* SaveGame = Cast<UStrategySaveGame>(UGameplayStatics::CreateSaveGameObject(UStrategySaveGame::StaticClass()));
+    if (!SaveGame) return;
+
+    SaveGame->CurrentDay = GetTimeManager()->GetCurrentDay();
+    SaveGame->HumanResources = GetResourceManager()->GetResources(EFactionType::Human);
+    SaveGame->EnemyResources = GetResourceManager()->GetResources(EFactionType::Enemy);
+    SaveGame->LastSavedTime = FDateTime::Now();
+    SaveGame->HumanSoldierCount = GetSoldierManager()->GetRoster(EFactionType::Human).Num();
+    SaveGame->HumanSummary = FText::FromString(FString::Printf(TEXT("%d Soldiers"), SaveGame->HumanSoldierCount));
+
+    UGameplayStatics::SaveGameToSlot(SaveGame, SlotName, 0);
+    UE_LOG(LogTemp, Display, TEXT("CAMPAIGN SAVED to slot %d (Day %d)"), SlotIndex, SaveGame->CurrentDay);
+}
+
+void UStrategyCampaignSubsystem::LoadCampaign(int32 SlotIndex)
+{
+    if (SlotIndex < 1) SlotIndex = 1;
+    FString SlotName = FString::Printf(TEXT("SaveSlot%02d"), SlotIndex);
+
+    UStrategySaveGame* Loaded = Cast<UStrategySaveGame>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
+    if (!Loaded)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No save found in slot %d — starting fresh"), SlotIndex);
+        return;
+    }
+
+    GetTimeManager()->AdvanceDays(Loaded->CurrentDay - GetTimeManager()->GetCurrentDay());
+    GetResourceManager()->SetResources(EFactionType::Human, Loaded->HumanResources);
+    GetResourceManager()->SetResources(EFactionType::Enemy, Loaded->EnemyResources);
+
+    UE_LOG(LogTemp, Display, TEXT("CAMPAIGN LOADED from slot %d (Day %d)"), SlotIndex, Loaded->CurrentDay);
+}
+
+TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() const
+{
+    TArray<UStrategySaveGame*> Saves;
+    for (int32 i = 1; i <= 10; ++i)
+    {
+        FString SlotName = FString::Printf(TEXT("SaveSlot%02d"), i);
+        UStrategySaveGame* Save = Cast<UStrategySaveGame>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
+        if (Save)
+            Saves.Add(Save);
+    }
+    return Saves;
 }
