@@ -170,25 +170,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
 
     // === RECRUIT, RESEARCH, PURCHASE, PRODUCTION ===
-    if (SoldierMgr)
+    // Now uses the new TryRecruit() which handles per-base barracks capacity + TargetBase
+    if (SoldierMgr && TryRecruit(Faction))
     {
-        USoldierClassDefinition* GruntClass = nullptr;
-        if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
-        {
-            if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
-            {
-                if (DB->AvailableSoldierClasses.Num() > 0)
-                    GruntClass = DB->AvailableSoldierClasses[0].Get();
-            }
-        }
-
-        if (GruntClass)
-        {
-            if (SoldierMgr->RecruitSoldier(Faction, GruntClass))
-            {
-                return;
-            }
-        }
+        return;
     }
 
     if (ResearchMgr && TryResearch(Faction)) return;
@@ -343,40 +328,39 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     }
 
     USoldierClassDatabase* SoldierDB = Campaign->SoldierClassDatabaseAsset.Get();
-    if (!SoldierDB)
+    if (!SoldierDB || SoldierDB->AvailableSoldierClasses.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] SoldierClassDatabase is null!"));
+        UE_LOG(LogTemp, Warning, TEXT("[AI] No soldier classes available!"));
         return false;
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] SoldierClassDatabase has %d classes"), SoldierDB->AvailableSoldierClasses.Num());
-
-    USoldierClassDefinition* ClassDef = nullptr;
-    for (const TSoftObjectPtr<USoldierClassDefinition>& SoftClass : SoldierDB->AvailableSoldierClasses)
+    USoldierClassDefinition* ClassDef = SoldierDB->AvailableSoldierClasses[0].Get();
+    if (!ClassDef)
     {
-        if (USoldierClassDefinition* Def = SoftClass.Get())
+        UE_LOG(LogTemp, Warning, TEXT("[AI] Soldier class is null!"));
+        return false;
+    }
+
+    // NEW: Find a base with available barracks capacity (strictly per-base)
+    UStrategyBase* TargetBase = nullptr;
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    for (UStrategyBase* Base : Bases)
+    {
+        if (Base)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] Found soldier class: %s"), *Def->ClassName.ToString());
-            ClassDef = Def;
-            break;
+            int32 Cap = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
+            int32 Stationed = SoldierMgr->GetNumSoldiersStationedAt(Base, Faction);
+            if (Stationed < Cap)
+            {
+                TargetBase = Base;
+                break; // first base with space
+            }
         }
     }
 
-    if (!ClassDef)
+    if (!TargetBase)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] No soldier class in SoldierClassDatabase!"));
-        return false;
-    }
-
-    int32 CurrentCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
-    int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
-
-    UE_LOG(LogTemp, Display, TEXT("[AI] Barracks capacity for %s: %d/%d"), *UEnum::GetValueAsString(Faction), CurrentSoldiers, CurrentCapacity);
-
-    if (CurrentSoldiers >= CurrentCapacity)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s barracks full (%d/%d) — cannot recruit"),
-            *UEnum::GetValueAsString(Faction), CurrentSoldiers, CurrentCapacity);
+        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No base with available barracks capacity for %s"), *UEnum::GetValueAsString(Faction));
         return false;
     }
 
@@ -387,9 +371,10 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    if (SoldierMgr->RecruitSoldier(Faction, ClassDef))
+    if (SoldierMgr->RecruitSoldier(Faction, ClassDef, TargetBase))
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s recruited a new soldier (%s)"), *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString());
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited a new soldier (%s) at base '%s'"),
+            *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(), *TargetBase->BaseName.ToString());
         return true;
     }
 
