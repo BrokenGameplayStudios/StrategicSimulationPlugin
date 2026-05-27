@@ -35,38 +35,42 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
         AI->RunAIForFaction(EFactionType::Enemy, NewDay);
     }
 
-    // === ONE-TIME DATA ASSET DEBUG PRINT (runs only on first day after loading) ===
+    // === ONE-TIME DATA ASSET DEBUG PRINT (runs only the FIRST time OnDayPassed is called) ===
     static bool bDebugPrinted = false;
-    if (!bDebugPrinted && NewDay == 1)
+    if (!bDebugPrinted)
     {
         bDebugPrinted = true;
 
         UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));
 
-        // 1. Facility Database (most important for soldier capacity)
-        if (UFacilityDatabase* FacilityDB = FacilityDatabaseAsset.Get())
+        // 1. Facility Database (force load + print)
+        if (FacilityDatabaseAsset.IsValid())
         {
-            UE_LOG(LogTemp, Display, TEXT("[FACILITY DATABASE] Loaded %d facilities:"), FacilityDB->AvailableFacilities.Num());
-            for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
+            UFacilityDatabase* FacilityDB = FacilityDatabaseAsset.LoadSynchronous();
+            if (FacilityDB)
             {
-                if (UFacilityDefinition* Def = SoftDef.Get())
+                UE_LOG(LogTemp, Display, TEXT("[FACILITY DATABASE] Loaded %d facilities:"), FacilityDB->AvailableFacilities.Num());
+                for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
                 {
-                    UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days"),
-                        *Def->FacilityName.ToString(),
-                        *UEnum::GetValueAsString(Def->FacilityType),
-                        Def->Capacity,
-                        Def->MaxBuilt,
-                        Def->PowerProvided,
-                        Def->PowerDraw,
-                        Def->BuildCost.Money,
-                        Def->BuildCost.Supplies,
-                        Def->BuildTimeDays);
+                    if (UFacilityDefinition* Def = SoftDef.Get())
+                    {
+                        UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days"),
+                            *Def->FacilityName.ToString(),
+                            *UEnum::GetValueAsString(Def->FacilityType),
+                            Def->Capacity,
+                            Def->MaxBuilt,
+                            Def->PowerProvided,
+                            Def->PowerDraw,
+                            Def->BuildCost.Money,
+                            Def->BuildCost.Supplies,
+                            Def->BuildTimeDays);
+                    }
                 }
             }
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("[FACILITY DATABASE] FacilityDatabaseAsset is NULL!"));
+            UE_LOG(LogTemp, Warning, TEXT("[FACILITY DATABASE] FacilityDatabaseAsset is NULL even after LoadSynchronous!"));
         }
 
         // 2. Soldier Class Database
@@ -86,30 +90,12 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
         if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
         {
             UE_LOG(LogTemp, Display, TEXT("[RESEARCH DATABASE] Loaded %d research techs:"), ResearchDB->AvailableTechs.Num());
-            for (const TSoftObjectPtr<UResearchTechDefinition>& SoftTech : ResearchDB->AvailableTechs)
-            {
-                if (UResearchTechDefinition* Tech = SoftTech.Get())
-                {
-                    UE_LOG(LogTemp, Display, TEXT("  • %s | Days: %d | Cost: %d Money"),
-                        *Tech->ProjectName.ToString(), Tech->ResearchDays, Tech->ResearchCost.Money);
-                }
-            }
         }
 
         // 4. Item Database
         if (UItemDatabase* ItemDB = ItemDatabaseAsset.Get())
         {
             UE_LOG(LogTemp, Display, TEXT("[ITEM DATABASE] Loaded %d buyable items:"), ItemDB->BuyableItems.Num());
-            for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
-            {
-                if (UItemDefinition* Item = SoftItem.Get())
-                {
-                    UE_LOG(LogTemp, Display, TEXT("  • %s | Category: %s | Cost: %d Money"),
-                        *Item->ItemName.ToString(),
-                        *UEnum::GetValueAsString(Item->ItemCategory),
-                        Item->PurchaseCost.Money);
-                }
-            }
         }
 
         UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));
