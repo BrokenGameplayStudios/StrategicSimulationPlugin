@@ -57,7 +57,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
             if (CommandDef)
             {
-                // === AFFORDABILITY CHECK (prevents negative money) ===
+                // === AFFORDABILITY CHECK ===
                 UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
                 if (ResourceMgr)
                 {
@@ -69,13 +69,10 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
                     }
                     else
                     {
-                        // Deduct build cost immediately
                         FResourceStockpile NegativeCost = CommandDef->BuildCost;
                         NegativeCost.Money = -NegativeCost.Money;
                         NegativeCost.Supplies = -NegativeCost.Supplies;
-
                         ResourceMgr->AddResources(Faction, NegativeCost);
-
                         UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Paid for Command Center in new base '%s'"), *NewBase->BaseName.ToString());
                     }
                 }
@@ -83,7 +80,6 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
                 // Start construction
                 UStrategyFacility* CommandFacility = BuildFacility(Faction, CommandDef, NewBase);
 
-                // === INSTANT OPERATIONAL FOR INITIAL BASE ===
                 if (CommandFacility)
                 {
                     CommandFacility->bIsOperational = true;
@@ -109,21 +105,40 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         }
     }
 
-    // === FALLBACK: Create Command Center directly if database lookup failed (fixes timing issue) ===
+    // === IMPROVED FALLBACK: Always use real FacilityDefinition ===
     if (!bCommandCreated)
     {
         UStrategyFacility* CommandFacility = NewObject<UStrategyFacility>();
-        CommandFacility->FacilityDefinition = nullptr; // Will be resolved later or use defaults
+
+        // Lookup the real Command Center definition for income/power/etc.
+        if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            UFacilityDatabase* FacilityDB = Campaign->FacilityDatabaseAsset.Get();
+            if (FacilityDB)
+            {
+                for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
+                {
+                    if (UFacilityDefinition* Def = SoftDef.Get())
+                    {
+                        if (Def->FacilityType == EFacilityType::Command)
+                        {
+                            CommandFacility->FacilityDefinition = Def;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         CommandFacility->BuildProgressDays = 0;
         CommandFacility->bIsOperational = true;
         CommandFacility->CurrentPowerDraw = 0;
 
-        // Give it basic Command properties (even without full definition)
         NewBase->AddFacility(CommandFacility);
 
         NewBase->UpdatePowerFromFacilities();
 
-        UE_LOG(LogTemp, Display, TEXT("[FACILITY] ✅ FALLBACK Command Center created and made operational in base '%s'"),
+        UE_LOG(LogTemp, Display, TEXT("[FACILITY] ✅ FALLBACK Command Center created with real definition and made operational in base '%s'"),
             *NewBase->BaseName.ToString());
 
         if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
@@ -155,7 +170,7 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 {
     if (!FacilityDef) return nullptr;
 
-    // === NEW AFFORDABILITY CHECK (prevents negative money) ===
+    // === AFFORDABILITY CHECK ===
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (ResourceMgr)
     {
@@ -183,7 +198,6 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 
     UStrategyBase* ChosenBase = TargetBase;
 
-    // NEW SMART LOGIC: If no TargetBase is specified, prefer a base that still needs its Command Center
     if (!ChosenBase)
     {
         for (UStrategyBase* Base : Bases)
@@ -195,7 +209,7 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
             }
         }
         if (!ChosenBase && !Bases.IsEmpty())
-            ChosenBase = Bases[0]; // fallback to first base for normal builds
+            ChosenBase = Bases[0];
     }
 
     if (!ChosenBase)
@@ -225,7 +239,6 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 
     OnFacilityListChanged.Broadcast(Faction);
 
-    // CLEAR LOGGING — now always shows exactly which base
     UE_LOG(LogTemp, Display, TEXT("✅ [BUILD] Started construction of %s in base '%s' (%d days)"),
         *FacilityDef->FacilityName.ToString(), *ChosenBase->BaseName.ToString(), NewFacility->BuildProgressDays);
 
@@ -278,7 +291,7 @@ int32 UBaseManagerSubsystem::GetTotalBarracksCapacity(EFactionType Faction) cons
     for (UStrategyBase* Base : GetBasesInternal(Faction))
     {
         if (Base)
-            Total += Base->GetTotalCapacityForType(EFacilityType::LivingQuarters); // or Barracks
+            Total += Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
     }
     return Total;
 }
@@ -367,7 +380,7 @@ bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const
     const TArray<UStrategyBase*>& Bases = GetBasesInternal(Faction);
     if (Bases.Num() >= 10)
     {
-        return false; // hard cap
+        return false;
     }
 
     int32 OperationalHangers = GetNumberOfOperationalHangers(Faction);
@@ -387,7 +400,6 @@ int32 UBaseManagerSubsystem::GetNumberOfOperationalHangers(EFactionType Faction)
     return Count;
 }
 
-// NEW FUNCTION
 void UBaseManagerSubsystem::ResetAllBases()
 {
     for (UStrategyBase* Base : HumanBases)

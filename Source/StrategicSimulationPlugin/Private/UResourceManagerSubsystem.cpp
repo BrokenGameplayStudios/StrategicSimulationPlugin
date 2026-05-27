@@ -6,11 +6,8 @@ void UResourceManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    // === TIGHTER STARTING RESOURCES (much more strategic early game) ===
-    // Human (player) - enough to build first base + 1-2 facilities, but must choose carefully
+    // === TIGHTER STARTING RESOURCES ===
     FactionResources.Add(EFactionType::Human, FResourceStockpile{ 9500, 1800, 100, 50 });
-
-    // Enemy (AI) - slightly weaker start so they don't snowball too fast
     FactionResources.Add(EFactionType::Enemy, FResourceStockpile{ 8500, 1400, 150, 30 });
 
     UE_LOG(LogTemp, Display, TEXT("UResourceManagerSubsystem initialized — both factions ready!"));
@@ -30,25 +27,9 @@ void UResourceManagerSubsystem::AddResources(EFactionType Faction, const FResour
     Current.ResearchPoints += Amount.ResearchPoints;
 }
 
-void UResourceManagerSubsystem::PrintAllResources() const
-{
-    UE_LOG(LogTemp, Display, TEXT("=== RESOURCE MANAGER DEBUG ==="));
-    for (auto& Pair : FactionResources)
-    {
-        FString FactionName = UEnum::GetValueAsString(Pair.Key);
-        UE_LOG(LogTemp, Display, TEXT("%s -> Money=%d | Supplies=%d | Exotic=%d | Research=%d"),
-            *FactionName,
-            Pair.Value.Money,
-            Pair.Value.Supplies,
-            Pair.Value.ExoticMaterial,
-            Pair.Value.ResearchPoints);
-    }
-}
-
 void UResourceManagerSubsystem::SetResources(EFactionType Faction, const FResourceStockpile& NewStock)
 {
     FactionResources.FindOrAdd(Faction) = NewStock;
-    UE_LOG(LogTemp, Display, TEXT("Resources set for %s"), *UEnum::GetValueAsString(Faction));
 }
 
 void UResourceManagerSubsystem::ApplyFacilityIncome(EFactionType Faction)
@@ -56,43 +37,69 @@ void UResourceManagerSubsystem::ApplyFacilityIncome(EFactionType Faction)
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (!BaseMgr) return;
 
-    const TArray<UStrategyFacility*>& Facilities = BaseMgr->GetFacilities(Faction);
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
 
     int32 TotalMoney = 0;
     int32 TotalSupplies = 0;
 
-    for (UStrategyFacility* Fac : Facilities)
+    UE_LOG(LogTemp, Verbose, TEXT("[INCOME DEBUG] %s has %d bases"), *UEnum::GetValueAsString(Faction), Bases.Num());
+
+    for (UStrategyBase* Base : Bases)
     {
-        if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
+        if (!Base) continue;
+
+        for (UStrategyFacility* Fac : Base->Facilities)
         {
-            TotalMoney += Fac->FacilityDefinition->MoneyIncomePerDay;
-            TotalSupplies += Fac->FacilityDefinition->SuppliesIncomePerDay;
+            if (!Fac || !Fac->bIsOperational) continue;
+
+            if (!Fac->FacilityDefinition)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[INCOME] Facility in '%s' has no FacilityDefinition — skipping income"), *Base->BaseName.ToString());
+                continue;
+            }
+
+            int32 MoneyIncome = Fac->FacilityDefinition->MoneyIncomePerDay;
+            int32 SuppliesIncome = Fac->FacilityDefinition->SuppliesIncomePerDay;
+
+            TotalMoney += MoneyIncome;
+            TotalSupplies += SuppliesIncome;
+
+            UE_LOG(LogTemp, Verbose, TEXT("[INCOME] %s in '%s' → +%d Money, +%d Supplies"),
+                *Fac->FacilityDefinition->FacilityName.ToString(), *Base->BaseName.ToString(), MoneyIncome, SuppliesIncome);
         }
     }
 
     if (TotalMoney > 0 || TotalSupplies > 0)
     {
-        FResourceStockpile Income;
-        Income.Money = TotalMoney;
-        Income.Supplies = TotalSupplies;
-
+        FResourceStockpile Income{ TotalMoney, TotalSupplies, 0, 0 };
         AddResources(Faction, Income);
 
         UE_LOG(LogTemp, Display, TEXT("[INCOME] %s gained %d Money and %d Supplies from facilities"),
             *UEnum::GetValueAsString(Faction), TotalMoney, TotalSupplies);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[INCOME] %s — no income generated this day"), *UEnum::GetValueAsString(Faction));
+    }
+}
+
+void UResourceManagerSubsystem::PrintAllResources() const
+{
+    UE_LOG(LogTemp, Display, TEXT("=== RESOURCE MANAGER DEBUG ==="));
+    for (auto& Pair : FactionResources)
+    {
+        FString FactionName = UEnum::GetValueAsString(Pair.Key);
+        UE_LOG(LogTemp, Display, TEXT("%s -> Money=%d | Supplies=%d | Exotic=%d | Research=%d"),
+            *FactionName, Pair.Value.Money, Pair.Value.Supplies, Pair.Value.ExoticMaterial, Pair.Value.ResearchPoints);
     }
 }
 
 void UResourceManagerSubsystem::ResetResources(EFactionType Faction)
 {
     if (Faction == EFactionType::Human)
-    {
-        FactionResources.Add(EFactionType::Human, FResourceStockpile{ 10000, 5000, 200, 100 });
-    }
+        FactionResources.Add(EFactionType::Human, FResourceStockpile{ 9500, 1800, 100, 50 });
     else
-    {
-        FactionResources.Add(EFactionType::Enemy, FResourceStockpile{ 8000, 4000, 300, 50 });
-    }
+        FactionResources.Add(EFactionType::Enemy, FResourceStockpile{ 8500, 1400, 150, 30 });
 
-    UE_LOG(LogTemp, Display, TEXT("[RESET] Resources reset for %s to starting values"), *UEnum::GetValueAsString(Faction));
+    UE_LOG(LogTemp, Display, TEXT("[RESET] Resources reset for %s"), *UEnum::GetValueAsString(Faction));
 }
