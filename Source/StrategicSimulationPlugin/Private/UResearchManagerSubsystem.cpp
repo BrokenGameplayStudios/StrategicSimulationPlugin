@@ -143,3 +143,24 @@ void UResearchManagerSubsystem::AdvanceDay(EFactionType Faction)
         }
     }
 }
+
+// NEW FUNCTION
+void UResearchManagerSubsystem::ResetResearch()
+{
+    for (UActiveResearchProject* Proj : HumanResearchQueue)
+    {
+        if (Proj) Proj->ConditionalBeginDestroy();
+    }
+    HumanResearchQueue.Empty();
+
+    for (UActiveResearchProject* Proj : EnemyResearchQueue)
+    {
+        if (Proj) Proj->ConditionalBeginDestroy();
+    }
+    EnemyResearchQueue.Empty();
+
+    OnResearchListChanged.Broadcast(EFactionType::Human);
+    OnResearchListChanged.Broadcast(EFactionType::Enemy);
+
+    UE_LOG(LogTemp, Display, TEXT("[RESET] All research cleared for both factions"));
+}

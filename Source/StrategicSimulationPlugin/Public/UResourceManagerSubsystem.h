@@ -33,6 +33,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void PrintAllResources() const;
 
+    // NEW: Reset to starting resources (used by Campaign ResetSimulation)
+    UFUNCTION(BlueprintCallable, Category = "Resources")
+    void ResetResources(EFactionType Faction);
+
 private:
     // One stockpile per faction
     UPROPERTY(VisibleAnywhere, Transient, Category = "Resources")

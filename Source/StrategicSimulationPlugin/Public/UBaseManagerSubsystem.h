@@ -61,6 +61,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;  // returns all facilities across bases (for compatibility)
 
+    // NEW: Full reset (used by Campaign ResetSimulation)
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    void ResetAllBases();
+
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnFacilityListChanged OnFacilityListChanged;
 

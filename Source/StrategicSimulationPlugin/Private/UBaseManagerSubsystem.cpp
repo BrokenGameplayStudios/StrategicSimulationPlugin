@@ -293,9 +293,6 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
                 bAnyCompletedThisTick = true;
 
                 // === NEW ROBUST POWER CHECK ===
-                // Always make the facility operational when construction finishes.
-                // Power shortages are now the AI's responsibility (it already prioritizes PowerPlants).
-                // This eliminates the permanent "FAILED power check" deadlock.
                 Fac->bIsOperational = true;
 
                 int32 PowerImpact = Fac->FacilityDefinition->PowerProvided - Fac->FacilityDefinition->PowerDraw;
@@ -311,7 +308,7 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
             }
         }
 
-        // Update power once after all completions this tick (avoids sequential check issues)
+        // Update power once after all completions this tick
         if (bAnyCompletedThisTick)
         {
             Base->UpdatePowerFromFacilities();
@@ -321,8 +318,8 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 
 const TArray<UStrategyFacility*>& UBaseManagerSubsystem::GetFacilities(EFactionType Faction) const
 {
-    // Temporary flat list for full backward compatibility (until we update callers)
-    static TArray<UStrategyFacility*> FlatList; // not ideal but keeps everything working
+    // Temporary flat list for full backward compatibility
+    static TArray<UStrategyFacility*> FlatList;
     FlatList.Empty();
     for (UStrategyBase* Base : GetBasesInternal(Faction))
     {
@@ -361,4 +358,25 @@ int32 UBaseManagerSubsystem::GetNumberOfOperationalHangers(EFactionType Faction)
             Count++;
     }
     return Count;
+}
+
+// NEW FUNCTION
+void UBaseManagerSubsystem::ResetAllBases()
+{
+    for (UStrategyBase* Base : HumanBases)
+    {
+        if (Base) Base->ConditionalBeginDestroy();
+    }
+    HumanBases.Empty();
+
+    for (UStrategyBase* Base : EnemyBases)
+    {
+        if (Base) Base->ConditionalBeginDestroy();
+    }
+    EnemyBases.Empty();
+
+    OnBaseListChanged.Broadcast(EFactionType::Human);
+    OnBaseListChanged.Broadcast(EFactionType::Enemy);
+
+    UE_LOG(LogTemp, Display, TEXT("[RESET] All bases cleared for both factions"));
 }

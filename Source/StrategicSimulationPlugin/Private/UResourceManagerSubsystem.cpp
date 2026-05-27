@@ -79,3 +79,17 @@ void UResourceManagerSubsystem::ApplyFacilityIncome(EFactionType Faction)
             *UEnum::GetValueAsString(Faction), TotalMoney, TotalSupplies);
     }
 }
+
+void UResourceManagerSubsystem::ResetResources(EFactionType Faction)
+{
+    if (Faction == EFactionType::Human)
+    {
+        FactionResources.Add(EFactionType::Human, FResourceStockpile{ 10000, 5000, 200, 100 });
+    }
+    else
+    {
+        FactionResources.Add(EFactionType::Enemy, FResourceStockpile{ 8000, 4000, 300, 50 });
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[RESET] Resources reset for %s to starting values"), *UEnum::GetValueAsString(Faction));
+}

@@ -36,6 +36,39 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     }
 }
 
+void UStrategyCampaignSubsystem::ResetSimulation()
+{
+    UE_LOG(LogTemp, Display, TEXT("[RESET] Resetting entire simulation..."));
+
+    if (auto* ResourceMgr = GetResourceManager())
+    {
+        ResourceMgr->ResetResources(EFactionType::Human);
+        ResourceMgr->ResetResources(EFactionType::Enemy);
+    }
+
+    if (auto* SoldierMgr = GetSoldierManager())
+    {
+        // TODO: Add ClearAllSoldiers() to SoldierManager later if needed
+    }
+
+    if (auto* BaseMgr = GetBaseManager())
+    {
+        BaseMgr->ResetAllBases();
+    }
+
+    if (auto* ResearchMgr = GetResearchManager())
+    {
+        ResearchMgr->ResetResearch();
+    }
+
+    if (auto* EngineeringMgr = GetEngineeringManager())
+    {
+        EngineeringMgr->ResetProduction();
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[RESET] Simulation has been fully cleared."));
+}
+
 void UStrategyCampaignSubsystem::StartSimulation()
 {
     GetTimeManager()->SetTimeScale(1.0f);

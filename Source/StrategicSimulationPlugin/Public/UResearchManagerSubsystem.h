@@ -29,7 +29,7 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnResearchListChanged OnResearchListChanged;
-    
+
     // Returns true if this research is currently active for the faction
     UFUNCTION(BlueprintCallable, Category = "Research")
     bool IsResearchInProgress(EFactionType Faction, UResearchTechDefinition* Tech) const;
@@ -42,6 +42,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Research")
     void AdvanceDay(EFactionType Faction);
 
+    // NEW: Full reset (used by Campaign ResetSimulation)
+    UFUNCTION(BlueprintCallable, Category = "Research")
+    void ResetResearch();
 
 private:
     // Two separate arrays (UHT-friendly)

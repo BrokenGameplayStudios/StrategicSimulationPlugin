@@ -25,6 +25,10 @@ class STRATEGICSIMULATIONPLUGIN_API UStrategyCampaignSubsystem : public UGameIns
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
+    /** Full reset of the simulation (call from UI for New Game) */
+    UFUNCTION(BlueprintCallable, Category = "Simulation")
+    void ResetSimulation();
+
     // Save / Load
     UFUNCTION(BlueprintCallable, Category = "Campaign")
     void SaveCampaign(int32 SlotIndex = 1);
@@ -56,17 +60,17 @@ public:
 
     // Configurable Item Database
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
-    TSoftObjectPtr<UItemDatabase> ItemDatabaseAsset;
+    TSoftObjectPtr<class UItemDatabase> ItemDatabaseAsset;
 
-    // === DATABASES (Phase 22 - fully data-driven) ===
+    // === DATABASES ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
-    TSoftObjectPtr<UFacilityDatabase> FacilityDatabaseAsset;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
-    TSoftObjectPtr<USoldierClassDatabase> SoldierClassDatabaseAsset;
+    TSoftObjectPtr<class UFacilityDatabase> FacilityDatabaseAsset;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
-    TSoftObjectPtr<UResearchDatabase> ResearchDatabaseAsset;
+    TSoftObjectPtr<class USoldierClassDatabase> SoldierClassDatabaseAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<class UResearchDatabase> ResearchDatabaseAsset;
 
     // Simulation control
     UFUNCTION(BlueprintCallable, Category = "Campaign")
@@ -81,21 +85,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Campaign")
     TArray<class UStrategySaveGame*> GetAllSaveMetadata() const;
 
-    // Returns true if the faction has completed this research/tech
+    // Research / Unlock helpers
     UFUNCTION(BlueprintCallable, Category = "Unlocks")
-    bool HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const;
+    bool HasCompletedResearch(EFactionType Faction, class UResearchTechDefinition* Tech) const;
 
-    // Full unlock chain check: Facility → Research → Tech → Item
     UFUNCTION(BlueprintCallable, Category = "Unlocks")
-    bool IsItemUnlocked(EFactionType Faction, UItemDefinition* ItemDef) const;
+    bool IsItemUnlocked(EFactionType Faction, class UItemDefinition* ItemDef) const;
 
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void Debug_RunAI();
 
 private:
-    UPROPERTY(Transient)
-    class UStrategySaveGame* CurrentSaveData;
-
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 };

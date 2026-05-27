@@ -182,3 +182,21 @@ void UEngineeringManagerSubsystem::OnDayPassed(int32 NewDay)
         }
     }
 }
+
+// NEW FUNCTION
+void UEngineeringManagerSubsystem::ResetProduction()
+{
+    for (UActiveProductionJob* Job : HumanProductionQueue)
+    {
+        if (Job) Job->ConditionalBeginDestroy();
+    }
+    HumanProductionQueue.Empty();
+
+    for (UActiveProductionJob* Job : EnemyProductionQueue)
+    {
+        if (Job) Job->ConditionalBeginDestroy();
+    }
+    EnemyProductionQueue.Empty();
+
+    UE_LOG(LogTemp, Display, TEXT("[RESET] All production jobs cleared for both factions"));
+}

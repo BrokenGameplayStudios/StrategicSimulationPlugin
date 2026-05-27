@@ -32,6 +32,10 @@ public:
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 
+    // NEW: Full reset (used by Campaign ResetSimulation)
+    UFUNCTION(BlueprintCallable, Category = "Production")
+    void ResetProduction();
+
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Production")
     TArray<UActiveProductionJob*> HumanProductionQueue;   // active + queued
