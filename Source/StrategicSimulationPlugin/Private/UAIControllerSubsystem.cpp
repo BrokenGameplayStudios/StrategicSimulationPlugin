@@ -80,7 +80,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // === PHASE 4: BASE EXPANSION (staggered by operational hangers) ===
+    // === PHASE 4: BASE EXPANSION ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
         int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
@@ -102,98 +102,48 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     {
         if (!Base) continue;
 
-        if (!Base->HasOperationalCommandCenter())
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] Skipping base '%s' — Command Center not yet operational"), *Base->BaseName.ToString());
-            continue;
-        }
+        if (!Base->HasOperationalCommandCenter()) continue;
 
-        UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational, Net Power: %d)"),
-            *Base->BaseName.ToString(), Base->GetNetPower());
+        UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
 
-        // 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY (Was Spamming)
+        // 1. POWER FIRST
         if (Base->GetNetPower() < 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → POWER CRITICAL (%d) — Trying PowerPlant in '%s'"),
-                Base->GetNetPower(), *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base))
-            {
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS PowerPlant started in '%s'"), *Base->BaseName.ToString());
-                continue; // power first
-            }
+                continue;
         }
 
-        // 2. AGGRESSIVE BARRACKS (every base keeps expanding capacity)
+        // 2. BARRACKS — respect your 68-cap limit (Living Quarters + other facilities)
         int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
         int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-        if (CurrentCapacity < 30 || CurrentSoldiers >= CurrentCapacity - 6)
+
+        if (CurrentCapacity < 60 || CurrentSoldiers >= CurrentCapacity - 4)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — Trying extra LivingQuarters in '%s'"),
+            UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — extra LivingQuarters in '%s'"),
                 CurrentSoldiers, CurrentCapacity, *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
         }
 
-        // 3. CORE FACILITIES (one of each — Hanger now uses operational check to guarantee it gets built)
-        if (!Base->HasFacilityOfType(EFacilityType::Storage))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Storage in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::Storage, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Storage started in '%s'"), *Base->BaseName.ToString());
-        }
+        // 3. Core facilities
+        if (!Base->HasFacilityOfType(EFacilityType::Storage)) TryBuildFacility(Faction, EFacilityType::Storage, Base);
+        if (!Base->HasFacilityOfType(EFacilityType::Workshop)) TryBuildFacility(Faction, EFacilityType::Workshop, Base);
+        if (!Base->HasFacilityOfType(EFacilityType::Laboratory)) TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
+        if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
 
-        if (!Base->HasFacilityOfType(EFacilityType::Workshop))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Workshop in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::Workshop, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Workshop started in '%s'"), *Base->BaseName.ToString());
-        }
-
-        if (!Base->HasFacilityOfType(EFacilityType::Laboratory))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Laboratory in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::Laboratory, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Laboratory started in '%s'"), *Base->BaseName.ToString());
-        }
-
-        // HANGER IS NOW HIGHER PRIORITY — use operational check so it always builds at least one
-        if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Hanger in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::Hanger, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Hanger started in '%s'"), *Base->BaseName.ToString());
-        }
-
-        // 4. Extras (always try these)
-        UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
+        // 4. Extras
         TryBuildFacility(Faction, EFacilityType::Storage, Base);
-        TryBuildFacility(Faction, EFacilityType::Hanger, Base);   // extra hangers allowed
-        if (Base->GetNetPower() < 100)
-            TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
+        TryBuildFacility(Faction, EFacilityType::Hanger, Base);
+        if (Base->GetNetPower() < 100) TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
     }
 
-    // === RECRUIT, RESEARCH, PURCHASE, PRODUCTION (all run every day) ===
+    // === RECRUIT, RESEARCH, PURCHASE, PRODUCTION ===
     bool bRecruited = (SoldierMgr && TryRecruit(Faction));
+    if (bRecruited) UE_LOG(LogTemp, Display, TEXT("[AI] Recruited soldier — continuing..."));
 
-    if (bRecruited)
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] Recruited soldier — continuing to research/purchase/production"));
-    }
-
-    if (ResearchMgr && TryResearch(Faction))
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] Research action taken"));
-    }
-
-    if (TryBuyAndEquip(Faction))
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] Purchase/equip action taken"));
-    }
-
-    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction))
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] Production action taken"));
-    }
+    if (ResearchMgr && TryResearch(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] Research action taken"));
+    if (TryBuyAndEquip(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] Purchase/equip action taken"));
+    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] Production action taken"));
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
