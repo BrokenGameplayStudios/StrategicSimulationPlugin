@@ -57,16 +57,27 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
             if (CommandDef)
             {
-                // Deduct build cost immediately
-                if (UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>())
+                // === NEW AFFORDABILITY CHECK ===
+                UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+                if (ResourceMgr)
                 {
-                    FResourceStockpile NegativeCost = CommandDef->BuildCost;
-                    NegativeCost.Money = -NegativeCost.Money;
-                    NegativeCost.Supplies = -NegativeCost.Supplies;
+                    FResourceStockpile Current = ResourceMgr->GetResources(Faction);
+                    if (Current.Money < CommandDef->BuildCost.Money || Current.Supplies < CommandDef->BuildCost.Supplies)
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center (%d Money, %d Supplies needed) — skipping cost deduction"),
+                            CommandDef->BuildCost.Money, CommandDef->BuildCost.Supplies);
+                    }
+                    else
+                    {
+                        // Deduct build cost immediately
+                        FResourceStockpile NegativeCost = CommandDef->BuildCost;
+                        NegativeCost.Money = -NegativeCost.Money;
+                        NegativeCost.Supplies = -NegativeCost.Supplies;
 
-                    ResourceMgr->AddResources(Faction, NegativeCost);
+                        ResourceMgr->AddResources(Faction, NegativeCost);
 
-                    UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Paid for Command Center in new base '%s'"), *NewBase->BaseName.ToString());
+                        UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Paid for Command Center in new base '%s'"), *NewBase->BaseName.ToString());
+                    }
                 }
 
                 // Start construction
@@ -139,10 +150,29 @@ TArray<UStrategyBase*>& UBaseManagerSubsystem::GetMutableBases(EFactionType Fact
     return (Faction == EFactionType::Human) ? HumanBases : EnemyBases;
 }
 
-// === BuildFacility with Command gate (unchanged but now logs better) ===
+// === BuildFacility with Command gate + NEW AFFORDABILITY CHECK ===
 UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase /*= nullptr*/)
 {
     if (!FacilityDef) return nullptr;
+
+    // === NEW AFFORDABILITY CHECK ===
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (ResourceMgr)
+    {
+        FResourceStockpile Current = ResourceMgr->GetResources(Faction);
+        if (Current.Money < FacilityDef->BuildCost.Money || Current.Supplies < FacilityDef->BuildCost.Supplies)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot afford %s (%d Money, %d Supplies needed)"),
+                *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money, FacilityDef->BuildCost.Supplies);
+            return nullptr;
+        }
+
+        // Deduct cost before building
+        FResourceStockpile NegativeCost = FacilityDef->BuildCost;
+        NegativeCost.Money = -NegativeCost.Money;
+        NegativeCost.Supplies = -NegativeCost.Supplies;
+        ResourceMgr->AddResources(Faction, NegativeCost);
+    }
 
     TArray<UStrategyBase*>& Bases = GetMutableBases(Faction);
     if (Bases.IsEmpty())
@@ -292,7 +322,6 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
             {
                 bAnyCompletedThisTick = true;
 
-                // === NEW ROBUST POWER CHECK ===
                 Fac->bIsOperational = true;
 
                 int32 PowerImpact = Fac->FacilityDefinition->PowerProvided - Fac->FacilityDefinition->PowerDraw;
@@ -308,7 +337,6 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
             }
         }
 
-        // Update power once after all completions this tick
         if (bAnyCompletedThisTick)
         {
             Base->UpdatePowerFromFacilities();
@@ -318,7 +346,6 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 
 const TArray<UStrategyFacility*>& UBaseManagerSubsystem::GetFacilities(EFactionType Faction) const
 {
-    // Temporary flat list for full backward compatibility
     static TArray<UStrategyFacility*> FlatList;
     FlatList.Empty();
     for (UStrategyBase* Base : GetBasesInternal(Faction))
@@ -344,7 +371,7 @@ bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const
     }
 
     int32 OperationalHangers = GetNumberOfOperationalHangers(Faction);
-    int32 MaxAllowedBases = 1 + OperationalHangers; // "a base for every base that has hangers"
+    int32 MaxAllowedBases = 1 + OperationalHangers;
 
     return Bases.Num() < MaxAllowedBases;
 }
@@ -360,7 +387,6 @@ int32 UBaseManagerSubsystem::GetNumberOfOperationalHangers(EFactionType Faction)
     return Count;
 }
 
-// NEW FUNCTION
 void UBaseManagerSubsystem::ResetAllBases()
 {
     for (UStrategyBase* Base : HumanBases)
