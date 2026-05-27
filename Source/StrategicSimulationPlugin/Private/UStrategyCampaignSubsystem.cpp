@@ -24,6 +24,83 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
     }
 
     UE_LOG(LogTemp, Display, TEXT("UStrategyCampaignSubsystem initialized — All managers + AI forced active"));
+
+    // ===================================================================
+    // === ONE-TIME DATA ASSET DEBUG PRINT (only runs once at startup) ===
+    // ===================================================================
+    UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));
+
+    // 1. Facility Database (most important for soldier capacity limits)
+    if (UFacilityDatabase* FacilityDB = FacilityDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[FACILITY DATABASE] Loaded %d facilities:"), FacilityDB->AvailableFacilities.Num());
+        for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
+        {
+            if (UFacilityDefinition* Def = SoftDef.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days"),
+                    *Def->FacilityName.ToString(),
+                    *UEnum::GetValueAsString(Def->FacilityType),
+                    Def->Capacity,
+                    Def->MaxBuilt,
+                    Def->PowerProvided,
+                    Def->PowerDraw,
+                    Def->BuildCost.Money,
+                    Def->BuildCost.Supplies,
+                    Def->BuildTimeDays);
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[FACILITY DATABASE] FacilityDatabaseAsset is NULL!"));
+    }
+
+    // 2. Soldier Class Database
+    if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER DATABASE] Loaded %d soldier classes:"), SoldierDB->AvailableSoldierClasses.Num());
+        for (const TSoftObjectPtr<USoldierClassDefinition>& SoftClass : SoldierDB->AvailableSoldierClasses)
+        {
+            if (USoldierClassDefinition* ClassDef = SoftClass.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Starting XP: %d"),
+                    *ClassDef->ClassName.ToString(), ClassDef->StartingXP);
+            }
+        }
+    }
+
+    // 3. Research Database
+    if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[RESEARCH DATABASE] Loaded %d research techs:"), ResearchDB->AvailableTechs.Num());
+        for (const TSoftObjectPtr<UResearchTechDefinition>& SoftTech : ResearchDB->AvailableTechs)
+        {
+            if (UResearchTechDefinition* Tech = SoftTech.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Days: %d | Cost: %d Money"),
+                    *Tech->ProjectName.ToString(), Tech->ResearchDays, Tech->ResearchCost.Money);
+            }
+        }
+    }
+
+    // 4. Item Database
+    if (UItemDatabase* ItemDB = ItemDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[ITEM DATABASE] Loaded %d buyable items:"), ItemDB->BuyableItems.Num());
+        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
+        {
+            if (UItemDefinition* Item = SoftItem.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Category: %s | Cost: %d Money"),
+                    *Item->ItemName.ToString(),
+                    *UEnum::GetValueAsString(Item->ItemCategory),
+                    Item->PurchaseCost.Money);
+            }
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));
 }
 
 void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
@@ -128,11 +205,7 @@ void UStrategyCampaignSubsystem::Debug_RunAI()
 bool UStrategyCampaignSubsystem::HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const
 {
     if (!Tech) return false;
-
-    // TODO: Once we have a real research queue, check completed research here.
-    // For now we assume that if the facility that unlocks the research is built, the tech is available.
-    // This is the "Research unlocks Tech" step.
-    return true; // placeholder for Phase 22 research automation
+    return true; // placeholder
 }
 
 bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefinition* ItemDef) const
@@ -148,7 +221,6 @@ bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefin
     {
         if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
         {
-            // 1. Facility → UnlocksResearch
             for (const auto& ResearchSoft : Fac->FacilityDefinition->UnlocksResearch)
             {
                 UResearchTechDefinition* Research = ResearchSoft.Get();
@@ -156,13 +228,11 @@ bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefin
 
                 if (HasCompletedResearch(Faction, Research))
                 {
-                    // 2. Research → UnlocksTech
                     for (const auto& TechSoft : Research->UnlocksTech)
                     {
                         UStrategyTechDefinition* Tech = TechSoft.Get();
                         if (!Tech) continue;
 
-                        // 3. Tech → UnlocksItems
                         for (const auto& UnlockedItem : Tech->UnlocksItems)
                         {
                             if (UnlockedItem.Get() == ItemDef)

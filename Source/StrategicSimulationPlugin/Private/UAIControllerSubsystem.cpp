@@ -101,7 +101,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base) continue;
-
         if (!Base->HasOperationalCommandCenter()) continue;
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
@@ -113,13 +112,13 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 continue;
         }
 
-        // 2. BARRACKS — respect your 68-cap limit (Living Quarters + other facilities)
+        // 2. BARRACKS — STRICT LIMIT (targets ~60 capacity per base = close to your 68 max)
         int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
         int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
 
         if (CurrentCapacity < 60 || CurrentSoldiers >= CurrentCapacity - 4)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — extra LivingQuarters in '%s'"),
+            UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — Trying extra LivingQuarters in '%s'"),
                 CurrentSoldiers, CurrentCapacity, *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
@@ -132,6 +131,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
 
         // 4. Extras
+        UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
         TryBuildFacility(Faction, EFacilityType::Storage, Base);
         TryBuildFacility(Faction, EFacilityType::Hanger, Base);
         if (Base->GetNetPower() < 100) TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
