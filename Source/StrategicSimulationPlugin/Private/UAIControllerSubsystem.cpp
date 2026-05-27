@@ -111,14 +111,15 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational, Net Power: %d)"),
             *Base->BaseName.ToString(), Base->GetNetPower());
 
-        // === 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY (build more aggressively) ===
-        if (Base->GetNetPower() <= 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
+        // === 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY (more aggressive now) ===
+        if (Base->GetNetPower() < 50 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → POWER CRITICAL — Trying PowerPlant in '%s'"), *Base->BaseName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[AI] → POWER CRITICAL (%d) — Trying PowerPlant in '%s'"),
+                Base->GetNetPower(), *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base))
             {
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS PowerPlant started in '%s'"), *Base->BaseName.ToString());
-                continue; // power first — don't do anything else this day
+                continue; // power first
             }
         }
 

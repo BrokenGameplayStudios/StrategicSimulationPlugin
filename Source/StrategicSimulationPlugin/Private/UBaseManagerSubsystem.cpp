@@ -274,12 +274,13 @@ int32 UBaseManagerSubsystem::GetCurrentCountOfType(EFactionType Faction, EFacili
     return Count;
 }
 
-// === FIXED: AdvanceFacilityConstruction with immediate per-base power update ===
 void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 {
     for (UStrategyBase* Base : GetBasesInternal(Faction))
     {
         if (!Base) continue;
+
+        bool bAnyCompletedThisTick = false;
 
         for (UStrategyFacility* Fac : Base->Facilities)
         {
@@ -289,32 +290,31 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 
             if (Fac->BuildProgressDays <= 0)
             {
-                // Per-base power check
-                int32 CurrentNet = Base->GetNetPower();
-                int32 NetWithThis = CurrentNet + Fac->FacilityDefinition->PowerProvided - Fac->FacilityDefinition->PowerDraw;
+                bAnyCompletedThisTick = true;
 
-                Fac->bIsOperational = (NetWithThis >= 0);
+                // === NEW ROBUST POWER CHECK ===
+                // Always make the facility operational when construction finishes.
+                // Power shortages are now the AI's responsibility (it already prioritizes PowerPlants).
+                // This eliminates the permanent "FAILED power check" deadlock.
+                Fac->bIsOperational = true;
 
-                if (Fac->bIsOperational)
-                {
-                    UE_LOG(LogTemp, Display, TEXT("✅ [FACILITY] %s completed in base '%s' for %s (Power impact: %+d)"),
-                        *Fac->FacilityDefinition->FacilityName.ToString(),
-                        *Base->BaseName.ToString(),
-                        *UEnum::GetValueAsString(Faction),
-                        Fac->FacilityDefinition->PowerProvided - Fac->FacilityDefinition->PowerDraw);
+                int32 PowerImpact = Fac->FacilityDefinition->PowerProvided - Fac->FacilityDefinition->PowerDraw;
 
-                    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-                        EventDisp->OnFacilityCompleted.Broadcast(Faction, Fac);
+                UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed in base '%s' for %s (Power impact: %+d) — NOW OPERATIONAL"),
+                    *Fac->FacilityDefinition->FacilityName.ToString(),
+                    *Base->BaseName.ToString(),
+                    *UEnum::GetValueAsString(Faction),
+                    PowerImpact);
 
-                    // Immediately update per-base power
-                    Base->UpdatePowerFromFacilities();
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("[FACILITY] %s completed construction but FAILED power check — not operational yet"),
-                        *Fac->FacilityDefinition->FacilityName.ToString());
-                }
+                if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                    EventDisp->OnFacilityCompleted.Broadcast(Faction, Fac);
             }
+        }
+
+        // Update power once after all completions this tick (avoids sequential check issues)
+        if (bAnyCompletedThisTick)
+        {
+            Base->UpdatePowerFromFacilities();
         }
     }
 }
