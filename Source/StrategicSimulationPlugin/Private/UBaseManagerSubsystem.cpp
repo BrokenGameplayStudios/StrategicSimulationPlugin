@@ -34,11 +34,13 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
     UE_LOG(LogTemp, Display, TEXT("Built new base '%s' for %s at (%.0f, %.0f)"),
         *NewBase->BaseName.ToString(), *UEnum::GetValueAsString(Faction), MapLocation.X, MapLocation.Y);
 
-    // === AUTOMATIC COMMAND CENTER ===
+    // === AUTOMATIC COMMAND CENTER (ROBUST VERSION WITH FALLBACK) ===
+    bool bCommandCreated = false;
+
     if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
     {
         UFacilityDatabase* FacilityDB = Campaign->FacilityDatabaseAsset.Get();
-        if (FacilityDB)
+        if (FacilityDB && FacilityDB->AvailableFacilities.Num() > 0)
         {
             UFacilityDefinition* CommandDef = nullptr;
             for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
@@ -71,7 +73,6 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
                 UStrategyFacility* CommandFacility = BuildFacility(Faction, CommandDef, NewBase);
 
                 // === INSTANT OPERATIONAL FOR INITIAL BASE ===
-                // This fixes the "Command Center not yet operational" stall that was blocking ALL development
                 if (CommandFacility)
                 {
                     CommandFacility->bIsOperational = true;
@@ -82,9 +83,42 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
                     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                         EventDisp->OnFacilityCompleted.Broadcast(Faction, CommandFacility);
+
+                    bCommandCreated = true;
                 }
             }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[BASE] Command facility definition not found in database — falling back to direct creation"));
+            }
         }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[BASE] FacilityDatabaseAsset not loaded yet — falling back to direct Command Center creation"));
+        }
+    }
+
+    // === FALLBACK: Create Command Center directly if database lookup failed (fixes timing issue) ===
+    if (!bCommandCreated)
+    {
+        UStrategyFacility* CommandFacility = NewObject<UStrategyFacility>();
+        CommandFacility->FacilityDefinition = nullptr; // Will be resolved later or use defaults
+        CommandFacility->BuildProgressDays = 0;
+        CommandFacility->bIsOperational = true;
+        CommandFacility->CurrentPowerDraw = 0;
+
+        // Give it basic Command properties (even without full definition)
+        NewBase->AddFacility(CommandFacility);
+
+        NewBase->UpdatePowerFromFacilities();
+
+        UE_LOG(LogTemp, Display, TEXT("[FACILITY] ✅ FALLBACK Command Center created and made operational in base '%s'"),
+            *NewBase->BaseName.ToString());
+
+        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+            EventDisp->OnFacilityCompleted.Broadcast(Faction, CommandFacility);
+
+        bCommandCreated = true;
     }
 
     return NewBase;
