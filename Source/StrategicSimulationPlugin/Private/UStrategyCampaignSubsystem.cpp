@@ -74,7 +74,7 @@ void UStrategyCampaignSubsystem::StartSimulation()
     GetTimeManager()->SetTimeScale(1.0f);
     UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED"));
 
-    // === ONE-TIME DATA ASSET DEBUG PRINT (runs right after GameInitializer) ===
+    // === COMPREHENSIVE DATA ASSET DEBUG PRINT (for balancing) ===
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));
 
     // 1. Facility Database
@@ -115,17 +115,47 @@ void UStrategyCampaignSubsystem::StartSimulation()
             }
         }
     }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SOLDIER DATABASE] SoldierClassDatabaseAsset is NULL!"));
+    }
 
     // 3. Research Database
     if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
     {
         UE_LOG(LogTemp, Display, TEXT("[RESEARCH DATABASE] Loaded %d research techs:"), ResearchDB->AvailableTechs.Num());
+        for (const TSoftObjectPtr<UResearchTechDefinition>& SoftTech : ResearchDB->AvailableTechs)
+        {
+            if (UResearchTechDefinition* Tech = SoftTech.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Research Days: %d"), *Tech->ProjectName.ToString(), Tech->ResearchDays);
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RESEARCH DATABASE] ResearchDatabaseAsset is NULL!"));
     }
 
     // 4. Item Database
     if (UItemDatabase* ItemDB = ItemDatabaseAsset.Get())
     {
         UE_LOG(LogTemp, Display, TEXT("[ITEM DATABASE] Loaded %d buyable items:"), ItemDB->BuyableItems.Num());
+        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
+        {
+            if (UItemDefinition* Item = SoftItem.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Cost: %d Money, %d Supplies | Production Days: %d"),
+                    *Item->ItemName.ToString(),
+                    Item->PurchaseCost.Money,
+                    Item->PurchaseCost.Supplies,
+                    Item->ProductionDays);
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[ITEM DATABASE] ItemDatabaseAsset is NULL!"));
     }
 
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));
