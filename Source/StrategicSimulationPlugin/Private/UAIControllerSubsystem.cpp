@@ -80,7 +80,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // === PHASE 4: BASE EXPANSION (staggered — one new base per operational hanger) ===
+    // === PHASE 4: BASE EXPANSION (staggered by operational hangers) ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
         int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
@@ -97,7 +97,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DEVELOP EVERY BASE IN PARALLEL (POWER-FIRST + CORE PRIORITIES) ===
+    // === DEVELOP EVERY BASE IN PARALLEL ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base) continue;
@@ -111,7 +111,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Command Center operational, Net Power: %d)"),
             *Base->BaseName.ToString(), Base->GetNetPower());
 
-        // === 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY (more aggressive now) ===
+        // 1. POWER IS THE ABSOLUTE HIGHEST PRIORITY
         if (Base->GetNetPower() < 50 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → POWER CRITICAL (%d) — Trying PowerPlant in '%s'"),
@@ -123,14 +123,18 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             }
         }
 
-        // === 2. CORE FACILITIES (one of each — LivingQuarters first for soldier cap) ===
-        if (!Base->HasFacilityOfType(EFacilityType::LivingQuarters))
+        // 2. BARRACKS PRIORITY — build extra LivingQuarters aggressively when near capacity
+        int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
+        int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
+        if (CurrentCapacity < 20 || CurrentSoldiers >= CurrentCapacity - 4) // always expand barracks before full
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying LivingQuarters (barracks) in '%s'"), *Base->BaseName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — Trying extra LivingQuarters in '%s'"),
+                CurrentSoldiers, CurrentCapacity, *Base->BaseName.ToString());
             if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS LivingQuarters started in '%s'"), *Base->BaseName.ToString());
+                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
         }
 
+        // 3. Core facilities (LivingQuarters already handled above)
         if (!Base->HasFacilityOfType(EFacilityType::Storage))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → Trying Storage in '%s'"), *Base->BaseName.ToString());
@@ -159,33 +163,43 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS Hanger started in '%s'"), *Base->BaseName.ToString());
         }
 
-        // === 3. EXTRAS (after core is complete) ===
-        if (Base->GetTotalCapacityForType(EFacilityType::LivingQuarters) < 12)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra LivingQuarters in '%s'"), *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
-        }
-
-        // Extra storage / hangers / power buffer
+        // 4. Extras
         UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
         TryBuildFacility(Faction, EFacilityType::Storage, Base);
         TryBuildFacility(Faction, EFacilityType::Hanger, Base);
-        if (Base->GetNetPower() < 100) // extra power buffer
+        if (Base->GetNetPower() < 100)
             TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
     }
 
     // === RECRUIT, RESEARCH, PURCHASE, PRODUCTION ===
-    if (SoldierMgr && TryRecruit(Faction))
+    // Recruit only if possible — but **do NOT early-return** so research/purchase/production can still run every day
+    bool bRecruited = (SoldierMgr && TryRecruit(Faction));
+
+    if (bRecruited)
     {
-        return;
+        UE_LOG(LogTemp, Display, TEXT("[AI] Recruited soldier — continuing to research/purchase/production"));
     }
 
-    if (ResearchMgr && TryResearch(Faction)) return;
-    if (TryBuyAndEquip(Faction)) return;
-    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) return;
+    // Research now runs every day (this was the main blocker)
+    if (ResearchMgr && TryResearch(Faction))
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] Research action taken"));
+        // return;  // optional — comment out for even more actions per day
+    }
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (no major action taken)"), *UEnum::GetValueAsString(Faction), CurrentDay);
+    if (TryBuyAndEquip(Faction))
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] Purchase/equip action taken"));
+        // return;
+    }
+
+    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction))
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] Production action taken"));
+        // return;
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
