@@ -34,7 +34,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
     UE_LOG(LogTemp, Display, TEXT("Built new base '%s' for %s at (%.0f, %.0f)"),
         *NewBase->BaseName.ToString(), *UEnum::GetValueAsString(Faction), MapLocation.X, MapLocation.Y);
 
-    // === AUTOMATIC COMMAND CENTER (your requested behavior) ===
+    // === AUTOMATIC COMMAND CENTER ===
     if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
     {
         UFacilityDatabase* FacilityDB = Campaign->FacilityDatabaseAsset.Get();
@@ -55,7 +55,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
             if (CommandDef)
             {
-                // Pay the cost immediately (using the correct method in your codebase)
+                // Deduct build cost immediately
                 if (UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>())
                 {
                     FResourceStockpile NegativeCost = CommandDef->BuildCost;
@@ -64,13 +64,25 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
                     ResourceMgr->AddResources(Faction, NegativeCost);
 
-                    UE_LOG(LogTemp, Display, TEXT("✅ [EXPANSION] Paid for Command Center in new base '%s'"), *NewBase->BaseName.ToString());
+                    UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Paid for Command Center in new base '%s'"), *NewBase->BaseName.ToString());
                 }
 
-                // Start construction in the new base
-                BuildFacility(Faction, CommandDef, NewBase);
-                UE_LOG(LogTemp, Display, TEXT("✅ [EXPANSION] Automatically started Command Center construction in new base '%s' (%d days)"),
-                    *NewBase->BaseName.ToString(), CommandDef->BuildTimeDays);
+                // Start construction
+                UStrategyFacility* CommandFacility = BuildFacility(Faction, CommandDef, NewBase);
+
+                // === INSTANT OPERATIONAL FOR INITIAL BASE ===
+                // This fixes the "Command Center not yet operational" stall that was blocking ALL development
+                if (CommandFacility)
+                {
+                    CommandFacility->bIsOperational = true;
+                    NewBase->UpdatePowerFromFacilities();
+
+                    UE_LOG(LogTemp, Display, TEXT("[FACILITY] ✅ Initial Command Center is NOW OPERATIONAL in base '%s' (instant for starting base)"),
+                        *NewBase->BaseName.ToString());
+
+                    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                        EventDisp->OnFacilityCompleted.Broadcast(Faction, CommandFacility);
+                }
             }
         }
     }
