@@ -307,18 +307,30 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return false;
     }
 
-    // === MAXBUILT CHECK — SKIPPED FOR BARRACKS AND HANGER (critical fix) ===
-    // LivingQuarters and Hanger are meant to be built multiple times per base / across bases
-    bool bSkipMaxBuilt = (FacilityTypeToBuild == EFacilityType::LivingQuarters ||
-        FacilityTypeToBuild == EFacilityType::Hanger);
-
-    if (!bSkipMaxBuilt)
+    // === PER-BASE MaxBuilt CHECK (this is the critical fix) ===
+    // LivingQuarters can be built many times per base (soldier scaling)
+    // Hanger respects MaxBuilt (4 per base, as defined in your data asset)
+    if (FacilityTypeToBuild != EFacilityType::LivingQuarters)
     {
-        int32 CurrentCount = BaseMgr->GetCurrentCountOfType(Faction, FacilityTypeToBuild);
-        if (CurrentCount >= FacilityDef->MaxBuilt)
+        int32 CurrentCountInBase = 0;
+        if (TargetBase)
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[AI] MaxBuilt reached for %s (%d/%d) — skipping"),
-                *UEnum::GetValueAsString(FacilityTypeToBuild), CurrentCount, FacilityDef->MaxBuilt);
+            // Count how many of this type already exist in THIS specific base
+            for (UStrategyFacility* Fac : TargetBase->Facilities)
+            {
+                if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityTypeToBuild)
+                {
+                    CurrentCountInBase++;
+                }
+            }
+        }
+
+        if (CurrentCountInBase >= FacilityDef->MaxBuilt)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[AI] MaxBuilt reached for %s in base '%s' (%d/%d) — skipping"),
+                *UEnum::GetValueAsString(FacilityTypeToBuild),
+                TargetBase ? *TargetBase->BaseName.ToString() : TEXT("unknown"),
+                CurrentCountInBase, FacilityDef->MaxBuilt);
             return false;
         }
     }
@@ -332,7 +344,7 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return false;
     }
 
-    // Use the provided target base (or let BuildFacility decide)
+    // Build it
     if (BaseMgr->BuildFacility(Faction, FacilityDef, TargetBase))
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] %s started construction of %s in base '%s' (%d days)"),
