@@ -307,25 +307,42 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return false;
     }
 
-    // Respect MaxBuilt limit
-    int32 CurrentCount = BaseMgr->GetCurrentCountOfType(Faction, FacilityTypeToBuild);
-    if (CurrentCount >= FacilityDef->MaxBuilt)
+    // === MAXBUILT CHECK — SKIPPED FOR BARRACKS AND HANGER (critical fix) ===
+    // LivingQuarters and Hanger are meant to be built multiple times per base / across bases
+    bool bSkipMaxBuilt = (FacilityTypeToBuild == EFacilityType::LivingQuarters ||
+        FacilityTypeToBuild == EFacilityType::Hanger);
+
+    if (!bSkipMaxBuilt)
     {
-        return false;
+        int32 CurrentCount = BaseMgr->GetCurrentCountOfType(Faction, FacilityTypeToBuild);
+        if (CurrentCount >= FacilityDef->MaxBuilt)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[AI] MaxBuilt reached for %s (%d/%d) — skipping"),
+                *UEnum::GetValueAsString(FacilityTypeToBuild), CurrentCount, FacilityDef->MaxBuilt);
+            return false;
+        }
     }
 
     // Resource check
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-    if (Res.Money < FacilityDef->BuildCost.Money) return false;
+    if (Res.Money < FacilityDef->BuildCost.Money)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] Not enough money for %s (needs %d)"),
+            *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money);
+        return false;
+    }
 
     // Use the provided target base (or let BuildFacility decide)
     if (BaseMgr->BuildFacility(Faction, FacilityDef, TargetBase))
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s started construction of %s in base '%s' (%d days)"),
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s started construction of %s in base '%s' (%d days)"),
             *UEnum::GetValueAsString(Faction), *FacilityDef->FacilityName.ToString(),
             TargetBase ? *TargetBase->BaseName.ToString() : TEXT("default base"), FacilityDef->BuildTimeDays);
         return true;
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("[AI] BuildFacility failed for %s in base '%s'"),
+        *FacilityDef->FacilityName.ToString(), TargetBase ? *TargetBase->BaseName.ToString() : TEXT("unknown"));
     return false;
 }
 
