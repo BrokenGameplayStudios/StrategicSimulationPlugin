@@ -17,12 +17,13 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     {
         if (!Vehicle) continue;
 
-        int32 OldHealth = Vehicle->CurrentHealth;
-
         Vehicle->CurrentHealth = FMath::Min(
             Vehicle->CurrentHealth + FacilityDefinition->RepairHealthPerDay,
             Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100
         );
+
+        // Update damage state after repair (keeps NeedsRepair() accurate)
+        Vehicle->UpdateDamageStateFromHealth();
 
         UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s repaired +%d HP → %d/%d"),
             *Vehicle->VehicleDefinition->VehicleName.ToString(),

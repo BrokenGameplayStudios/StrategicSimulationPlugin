@@ -16,16 +16,7 @@ void UStrategyVehicle::ApplyDamage(int32 DamageAmount)
     if (DamageAmount <= 0) return;
 
     CurrentHealth = FMath::Max(0, CurrentHealth - DamageAmount);
-
-    float HealthPercent = (float)CurrentHealth / (VehicleDefinition ? VehicleDefinition->MaxHealth : 100);
-    if (HealthPercent <= 0.0f)
-        DamageState = EVehicleDamageState::Destroyed;
-    else if (HealthPercent <= 0.3f)
-        DamageState = EVehicleDamageState::HeavilyDamaged;
-    else if (HealthPercent <= 0.7f)
-        DamageState = EVehicleDamageState::LightlyDamaged;
-    else
-        DamageState = EVehicleDamageState::Undamaged;
+    UpdateDamageStateFromHealth();
 
     UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s took %d damage → Health: %d/%d (%s)"),
         *VehicleDefinition->VehicleName.ToString(),
@@ -34,9 +25,30 @@ void UStrategyVehicle::ApplyDamage(int32 DamageAmount)
         *UEnum::GetValueAsString(DamageState));
 }
 
+void UStrategyVehicle::UpdateDamageStateFromHealth()
+{
+    if (!VehicleDefinition || VehicleDefinition->MaxHealth <= 0)
+    {
+        DamageState = (CurrentHealth <= 0) ? EVehicleDamageState::Destroyed : EVehicleDamageState::Undamaged;
+        return;
+    }
+
+    float HealthPercent = (float)CurrentHealth / VehicleDefinition->MaxHealth;
+
+    if (HealthPercent <= 0.0f)
+        DamageState = EVehicleDamageState::Destroyed;
+    else if (HealthPercent <= 0.3f)
+        DamageState = EVehicleDamageState::HeavilyDamaged;
+    else if (HealthPercent <= 0.7f)
+        DamageState = EVehicleDamageState::LightlyDamaged;
+    else
+        DamageState = EVehicleDamageState::Undamaged;
+}
+
 bool UStrategyVehicle::NeedsRepair() const
 {
-    return DamageState != EVehicleDamageState::Undamaged;
+    int32 MaxH = VehicleDefinition ? VehicleDefinition->MaxHealth : 100;
+    return CurrentHealth < MaxH || DamageState != EVehicleDamageState::Undamaged;
 }
 
 bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
@@ -51,6 +63,12 @@ bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
     {
         UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s is already in repair"), *VehicleDefinition->VehicleName.ToString());
         return false;
+    }
+
+    // Remember the original hanger for later return (this is the "reserved slot")
+    if (CurrentHanger && !HomeHanger)
+    {
+        HomeHanger = CurrentHanger;
     }
 
     if (CurrentHanger)
@@ -72,11 +90,26 @@ void UStrategyVehicle::ReturnFromRepair()
         return;
     }
 
+    // Fully heal
     CurrentHealth = VehicleDefinition ? VehicleDefinition->MaxHealth : 100;
     DamageState = EVehicleDamageState::Undamaged;
 
     bool Parked = false;
-    if (HomeBase)
+
+    // PRIORITY 1: Return to the original reserved/HomeHanger (this fixes the bug)
+    if (HomeHanger && HomeHanger->FacilityDefinition && HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+    {
+        if (HomeHanger->ParkedVehicles.Num() < HomeHanger->FacilityDefinition->Capacity)
+        {
+            HomeHanger->ParkedVehicles.Add(this);
+            CurrentHanger = HomeHanger;
+            Parked = true;
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s fully repaired and returned to its HOME HANGER (reserved slot)"), *VehicleDefinition->VehicleName.ToString());
+        }
+    }
+
+    // PRIORITY 2: Fallback - any available hanger in the base
+    if (!Parked && HomeBase)
     {
         for (UStrategyFacility* Hanger : HomeBase->Facilities)
         {
@@ -86,7 +119,9 @@ void UStrategyVehicle::ReturnFromRepair()
                 {
                     Hanger->ParkedVehicles.Add(this);
                     CurrentHanger = Hanger;
+                    if (!HomeHanger) HomeHanger = Hanger; // assign now if we never had one
                     Parked = true;
+                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s fully repaired and returned to fallback hanger slot"), *VehicleDefinition->VehicleName.ToString());
                     break;
                 }
             }
@@ -95,12 +130,8 @@ void UStrategyVehicle::ReturnFromRepair()
 
     CurrentRepairBay = nullptr;
 
-    if (Parked)
+    if (!Parked)
     {
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s fully repaired and returned to reserved hanger slot from repair bay"), *VehicleDefinition->VehicleName.ToString());
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s repaired but no hanger space available"), *VehicleDefinition->VehicleName.ToString());
+        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s repaired but NO HANGER SPACE AVAILABLE anywhere"), *VehicleDefinition->VehicleName.ToString());
     }
 }
