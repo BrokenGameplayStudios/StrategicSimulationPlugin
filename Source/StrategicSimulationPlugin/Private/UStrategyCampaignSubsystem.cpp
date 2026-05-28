@@ -15,6 +15,7 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
     GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
     GetGameInstance()->GetSubsystem<UAIControllerSubsystem>();
+    GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
 
     // Bind to every day that passes
     if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
@@ -156,6 +157,31 @@ void UStrategyCampaignSubsystem::StartSimulation()
     else
     {
         UE_LOG(LogTemp, Warning, TEXT("[ITEM DATABASE] ItemDatabaseAsset is NULL!"));
+    }
+
+    // 5. Vehicle Database (NEW)
+    if (UVehicleDatabase* VehicleDB = VehicleDatabaseAsset.Get())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE DATABASE] Loaded %d vehicles:"), VehicleDB->AvailableVehicles.Num());
+        for (const TSoftObjectPtr<UVehicleDefinition>& SoftVeh : VehicleDB->AvailableVehicles)
+        {
+            if (UVehicleDefinition* Veh = SoftVeh.Get())
+            {
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d soldiers | Max Mission Days: %d | Attack: %d | Build Cost: %d Money, %d Supplies | Production: %d days"),
+                    *Veh->VehicleName.ToString(),
+                    *UEnum::GetValueAsString(Veh->VehicleType),
+                    Veh->SoldierCapacity,
+                    Veh->MaxMissionDurationDays,
+                    Veh->AttackPower,
+                    Veh->BuildCost.Money,
+                    Veh->BuildCost.Supplies,
+                    Veh->ProductionDays);
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE DATABASE] VehicleDatabaseAsset is NULL!"));
     }
 
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));

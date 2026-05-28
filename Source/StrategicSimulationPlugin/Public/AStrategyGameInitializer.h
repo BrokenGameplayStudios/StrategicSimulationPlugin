@@ -6,6 +6,7 @@
 #include "UFacilityDatabase.h"
 #include "USoldierClassDatabase.h"
 #include "UResearchDatabase.h"
+#include "UVehicleDatabase.h"          // NEW
 #include "AStrategyGameInitializer.generated.h"
 
 UCLASS()
@@ -21,7 +22,7 @@ public:
     // === DATABASES ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UItemDatabase> ItemDatabaseAsset;
-    
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UFacilityDatabase> FacilityDatabaseAsset;
 
@@ -30,4 +31,8 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UResearchDatabase> ResearchDatabaseAsset;
+
+    // NEW: Vehicle Database
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<UVehicleDatabase> VehicleDatabaseAsset;
 };

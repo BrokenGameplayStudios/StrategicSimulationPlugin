@@ -41,4 +41,5 @@ private:
     bool TryBuyAndEquip(EFactionType Faction);
     bool TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase = nullptr);
     bool TryResearch(EFactionType Faction);
+    bool TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase);
 };

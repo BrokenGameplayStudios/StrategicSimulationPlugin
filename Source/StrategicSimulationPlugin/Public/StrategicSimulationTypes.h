@@ -65,6 +65,16 @@ enum class EFacilityType : uint8
     Special
 };
 
+UENUM(BlueprintType)
+enum class EVehicleType : uint8
+{
+    Transport,
+    Gunship,
+    Support,
+    Scout,
+    Heavy
+};
+
 // Soldier base stats (used by soldier classes and runtime soldiers)
 USTRUCT(BlueprintType)
 struct FSoldierStats

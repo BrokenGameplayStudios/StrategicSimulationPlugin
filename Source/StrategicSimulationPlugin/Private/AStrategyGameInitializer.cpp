@@ -34,7 +34,7 @@ void AStrategyGameInitializer::BeginPlay()
         }
     }
 
-    // === DATABASES — FORCE LOAD EVERYTHING (fixes the persistent "No facility of type" bug) ===
+    // === DATABASES — FORCE LOAD EVERYTHING ===
     if (UFacilityDatabase* FacDB = FacilityDatabaseAsset.Get())
     {
         for (auto& Soft : FacDB->AvailableFacilities)
@@ -42,6 +42,7 @@ void AStrategyGameInitializer::BeginPlay()
         Campaign->FacilityDatabaseAsset = FacilityDatabaseAsset;
         UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d facilities from FacilityDatabase"), FacDB->AvailableFacilities.Num());
     }
+
     if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
     {
         for (auto& Soft : SoldierDB->AvailableSoldierClasses)
@@ -49,6 +50,7 @@ void AStrategyGameInitializer::BeginPlay()
         Campaign->SoldierClassDatabaseAsset = SoldierClassDatabaseAsset;
         UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d soldier classes from SoldierClassDatabase"), SoldierDB->AvailableSoldierClasses.Num());
     }
+
     if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
     {
         for (auto& Soft : ResearchDB->AvailableTechs)
@@ -56,10 +58,23 @@ void AStrategyGameInitializer::BeginPlay()
         Campaign->ResearchDatabaseAsset = ResearchDatabaseAsset;
         UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d research projects from ResearchDatabase"), ResearchDB->AvailableTechs.Num());
     }
+
+    // NEW: Vehicle Database
+    if (UVehicleDatabase* VehicleDB = VehicleDatabaseAsset.Get())
+    {
+        for (auto& Soft : VehicleDB->AvailableVehicles)
+            Soft.LoadSynchronous();
+        Campaign->VehicleDatabaseAsset = VehicleDatabaseAsset;
+        UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d vehicles from VehicleDatabase"), VehicleDB->AvailableVehicles.Num());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE DATABASE] VehicleDatabaseAsset is NULL!"));
+    }
+
     UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases force-loaded and registered"));
 
-
-    // === START THE SIMULATION (AI now runs automatically every day) ===
+    // === START THE SIMULATION ===
     Campaign->StartSimulation();
     UE_LOG(LogTemp, Display, TEXT("🚀 Simulation STARTED — AI will act every day"));
 }

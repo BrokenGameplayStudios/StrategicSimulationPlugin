@@ -400,6 +400,19 @@ int32 UBaseManagerSubsystem::GetNumberOfOperationalHangers(EFactionType Faction)
     return Count;
 }
 
+int32 UBaseManagerSubsystem::GetTotalAvailableHangerSlots(EFactionType Faction) const
+{
+    int32 TotalSlots = 0;
+    for (UStrategyBase* Base : GetBasesInternal(Faction))
+    {
+        if (Base)
+        {
+            TotalSlots += Base->GetTotalCapacityForType(EFacilityType::Hanger);
+        }
+    }
+    return TotalSlots;
+}
+
 void UBaseManagerSubsystem::ResetAllBases()
 {
     for (UStrategyBase* Base : HumanBases)

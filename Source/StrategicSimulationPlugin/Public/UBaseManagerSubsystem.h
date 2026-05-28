@@ -61,6 +61,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;  // returns all facilities across bases (for compatibility)
 
+    // Get available vehicle parking slots in all hangers
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    int32 GetTotalAvailableHangerSlots(EFactionType Faction) const;
+
     // NEW: Full reset (used by Campaign ResetSimulation)
     UFUNCTION(BlueprintCallable, Category = "Base")
     void ResetAllBases();

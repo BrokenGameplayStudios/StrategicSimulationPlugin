@@ -7,6 +7,7 @@
 #include "UItemDatabase.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UFacilityDatabase.h"
+#include "UVehicleDatabase.h"          // NEW
 #include "UStrategyBase.h"
 #include "Engine/Engine.h"
 
@@ -27,7 +28,6 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("🔥 [AI] === ENEMY AI DECISION TRIGGERED — Real Day %d ==="), NewDay);
 
-    // NEW: Always advance ALL facility construction first (reliable)
     if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
     {
         BaseMgr->AdvanceFacilityConstruction(EFactionType::Enemy);
@@ -112,7 +112,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 continue;
         }
 
-        // 2. BARRACKS — STRICT LIMIT (36 from 6x LivingQuarters)
+        // 2. BARRACKS — STRICT LIMIT
         int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
         int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
 
@@ -129,6 +129,13 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (!Base->HasFacilityOfType(EFacilityType::Workshop)) TryBuildFacility(Faction, EFacilityType::Workshop, Base);
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory)) TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
         if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
+
+        // === NEW: Build Vehicles once we have a Hanger ===
+        if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
+        {
+            if (TryBuildVehicle(Faction, Base))
+                continue;
+        }
 
         // 4. Extras
         UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
@@ -148,6 +155,35 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
+// === NEW HELPER: Try to build a vehicle in a base that has a hanger ===
+bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
+{
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (!Campaign) return false;
+
+    UVehicleDatabase* VehicleDB = Campaign->VehicleDatabaseAsset.Get();
+    if (!VehicleDB || VehicleDB->AvailableVehicles.Num() == 0) return false;
+
+    UVehicleDefinition* VehDef = VehicleDB->AvailableVehicles[0].Get();
+    if (!VehDef) return false;
+
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (!ResourceMgr) return false;
+
+    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+    if (Res.Money < VehDef->BuildCost.Money || Res.Supplies < VehDef->BuildCost.Supplies)
+    {
+        return false;
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s started construction of vehicle '%s' in base '%s'"),
+        *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), *TargetBase->BaseName.ToString());
+
+    // TODO: Actual vehicle spawning will be added in next step
+    return true;
+}
+
+// === Your existing functions (unchanged) ===
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -169,7 +205,6 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
     while (PurchasesThisDay < MaxPurchasesPerDay)
     {
-        // Re-select poorest soldier every purchase
         UStrategySoldier* TargetSoldier = nullptr;
         int32 MinItems = INT_MAX;
         for (UStrategySoldier* Soldier : Roster)
@@ -182,7 +217,7 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
         }
         if (!TargetSoldier) break;
 
-        if (MinItems >= 10) break;   // prevent over-equipping
+        if (MinItems >= 10) break;
 
         FResourceStockpile Res = ResourceMgr->GetResources(Faction);
 
@@ -203,7 +238,6 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
                     UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Bought %s on soldier (now has %d items)"),
                         *ItemDef->ItemName.ToString(), TargetSoldier->CurrentLoadout.Num());
 
-                    // Broadcast loadout changed event so UI can refresh efficiently
                     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                     {
                         EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, TargetSoldier);
@@ -257,7 +291,6 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return false;
     }
 
-    // === RESPECT MaxBuilt FROM DATA ASSETS (no special cases) ===
     if (TargetBase)
     {
         int32 CurrentCountInBase = 0;
@@ -277,7 +310,6 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         }
     }
 
-    // Resource check
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < FacilityDef->BuildCost.Money)
     {
@@ -325,7 +357,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // === Pick the base with the MOST available barracks capacity ===
     UStrategyBase* TargetBase = nullptr;
     int32 BestAvailableSlots = 0;
 

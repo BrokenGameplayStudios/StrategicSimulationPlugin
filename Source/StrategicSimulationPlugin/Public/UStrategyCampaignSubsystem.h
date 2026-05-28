@@ -10,9 +10,12 @@
 #include "UBaseManagerSubsystem.h"
 #include "UResearchManagerSubsystem.h"
 #include "UAIControllerSubsystem.h"
+#include "UMissionManagerSubsystem.h"
 #include "UItemDatabase.h"
 #include "UFacilityDatabase.h"
+#include "UVehicleDatabase.h"
 #include "UFacilityDefinition.h"
+#include "UVehicleDefinition.h"
 #include "UResearchDatabase.h"
 #include "USoldierClassDatabase.h"
 #include "UStrategyCampaignSubsystem.generated.h"
@@ -71,6 +74,9 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<class UResearchDatabase> ResearchDatabaseAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<class UVehicleDatabase> VehicleDatabaseAsset;
 
     // Simulation control
     UFUNCTION(BlueprintCallable, Category = "Campaign")
