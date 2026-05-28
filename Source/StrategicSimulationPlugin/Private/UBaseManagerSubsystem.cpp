@@ -414,18 +414,19 @@ void UBaseManagerSubsystem::ResetAllBases()
     UE_LOG(LogTemp, Display, TEXT("[RESET] All bases cleared for both factions"));
 }
 
-// === NEW: Daily Repair Tick for all VehicleRepair facilities ===
+// === Daily Repair + Medical Tick for ALL operational facilities ===
 void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Starting daily repairs for %s"), *UEnum::GetValueAsString(Faction));
+    UE_LOG(LogTemp, Verbose, TEXT("[DAILY SIM] Starting daily repair/medical simulation for %s"), *UEnum::GetValueAsString(Faction));
 
     for (UStrategyBase* Base : GetBasesInternal(Faction))
     {
         if (!Base) continue;
 
+        // Call SimulateDailyRepair on EVERY operational facility (VehicleRepair + Medical)
         for (UStrategyFacility* Fac : Base->Facilities)
         {
-            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
+            if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
             {
                 Fac->SimulateDailyRepair(Base);
             }
