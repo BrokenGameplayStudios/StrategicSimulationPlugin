@@ -23,4 +23,8 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     int32 CurrentPowerDraw = 0;
+
+    /** Vehicles currently parked in this hanger (only used if FacilityType == Hanger) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hanger")
+    TArray<class UStrategyVehicle*> ParkedVehicles;
 };

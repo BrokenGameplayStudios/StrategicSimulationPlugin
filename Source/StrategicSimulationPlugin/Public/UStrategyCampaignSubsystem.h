@@ -61,6 +61,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Managers")
     class UAIControllerSubsystem* GetAIController() const;
 
+    UFUNCTION(BlueprintCallable, Category = "Managers")
+    class UMissionManagerSubsystem* GetMissionManager() const;
+
     // Configurable Item Database
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
     TSoftObjectPtr<class UItemDatabase> ItemDatabaseAsset;

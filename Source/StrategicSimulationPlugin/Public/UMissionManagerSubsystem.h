@@ -24,6 +24,13 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Mission")
     FOnMissionCompleted OnMissionCompleted;
 
+    /** Launches a simple mission with all parked vehicles in a base (for testing/AI) */
+    UFUNCTION(BlueprintCallable, Category = "Mission")
+    UMissionGroup* LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays = 15);
+
+    UFUNCTION()
+    void OnDayPassed(int32 NewDay);
+
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Missions")
     TArray<UMissionGroup*> ActiveMissions;

@@ -24,6 +24,16 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
         UE_LOG(LogTemp, Display, TEXT("✅ Campaign — OnDayPassed bound to AI"));
     }
 
+    // === NEW: Bind MissionManager to OnDayPassed (guaranteed correct order) ===
+    if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
+    {
+        if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
+        {
+            TimeMgr->OnDayPassed.AddDynamic(MissionMgr, &UMissionManagerSubsystem::OnDayPassed);
+            UE_LOG(LogTemp, Display, TEXT("✅ Campaign bound MissionManager to OnDayPassed"));
+        }
+    }
+
     UE_LOG(LogTemp, Display, TEXT("UStrategyCampaignSubsystem initialized — All managers + AI forced active"));
 }
 
@@ -268,6 +278,7 @@ UEngineeringManagerSubsystem* UStrategyCampaignSubsystem::GetEngineeringManager(
 UBaseManagerSubsystem* UStrategyCampaignSubsystem::GetBaseManager() const { return GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>(); }
 UTimeManagerSubsystem* UStrategyCampaignSubsystem::GetTimeManager() const { return GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>(); }
 UAIControllerSubsystem* UStrategyCampaignSubsystem::GetAIController() const { return GetGameInstance()->GetSubsystem<UAIControllerSubsystem>(); }
+UMissionManagerSubsystem* UStrategyCampaignSubsystem::GetMissionManager() const { return GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>(); }
 
 void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)
 {
