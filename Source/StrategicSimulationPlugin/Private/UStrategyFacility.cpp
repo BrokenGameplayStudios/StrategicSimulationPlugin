@@ -30,8 +30,8 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
             Vehicle->CurrentHealth,
             Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100);
 
-        // If it reached full health this tick, schedule return
-        if (OldHealth < Vehicle->CurrentHealth && !Vehicle->NeedsRepair())
+        // === STRONGER FULL-HEALTH DETECTION ===
+        if (!Vehicle->NeedsRepair())
         {
             UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s has reached full health — scheduling return to hanger"),
                 *Vehicle->VehicleDefinition->VehicleName.ToString());
@@ -46,7 +46,7 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
         Vehicle->ReturnFromRepair();
     }
 
-    // Auto-assign any damaged vehicles sitting in hangers if we have open repair slots
+    // Auto-assign damaged vehicles from hangers (daily ritual)
     if (OwningBase)
     {
         for (UStrategyFacility* Hanger : OwningBase->Facilities)

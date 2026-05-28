@@ -124,7 +124,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory)) TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
         if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
 
-        // === NEW: Build 1 VehicleRepair bay per operational hanger (up to MaxBuilt) ===
+        // === VehicleRepair bay logic (1 per operational hanger) ===
         int32 OperationalHangers = 0;
         for (UStrategyFacility* Fac : Base->Facilities)
         {
