@@ -78,7 +78,6 @@ bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
         return false;
     }
 
-    // Remember original hanger for return (only set once)
     if (CurrentHanger && !HomeHanger)
     {
         HomeHanger = CurrentHanger;
@@ -115,11 +114,12 @@ void UStrategyVehicle::ReturnFromRepair()
         HomeHanger ? *HomeHanger->FacilityDefinition->FacilityName.ToString() : TEXT("NULL"),
         HomeBase ? *HomeBase->BaseName.ToString() : TEXT("NULL"));
 
-    // PRIORITY 1: Original reserved HomeHanger
+    // === FORCE RETURN TO OWNED HOME HANGER (this fixes the bug) ===
     if (HomeHanger && HomeHanger->FacilityDefinition && HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
     {
         int32 CurrentSlots = HomeHanger->ParkedVehicles.Num();
         int32 MaxSlots = HomeHanger->FacilityDefinition->Capacity;
+
         UE_LOG(LogTemp, Display, TEXT("[RETURN DEBUG] HomeHanger '%s' capacity: %d/%d"), *HomeHanger->FacilityDefinition->FacilityName.ToString(), CurrentSlots, MaxSlots);
 
         if (CurrentSlots < MaxSlots)
@@ -129,9 +129,24 @@ void UStrategyVehicle::ReturnFromRepair()
             Parked = true;
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s fully repaired and returned to its HOME HANGER (reserved slot)"), *VehicleDefinition->VehicleName.ToString());
         }
+        else
+        {
+            // FORCE RECLAIM: evict the last vehicle to guarantee our owned slot
+            if (HomeHanger->ParkedVehicles.Num() > 0)
+            {
+                UStrategyVehicle* Evicted = HomeHanger->ParkedVehicles.Last();
+                UE_LOG(LogTemp, Display, TEXT("[RETURN DEBUG] HomeHanger full — evicting %s to reclaim slot for %s"), *Evicted->VehicleDefinition->VehicleName.ToString(), *VehicleDefinition->VehicleName.ToString());
+                HomeHanger->ParkedVehicles.RemoveAt(HomeHanger->ParkedVehicles.Num() - 1);
+            }
+
+            HomeHanger->ParkedVehicles.Add(this);
+            CurrentHanger = HomeHanger;
+            Parked = true;
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s FORCIBLY returned to its HOME HANGER (slot reclaimed)"), *VehicleDefinition->VehicleName.ToString());
+        }
     }
 
-    // PRIORITY 2: Fallback
+    // Fallback only if something went wrong with HomeHanger
     if (!Parked && HomeBase)
     {
         UE_LOG(LogTemp, Display, TEXT("[RETURN DEBUG] No space in HomeHanger — checking all hangers in base '%s'"), *HomeBase->BaseName.ToString());
