@@ -65,7 +65,6 @@ bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
         return false;
     }
 
-    // Remember the original hanger for later return (this is the "reserved slot")
     if (CurrentHanger && !HomeHanger)
     {
         HomeHanger = CurrentHanger;
@@ -90,13 +89,11 @@ void UStrategyVehicle::ReturnFromRepair()
         return;
     }
 
-    // Fully heal
     CurrentHealth = VehicleDefinition ? VehicleDefinition->MaxHealth : 100;
     DamageState = EVehicleDamageState::Undamaged;
 
     bool Parked = false;
 
-    // PRIORITY 1: Return to the original reserved/HomeHanger (this fixes the bug)
     if (HomeHanger && HomeHanger->FacilityDefinition && HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
     {
         if (HomeHanger->ParkedVehicles.Num() < HomeHanger->FacilityDefinition->Capacity)
@@ -108,7 +105,6 @@ void UStrategyVehicle::ReturnFromRepair()
         }
     }
 
-    // PRIORITY 2: Fallback - any available hanger in the base
     if (!Parked && HomeBase)
     {
         for (UStrategyFacility* Hanger : HomeBase->Facilities)
@@ -119,9 +115,9 @@ void UStrategyVehicle::ReturnFromRepair()
                 {
                     Hanger->ParkedVehicles.Add(this);
                     CurrentHanger = Hanger;
-                    if (!HomeHanger) HomeHanger = Hanger; // assign now if we never had one
+                    if (!HomeHanger) HomeHanger = Hanger;
                     Parked = true;
-                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s fully repaired and returned to fallback hanger slot"), *VehicleDefinition->VehicleName.ToString());
+                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s fully repaired and returned to fallback hanger"), *VehicleDefinition->VehicleName.ToString());
                     break;
                 }
             }

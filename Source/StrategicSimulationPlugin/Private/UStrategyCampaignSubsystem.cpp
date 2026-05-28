@@ -63,19 +63,11 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     }
 
     // === Daily Repair Tick for all VehicleRepair bays ===
+    // FIXED: Call SimulateDailyRepairs ONLY ONCE per faction (was inside facility loop = crash!)
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
     {
-        for (EFactionType Faction : { EFactionType::Human, EFactionType::Enemy })
-        {
-            const TArray<UStrategyFacility*>& Facilities = BaseMgr->GetFacilities(Faction);
-            for (UStrategyFacility* Fac : Facilities)
-            {
-                if (Fac)
-                {
-                    BaseMgr->SimulateDailyRepairs(Faction);
-                }
-            }
-        }
+        BaseMgr->SimulateDailyRepairs(EFactionType::Human);
+        BaseMgr->SimulateDailyRepairs(EFactionType::Enemy);
     }
 }
 

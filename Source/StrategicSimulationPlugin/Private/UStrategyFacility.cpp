@@ -22,7 +22,6 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
             Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100
         );
 
-        // Update damage state after repair (keeps NeedsRepair() accurate)
         Vehicle->UpdateDamageStateFromHealth();
 
         UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s repaired +%d HP → %d/%d"),
@@ -31,7 +30,6 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
             Vehicle->CurrentHealth,
             Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100);
 
-        // === STRONGER FULL-HEALTH DETECTION ===
         if (!Vehicle->NeedsRepair())
         {
             UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s has reached full health — scheduling return to hanger"),
@@ -40,14 +38,12 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
         }
     }
 
-    // Return fully repaired vehicles
     for (UStrategyVehicle* Vehicle : ToReturn)
     {
         VehiclesInRepair.Remove(Vehicle);
         Vehicle->ReturnFromRepair();
     }
 
-    // Auto-assign damaged vehicles from hangers (daily ritual)
     if (OwningBase)
     {
         for (UStrategyFacility* Hanger : OwningBase->Facilities)

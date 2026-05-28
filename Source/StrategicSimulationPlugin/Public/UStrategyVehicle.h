@@ -27,7 +27,7 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     UStrategyFacility* CurrentHanger;
 
-    /** Persistent reference to the hanger this vehicle is assigned to (reserved slot from mission/creation). Used for reliable return after repair. */
+    /** Persistent reserved hanger slot (set when leaving for mission/repair). Guarantees return to correct slot. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     UStrategyFacility* HomeHanger = nullptr;
 
@@ -59,7 +59,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Repair")
     bool NeedsRepair() const;
 
-    /** Updates DamageState based on CurrentHealth percentage. Call after any health change. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void UpdateDamageStateFromHealth();
 
