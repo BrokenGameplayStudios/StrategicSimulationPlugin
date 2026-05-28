@@ -2,10 +2,14 @@
 #include "UStrategySaveGame.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
+#include "UMissionManagerSubsystem.h"   // ← Required for MissionManager binding
 
 void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
+
+    // === FORCE TIME MANAGER FIRST (critical fix) ===
+    GetTimeManager();   // This guarantees TimeManager is created before any bindings
 
     // Force all subsystems
     GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
@@ -17,21 +21,34 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
     GetGameInstance()->GetSubsystem<UAIControllerSubsystem>();
     GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
 
-    // Bind to every day that passes
+    // Bind to every day that passes (AI)
     if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
     {
         TimeMgr->OnDayPassed.AddDynamic(this, &UStrategyCampaignSubsystem::OnDayPassed);
         UE_LOG(LogTemp, Display, TEXT("✅ Campaign — OnDayPassed bound to AI"));
     }
-
-    // === NEW: Bind MissionManager to OnDayPassed (guaranteed correct order) ===
-    if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
+    else
     {
-        if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
+        UE_LOG(LogTemp, Error, TEXT("❌ Campaign could NOT get TimeManager for AI binding!"));
+    }
+
+    // === Bind MissionManager to OnDayPassed (guaranteed correct order) ===
+    if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
+    {
+        if (UMissionManagerSubsystem* MissionMgr = GetMissionManager())
         {
+            TimeMgr->OnDayPassed.RemoveDynamic(MissionMgr, &UMissionManagerSubsystem::OnDayPassed);
             TimeMgr->OnDayPassed.AddDynamic(MissionMgr, &UMissionManagerSubsystem::OnDayPassed);
             UE_LOG(LogTemp, Display, TEXT("✅ Campaign bound MissionManager to OnDayPassed"));
         }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("❌ Campaign could NOT get MissionManager!"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("❌ Campaign could NOT get TimeManager for MissionManager binding!"));
     }
 
     UE_LOG(LogTemp, Display, TEXT("UStrategyCampaignSubsystem initialized — All managers + AI forced active"));
