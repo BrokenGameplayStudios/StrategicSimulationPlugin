@@ -9,7 +9,13 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     if (!FacilityDefinition || !bIsOperational || !OwningBase)
         return;
 
-    // === VEHICLE REPAIR (unchanged from what was already working) ===
+    // Debug: show every facility that is being processed
+    UE_LOG(LogTemp, Display, TEXT("[FACILITY TICK] %s (%s) in base '%s' is operational — processing daily simulation"),
+        *FacilityDefinition->FacilityName.ToString(),
+        *UEnum::GetValueAsString(FacilityDefinition->FacilityType),
+        *OwningBase->BaseName.ToString());
+
+    // === VEHICLE REPAIR ===
     if (FacilityDefinition->RepairHealthPerDay > 0 && FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
     {
         int32 RepairsRemaining = FacilityDefinition->Capacity;
@@ -51,20 +57,21 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
         }
     }
 
-    // === SOLDIER MEDICAL HEALING (exactly parallel to vehicle repair) ===
+    // === SOLDIER MEDICAL HEALING (exact parallel to vehicle repair) ===
     if (FacilityDefinition->FacilityType == EFacilityType::Medical)
     {
         int32 HealsRemaining = FacilityDefinition->Capacity;
 
-        UE_LOG(LogTemp, Display, TEXT("[MEDICAL TICK] %s can heal up to %d soldiers"),
-            *FacilityDefinition->FacilityName.ToString(), HealsRemaining);
+        UE_LOG(LogTemp, Display, TEXT("[MEDICAL TICK] %s can heal up to %d soldiers (+%d HP each)"),
+            *FacilityDefinition->FacilityName.ToString(), HealsRemaining, FacilityDefinition->RepairHealthPerDay);
 
         for (UStrategySoldier* Soldier : OwningBase->GetStationedSoldiers())
         {
             if (!Soldier || !Soldier->NeedsHealing() || HealsRemaining <= 0)
                 continue;
 
-            Soldier->Heal(3);   // 3 HP per day — easy to change later
+            Soldier->Heal(FacilityDefinition->RepairHealthPerDay);   // uses same per-day value as vehicles
+
             HealsRemaining--;
         }
     }
