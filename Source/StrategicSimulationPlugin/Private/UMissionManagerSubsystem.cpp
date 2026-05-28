@@ -62,6 +62,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     FResourceStockpile Reward;
     int32 SoldiersLost = 0;
     int32 VehiclesLostThisMission = 0;
+    int32 BaseDamagePerVehicle = 0;
 
     switch (Mission->Outcome)
     {
@@ -70,6 +71,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         Reward.Money = FMath::RandRange(1500, 2800);
         Reward.Supplies = FMath::RandRange(800, 1600);
         SoldiersLost = FMath::RandRange(0, 2);
+        BaseDamagePerVehicle = 0;
         break;
 
     case EMissionOutcome::PartialSuccess:
@@ -77,6 +79,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         Reward.Money = FMath::RandRange(700, 1500);
         Reward.Supplies = FMath::RandRange(400, 900);
         SoldiersLost = FMath::RandRange(1, 4);
+        BaseDamagePerVehicle = 15;
         break;
 
     case EMissionOutcome::Failure:
@@ -84,6 +87,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         Reward.Money = FMath::RandRange(0, 500);
         Reward.Supplies = FMath::RandRange(0, 300);
         SoldiersLost = FMath::RandRange(3, 6);
+        BaseDamagePerVehicle = 35;
         break;
 
     case EMissionOutcome::CatastrophicFailure:
@@ -91,7 +95,8 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         Reward.Money = -FMath::RandRange(400, 1200);
         Reward.Supplies = -FMath::RandRange(300, 800);
         SoldiersLost = FMath::RandRange(5, 10);
-        VehiclesLostThisMission = FMath::RandRange(0, 2); // can lose up to 2 vehicles
+        VehiclesLostThisMission = FMath::RandRange(0, 2);
+        BaseDamagePerVehicle = 70;
         break;
     }
 
@@ -105,11 +110,10 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     if (ResourceMgr)
     {
-        // TODO Phase 4: Make this dynamic per-base faction (currently Enemy because AI launches)
         ResourceMgr->AddResources(EFactionType::Enemy, Reward);
     }
 
-    // Soldier casualties (remove from roster)
+    // Soldier casualties
     if (SoldierMgr && SoldiersLost > 0)
     {
         TArray<UStrategySoldier*> AllPassengers;
@@ -127,7 +131,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
     }
 
-    // === Return / Destroy Vehicles ===
+    // === Apply Vehicle Damage + Auto-Checkout to Repair Bay ===
     int32 VehiclesToDestroy = VehiclesLostThisMission;
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
@@ -136,29 +140,52 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         if (VehiclesToDestroy > 0)
         {
             VehiclesToDestroy--;
+            // Destroyed vehicle is removed from the game
+            if (Vehicle->CurrentHanger)
+            {
+                Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
+            }
+            Vehicle->CurrentHanger = nullptr;
+            Vehicle->CurrentMission = nullptr;
             UE_LOG(LogTemp, Warning, TEXT("[MISSION] 💥 Vehicle '%s' was DESTROYED"), *Vehicle->VehicleDefinition->VehicleName.ToString());
-            continue; // vehicle is gone
+            continue;
         }
 
-        // Park surviving vehicle back in first available hanger slot
-        bool Parked = false;
-        for (UStrategyFacility* Hanger : Mission->OriginBase->Facilities)
+        // Survived → apply mission damage
+        if (BaseDamagePerVehicle > 0)
         {
-            if (Hanger && Hanger->FacilityDefinition && Hanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+            Vehicle->ApplyDamage(BaseDamagePerVehicle);
+        }
+
+        Vehicle->CurrentMission = nullptr;
+
+        // === AUTO-CHECKOUT: Damaged vehicles go straight to first available repair bay ===
+        if (Vehicle->NeedsRepair())
+        {
+            bool Repaired = false;
+            for (UStrategyFacility* Fac : Mission->OriginBase->Facilities)
             {
-                if (Hanger->ParkedVehicles.Num() < Hanger->FacilityDefinition->Capacity)
+                if (Fac && Fac->FacilityDefinition &&
+                    Fac->FacilityDefinition->FacilityType == EFacilityType::Workshop &&
+                    Fac->VehiclesInRepair.Num() < Fac->FacilityDefinition->Capacity)
                 {
-                    Hanger->ParkedVehicles.Add(Vehicle);
-                    Vehicle->CurrentHanger = Hanger;
-                    Vehicle->CurrentMission = nullptr;
-                    Parked = true;
-                    break;
+                    if (Vehicle->CheckoutToRepair(Fac))
+                    {
+                        Fac->VehiclesInRepair.Add(Vehicle);
+                        Repaired = true;
+                        UE_LOG(LogTemp, Display, TEXT("[MISSION] 🔧 %s auto-checked into repair bay"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+                        break;
+                    }
                 }
             }
+            if (!Repaired)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[MISSION] ⚠️ No repair bay space for damaged vehicle '%s'"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+            }
         }
-        if (!Parked)
+        else
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MISSION] ⚠️ No hanger space for returning vehicle '%s'"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[MISSION] ✅ Vehicle '%s' returned undamaged to reserved hanger slot"), *Vehicle->VehicleDefinition->VehicleName.ToString());
         }
     }
 
@@ -175,7 +202,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     OnMissionCompleted.Broadcast(Mission);
 }
 
-// (StartMission + LaunchMissionFromBase unchanged — just kept for completeness)
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
@@ -186,22 +212,17 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->StartDay = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay();
     NewMission->DurationDays = DurationDays;
     NewMission->Status = EMissionStatus::InProgress;
-    NewMission->Outcome = EMissionOutcome::Success; // default until resolved
+    NewMission->Outcome = EMissionOutcome::Success;
 
     ActiveMissions.Add(NewMission);
 
-    // Check vehicles out of hangers
+    // === CHECK-OUT: Mark as on mission but KEEP in ParkedVehicles (slot stays reserved) ===
     for (UStrategyVehicle* Vehicle : Vehicles)
     {
-        if (Vehicle->CurrentHanger)
-        {
-            Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
-            Vehicle->CurrentHanger = nullptr;
-        }
         Vehicle->CurrentMission = NewMission;
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched mission with %d vehicles from base '%s' (duration: %d days)"),
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched mission with %d vehicles from base '%s' (duration: %d days) — slots reserved"),
         Vehicles.Num(), *OriginBase->BaseName.ToString(), DurationDays);
 
     return NewMission;
@@ -223,7 +244,13 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
     {
         if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
-            AvailableVehicles.Append(Fac->ParkedVehicles);
+            for (UStrategyVehicle* Veh : Fac->ParkedVehicles)
+            {
+                if (Veh && Veh->CurrentMission == nullptr)  // Only non-mission vehicles
+                {
+                    AvailableVehicles.Add(Veh);
+                }
+            }
         }
     }
 

@@ -4,6 +4,11 @@
 #include "Engine/Engine.h"
 #include "UMissionManagerSubsystem.h"   // Required for MissionManager binding
 
+// === NEW INCLUDES FOR REPAIR SYSTEM ===
+#include "UBaseManagerSubsystem.h"
+#include "UStrategyBase.h"
+#include "UStrategyFacility.h"
+
 void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -64,6 +69,19 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     {
         AI->RunAIForFaction(EFactionType::Enemy, NewDay);
     }
+
+    // === Daily Repair Tick for all Workshop/Repair Bays (both factions) ===
+    if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
+    {
+        for (EFactionType Faction : { EFactionType::Human, EFactionType::Enemy })
+        {
+            const TArray<UStrategyFacility*>& Facilities = BaseMgr->GetFacilities(Faction);
+            for (UStrategyFacility* Fac : Facilities)
+            {
+                if (Fac) Fac->SimulateDailyRepair();
+            }
+        }
+    }
 }
 
 void UStrategyCampaignSubsystem::ResetSimulation()
@@ -115,7 +133,10 @@ void UStrategyCampaignSubsystem::StartSimulation()
         {
             if (UFacilityDefinition* Def = SoftDef.Get())
             {
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days"),
+                FString RepairInfo = (Def->RepairHealthPerDay > 0) ?
+                    FString::Printf(TEXT(" | Repair: +%d HP/day"), Def->RepairHealthPerDay) : TEXT("");
+
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days%s"),
                     *Def->FacilityName.ToString(),
                     *UEnum::GetValueAsString(Def->FacilityType),
                     Def->Capacity,
@@ -124,7 +145,8 @@ void UStrategyCampaignSubsystem::StartSimulation()
                     Def->PowerDraw,
                     Def->BuildCost.Money,
                     Def->BuildCost.Supplies,
-                    Def->BuildTimeDays);
+                    Def->BuildTimeDays,
+                    *RepairInfo);
             }
         }
     }
@@ -211,6 +233,15 @@ void UStrategyCampaignSubsystem::StartSimulation()
     else
     {
         UE_LOG(LogTemp, Warning, TEXT("[VEHICLE DATABASE] VehicleDatabaseAsset is NULL!"));
+    }
+
+    // === NEW: Current Resource Stockpile at Start ===
+    if (UResourceManagerSubsystem* ResourceMgr = GetResourceManager())
+    {
+        FResourceStockpile HumanRes = ResourceMgr->GetResources(EFactionType::Human);
+        FResourceStockpile EnemyRes = ResourceMgr->GetResources(EFactionType::Enemy);
+        UE_LOG(LogTemp, Display, TEXT("[RESOURCES] Human start: %d💰 %d📦 %d🛠️ %d🧬 %d⚗️"), HumanRes.Money, HumanRes.Supplies, HumanRes.Metals, HumanRes.Biologicals, HumanRes.Chemicals);
+        UE_LOG(LogTemp, Display, TEXT("[RESOURCES] Enemy start: %d💰 %d📦 %d🛠️ %d🧬 %d⚗️"), EnemyRes.Money, EnemyRes.Supplies, EnemyRes.Metals, EnemyRes.Biologicals, EnemyRes.Chemicals);
     }
 
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));

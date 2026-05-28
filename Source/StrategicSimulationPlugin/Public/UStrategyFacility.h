@@ -27,4 +27,13 @@ public:
     /** Vehicles currently parked in this hanger (only used if FacilityType == Hanger) */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hanger")
     TArray<class UStrategyVehicle*> ParkedVehicles;
+
+    // === NEW: Repair Bay Support (Phase 3.6) ===
+    /** Vehicles currently being repaired in this workshop/repair bay */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Repair")
+    TArray<class UStrategyVehicle*> VehiclesInRepair;
+
+    /** Simulate one day of repairs for all vehicles in this bay */
+    UFUNCTION(BlueprintCallable, Category = "Repair")
+    void SimulateDailyRepair();
 };

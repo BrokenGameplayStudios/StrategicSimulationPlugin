@@ -13,7 +13,7 @@ enum class EFactionType : uint8
     Neutral		UMETA(DisplayName = "Neutral")
 };
 
-// Resources
+// Resources (now more granular while keeping old fields for compatibility)
 UENUM(BlueprintType)
 enum class EResourceType : uint8
 {
@@ -21,6 +21,41 @@ enum class EResourceType : uint8
     Supplies		UMETA(DisplayName = "Supplies"),
     ExoticMaterial	UMETA(DisplayName = "Exotic Material"),
     ResearchPoints	UMETA(DisplayName = "Research Points")
+};
+
+USTRUCT(BlueprintType)
+struct FResourceStockpile
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Money = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Supplies = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 ExoticMaterial = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 ResearchPoints = 0;
+
+    // === NEW GRANULAR RESOURCES (Phase 3.5) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Metals = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Biologicals = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Chemicals = 0;
+
+    // Helper operators (makes code much cleaner later)
+    FResourceStockpile operator+(const FResourceStockpile& Other) const;
+    FResourceStockpile operator-(const FResourceStockpile& Other) const;
+    bool operator>=(const FResourceStockpile& Other) const;
+    void Add(const FResourceStockpile& Other);
+    void Subtract(const FResourceStockpile& Other);
 };
 
 // Tech categories (melee, ballistic, etc. — same for both sides)
@@ -34,8 +69,8 @@ enum class ETechCategory : uint8
     Bio,
     Gas,
     Psychic,
-	Medical,
-	Utility
+    Medical,
+    Utility
 };
 
 // Tech tiers
@@ -56,7 +91,7 @@ enum class EFacilityType : uint8
     Command,
     LivingQuarters,
     Laboratory,
-    Workshop,
+    Workshop,           // Will be used for VehicleRepair bay
     Storage,
     Defense,
     Hanger,
@@ -73,6 +108,26 @@ enum class EVehicleType : uint8
     Support,
     Scout,
     Heavy
+};
+
+// === NEW: Vehicle Damage System ===
+UENUM(BlueprintType)
+enum class EVehicleDamageState : uint8
+{
+    Undamaged       UMETA(DisplayName = "Undamaged"),
+    LightlyDamaged  UMETA(DisplayName = "Lightly Damaged"),
+    HeavilyDamaged  UMETA(DisplayName = "Heavily Damaged"),
+    Destroyed       UMETA(DisplayName = "Destroyed")
+};
+
+// === NEW: Soldier Medical System ===
+UENUM(BlueprintType)
+enum class ESoldierStatus : uint8
+{
+    Healthy         UMETA(DisplayName = "Healthy"),
+    Wounded         UMETA(DisplayName = "Wounded"),
+    Critical        UMETA(DisplayName = "Critical"),
+    Dead            UMETA(DisplayName = "Dead")
 };
 
 // Soldier base stats (used by soldier classes and runtime soldiers)
@@ -97,21 +152,24 @@ struct FSoldierStats
     int32 Mobility = 12;
 };
 
-// Simple resource cost (used by research, production, facilities)
+// Vehicle stats (used by UVehicleDefinition and UStrategyVehicle)
 USTRUCT(BlueprintType)
-struct FResourceStockpile
+struct FVehicleStats
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 Money = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    int32 MaxHealth = 100;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 Supplies = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    int32 AttackPower = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 ExoticMaterial = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    int32 SoldierCapacity = 4;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 ResearchPoints = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    int32 MaxMissionDurationDays = 15;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    int32 ProductionDays = 20;
 };

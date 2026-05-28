@@ -33,10 +33,10 @@ public:
 
     // Production
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Production")
-    int32 ProductionSlots = 0;           // how many items this facility can produce at once (Workshop = 2, etc.)
+    int32 ProductionSlots = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Production")
-    float ProductionSpeedMultiplier = 1.0f;  // 1.0 = normal speed
+    float ProductionSpeedMultiplier = 1.0f;
 
     // Facility ONLY unlocks Research Projects
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")
@@ -56,4 +56,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Build")
     int32 MaxBuilt = 1;
 
+    // === NEW: Repair Bay Support (Phase 3.6) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair")
+    int32 RepairHealthPerDay = 0;   // Health restored per day per vehicle (e.g. 25 for a basic repair bay)
 };

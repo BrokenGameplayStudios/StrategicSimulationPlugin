@@ -34,4 +34,11 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
     FText Description;
+
+    // === NEW: Vehicle Damage & Repair System (Phase 3.5) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Damage & Repair")
+    int32 MaxHealth = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Damage & Repair")
+    EVehicleDamageState DefaultDamageState = EVehicleDamageState::Undamaged;
 };
