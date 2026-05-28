@@ -2,10 +2,20 @@
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
+#include "StrategicSimulationTypes.h"
 #include "UMissionGroup.generated.h"
 
 class UStrategyVehicle;
 class UStrategyBase;
+
+UENUM(BlueprintType)
+enum class EMissionOutcome : uint8
+{
+    Success             UMETA(DisplayName = "Success"),
+    PartialSuccess      UMETA(DisplayName = "Partial Success"),
+    Failure             UMETA(DisplayName = "Failure"),
+    CatastrophicFailure UMETA(DisplayName = "Catastrophic Failure")
+};
 
 UENUM(BlueprintType)
 enum class EMissionStatus : uint8
@@ -41,4 +51,17 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
     FText MissionName;
+
+    // === NEW: Mission Results (Phase 3) ===
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Result")
+    EMissionOutcome Outcome;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Result")
+    FResourceStockpile ResourcesGained;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Result")
+    int32 SoldiersKilled = 0;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Result")
+    int32 VehiclesLost = 0;
 };

@@ -32,6 +32,9 @@ public:
     void OnDayPassed(int32 NewDay);
 
 private:
+    /** Phase 3: Resolves random mission outcome + rewards/losses */
+    void ResolveMissionOutcome(UMissionGroup* Mission);
+
     UPROPERTY(VisibleAnywhere, Transient, Category = "Missions")
     TArray<UMissionGroup*> ActiveMissions;
 };
