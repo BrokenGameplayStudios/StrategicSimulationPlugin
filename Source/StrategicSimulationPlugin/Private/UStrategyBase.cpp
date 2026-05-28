@@ -1,4 +1,30 @@
 #include "UStrategyBase.h"
+#include "UStrategyFacility.h"
+#include "UStrategySoldier.h"
+#include "USoldierManagerSubsystem.h"
+#include "Engine/Engine.h"          // ← Added for GEngine
+#include "Kismet/GameplayStatics.h" // ← Added for safety
+
+TArray<UStrategySoldier*> UStrategyBase::GetStationedSoldiers() const
+{
+    TArray<UStrategySoldier*> Soldiers;
+
+    // Fixed: UObject does not have GetGameInstance(). Use GEngine safely.
+    UWorld* World = GEngine ? GEngine->GetCurrentPlayWorld() : nullptr;
+    if (World)
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
+            {
+                // Assuming Enemy for now (you can change to Human when player side is added)
+                Soldiers = SoldierMgr->GetRoster(EFactionType::Enemy);
+            }
+        }
+    }
+
+    return Soldiers;
+}
 
 bool UStrategyBase::HasOperationalCommandCenter() const
 {

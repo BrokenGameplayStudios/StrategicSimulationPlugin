@@ -5,9 +5,9 @@
 #include "StrategicSimulationTypes.h"
 #include "USoldierClassDefinition.h"
 #include "UItemDefinition.h"
-#include "UStrategyBase.h"
 #include "UStrategySoldier.generated.h"
 
+class UStrategyBase;
 class UStrategyFacility;
 
 UCLASS(BlueprintType)
@@ -42,7 +42,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     int32 DaysUntilRecovered = 0;
 
-    /** Permanent reserved barracks slot — belongs to this soldier until they die */
+    /** Permanent reserved barracks slot — belongs to this soldier until death */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Location")
     UStrategyFacility* HomeBarracks = nullptr;
 

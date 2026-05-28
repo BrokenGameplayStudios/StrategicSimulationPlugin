@@ -9,7 +9,7 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     if (!FacilityDefinition || !bIsOperational || !OwningBase)
         return;
 
-    // === VEHICLE REPAIR ===
+    // === VEHICLE REPAIR (unchanged) ===
     if (FacilityDefinition->RepairHealthPerDay > 0 && FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
     {
         int32 RepairsRemaining = FacilityDefinition->Capacity;
@@ -59,12 +59,12 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
         UE_LOG(LogTemp, Verbose, TEXT("[MEDICAL TICK] %s can heal up to %d soldiers"),
             *FacilityDefinition->FacilityName.ToString(), HealsRemaining);
 
-        for (UStrategySoldier* Soldier : OwningBase->GetAllSoldiers()) // assume helper or loop rosters
+        for (UStrategySoldier* Soldier : OwningBase->GetStationedSoldiers())
         {
             if (!Soldier || !Soldier->NeedsHealing() || HealsRemaining <= 0)
                 continue;
 
-            Soldier->Heal(3); // heal 3 HP per day (adjustable later)
+            Soldier->Heal(3); // 3 HP per day — easy to tweak later
             HealsRemaining--;
         }
     }

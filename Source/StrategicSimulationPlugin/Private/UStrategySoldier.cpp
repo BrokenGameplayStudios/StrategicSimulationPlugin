@@ -30,9 +30,7 @@ void UStrategySoldier::Heal(int32 Amount)
 {
     if (Amount <= 0 || Status == ESoldierStatus::Dead) return;
 
-    CurrentStats.Health += Amount;
-    if (CurrentStats.Health > 10) CurrentStats.Health = 10; // max health for now
-
+    CurrentStats.Health = FMath::Min(CurrentStats.Health + Amount, 10);
     UpdateStatusFromHealth();
 
     UE_LOG(LogTemp, Display, TEXT("[MEDICAL] %s healed +%d HP → Health: %d (%s)"),

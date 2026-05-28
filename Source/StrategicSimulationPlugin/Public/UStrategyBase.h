@@ -64,4 +64,7 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Base")
     void AddFacility(UStrategyFacility* NewFacility);
+
+    UFUNCTION(BlueprintCallable, Category = "Soldiers")
+    TArray<UStrategySoldier*> GetStationedSoldiers() const;
 };
