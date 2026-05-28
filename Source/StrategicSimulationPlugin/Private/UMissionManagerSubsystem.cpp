@@ -51,7 +51,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 {
     if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0) return;
 
-    // Weighted random outcome (tweak percentages anytime)
     const int32 Roll = FMath::RandRange(1, 100);
     if (Roll <= 55)      Mission->Outcome = EMissionOutcome::Success;
     else if (Roll <= 80) Mission->Outcome = EMissionOutcome::PartialSuccess;
@@ -66,72 +65,33 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     switch (Mission->Outcome)
     {
-    case EMissionOutcome::Success:
-        OutcomeStr = TEXT("SUCCESS");
-        Reward.Money = FMath::RandRange(1500, 2800);
-        Reward.Supplies = FMath::RandRange(800, 1600);
-        SoldiersLost = FMath::RandRange(0, 2);
-        BaseDamagePerVehicle = 0;
-        break;
-
-    case EMissionOutcome::PartialSuccess:
-        OutcomeStr = TEXT("PARTIAL SUCCESS");
-        Reward.Money = FMath::RandRange(700, 1500);
-        Reward.Supplies = FMath::RandRange(400, 900);
-        SoldiersLost = FMath::RandRange(1, 4);
-        BaseDamagePerVehicle = 15;
-        break;
-
-    case EMissionOutcome::Failure:
-        OutcomeStr = TEXT("FAILURE");
-        Reward.Money = FMath::RandRange(0, 500);
-        Reward.Supplies = FMath::RandRange(0, 300);
-        SoldiersLost = FMath::RandRange(3, 6);
-        BaseDamagePerVehicle = 35;
-        break;
-
-    case EMissionOutcome::CatastrophicFailure:
-        OutcomeStr = TEXT("CATASTROPHIC FAILURE");
-        Reward.Money = -FMath::RandRange(400, 1200);
-        Reward.Supplies = -FMath::RandRange(300, 800);
-        SoldiersLost = FMath::RandRange(5, 10);
-        VehiclesLostThisMission = FMath::RandRange(0, 2);
-        BaseDamagePerVehicle = 70;
-        break;
+    case EMissionOutcome::Success:         OutcomeStr = TEXT("SUCCESS");        Reward.Money = FMath::RandRange(1500, 2800); Reward.Supplies = FMath::RandRange(800, 1600); SoldiersLost = FMath::RandRange(0, 2); BaseDamagePerVehicle = 0; break;
+    case EMissionOutcome::PartialSuccess:  OutcomeStr = TEXT("PARTIAL SUCCESS"); Reward.Money = FMath::RandRange(700, 1500); Reward.Supplies = FMath::RandRange(400, 900);  SoldiersLost = FMath::RandRange(1, 4); BaseDamagePerVehicle = 15; break;
+    case EMissionOutcome::Failure:         OutcomeStr = TEXT("FAILURE");        Reward.Money = FMath::RandRange(0, 500);   Reward.Supplies = FMath::RandRange(0, 300);   SoldiersLost = FMath::RandRange(3, 6); BaseDamagePerVehicle = 35; break;
+    case EMissionOutcome::CatastrophicFailure: OutcomeStr = TEXT("CATASTROPHIC FAILURE"); Reward.Money = -FMath::RandRange(400, 1200); Reward.Supplies = -FMath::RandRange(300, 800); SoldiersLost = FMath::RandRange(5, 10); VehiclesLostThisMission = FMath::RandRange(0, 2); BaseDamagePerVehicle = 70; break;
     }
 
     Mission->ResourcesGained = Reward;
     Mission->SoldiersKilled = SoldiersLost;
     Mission->VehiclesLost = VehiclesLostThisMission;
 
-    // === Apply Rewards / Losses ===
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
 
-    if (ResourceMgr)
-    {
-        ResourceMgr->AddResources(EFactionType::Enemy, Reward);
-    }
+    if (ResourceMgr) ResourceMgr->AddResources(EFactionType::Enemy, Reward);
 
-    // Soldier casualties
     if (SoldierMgr && SoldiersLost > 0)
     {
         TArray<UStrategySoldier*> AllPassengers;
-        for (UStrategyVehicle* Veh : Mission->VehiclesInFleet)
-        {
-            AllPassengers.Append(Veh->CurrentPassengers);
-        }
-
+        for (UStrategyVehicle* Veh : Mission->VehiclesInFleet) AllPassengers.Append(Veh->CurrentPassengers);
         for (int32 i = 0; i < SoldiersLost && AllPassengers.Num() > 0; ++i)
         {
-            int32 RandomIndex = FMath::RandRange(0, AllPassengers.Num() - 1);
-            UStrategySoldier* DeadSoldier = AllPassengers[RandomIndex];
-            SoldierMgr->DismissSoldier(DeadSoldier);
-            AllPassengers.RemoveAt(RandomIndex);
+            int32 idx = FMath::RandRange(0, AllPassengers.Num() - 1);
+            SoldierMgr->DismissSoldier(AllPassengers[idx]);
+            AllPassengers.RemoveAt(idx);
         }
     }
 
-    // === Apply Vehicle Damage + Auto-Checkout to Repair Bay ===
     int32 VehiclesToDestroy = VehiclesLostThisMission;
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
@@ -140,47 +100,38 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         if (VehiclesToDestroy > 0)
         {
             VehiclesToDestroy--;
-            // Destroyed vehicle is removed from the game
-            if (Vehicle->CurrentHanger)
-            {
-                Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
-            }
+            if (Vehicle->CurrentHanger) Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
             Vehicle->CurrentHanger = nullptr;
             Vehicle->CurrentMission = nullptr;
             UE_LOG(LogTemp, Warning, TEXT("[MISSION] 💥 Vehicle '%s' was DESTROYED"), *Vehicle->VehicleDefinition->VehicleName.ToString());
             continue;
         }
 
-        // Survived → apply mission damage
-        if (BaseDamagePerVehicle > 0)
-        {
-            Vehicle->ApplyDamage(BaseDamagePerVehicle);
-        }
+        if (BaseDamagePerVehicle > 0) Vehicle->ApplyDamage(BaseDamagePerVehicle);
 
         Vehicle->CurrentMission = nullptr;
 
-        // === AUTO-CHECKOUT: Damaged vehicles go straight to first available repair bay ===
         if (Vehicle->NeedsRepair())
         {
             bool Repaired = false;
             for (UStrategyFacility* Fac : Mission->OriginBase->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition &&
-                    Fac->FacilityDefinition->FacilityType == EFacilityType::Workshop &&
+                    Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair &&
                     Fac->VehiclesInRepair.Num() < Fac->FacilityDefinition->Capacity)
                 {
                     if (Vehicle->CheckoutToRepair(Fac))
                     {
                         Fac->VehiclesInRepair.Add(Vehicle);
                         Repaired = true;
-                        UE_LOG(LogTemp, Display, TEXT("[MISSION] 🔧 %s auto-checked into repair bay"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+                        UE_LOG(LogTemp, Display, TEXT("[MISSION] 🔧 %s auto-checked into VehicleRepair bay"), *Vehicle->VehicleDefinition->VehicleName.ToString());
                         break;
                     }
                 }
             }
             if (!Repaired)
             {
-                UE_LOG(LogTemp, Warning, TEXT("[MISSION] ⚠️ No repair bay space for damaged vehicle '%s'"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+                UE_LOG(LogTemp, Warning, TEXT("[MISSION] ⚠️ No VehicleRepair bay space for damaged vehicle '%s'"), *Vehicle->VehicleDefinition->VehicleName.ToString());
             }
         }
         else
@@ -216,7 +167,6 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
     ActiveMissions.Add(NewMission);
 
-    // === CHECK-OUT: Mark as on mission but KEEP in ParkedVehicles (slot stays reserved) ===
     for (UStrategyVehicle* Vehicle : Vehicles)
     {
         Vehicle->CurrentMission = NewMission;
@@ -232,7 +182,6 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
 {
     if (!OriginBase) return nullptr;
 
-    // Prevent spam
     for (UMissionGroup* Existing : ActiveMissions)
     {
         if (Existing && Existing->OriginBase == OriginBase && Existing->Status == EMissionStatus::InProgress)
@@ -246,10 +195,8 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
         {
             for (UStrategyVehicle* Veh : Fac->ParkedVehicles)
             {
-                if (Veh && Veh->CurrentMission == nullptr)  // Only non-mission vehicles
-                {
+                if (Veh && Veh->CurrentMission == nullptr)
                     AvailableVehicles.Add(Veh);
-                }
             }
         }
     }

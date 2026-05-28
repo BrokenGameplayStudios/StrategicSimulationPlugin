@@ -58,7 +58,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order) - Bases: %d"),
         *UEnum::GetValueAsString(Faction), CurrentDay, BaseMgr->GetBases(Faction).Num());
 
-    // === FORCE INITIAL BASE CREATION ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] No bases exist — creating initial Command Center base"));
@@ -77,11 +76,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === CRITICAL DAILY PROGRESS ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // === PHASE 4: BASE EXPANSION ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
         int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
@@ -98,7 +95,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DEVELOP EVERY BASE IN PARALLEL ===
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         if (!Base) continue;
@@ -106,14 +102,12 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
 
-        // 1. POWER FIRST
         if (Base->GetNetPower() < 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
         {
             if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base))
                 continue;
         }
 
-        // 2. BARRACKS — STRICT LIMIT
         int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
         int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
 
@@ -125,20 +119,44 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
         }
 
-        // 3. Core facilities
         if (!Base->HasFacilityOfType(EFacilityType::Storage)) TryBuildFacility(Faction, EFacilityType::Storage, Base);
         if (!Base->HasFacilityOfType(EFacilityType::Workshop)) TryBuildFacility(Faction, EFacilityType::Workshop, Base);
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory)) TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
         if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
 
-        // === NEW: Build Vehicles once we have a Hanger ===
+        // === NEW: Build 1 VehicleRepair bay per operational hanger (up to MaxBuilt) ===
+        int32 OperationalHangers = 0;
+        for (UStrategyFacility* Fac : Base->Facilities)
+        {
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger && Fac->bIsOperational)
+                OperationalHangers++;
+        }
+
+        int32 CurrentRepairBays = 0;
+        int32 RepairUnderConstruction = 0;
+        for (UStrategyFacility* Fac : Base->Facilities)
+        {
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
+            {
+                if (Fac->bIsOperational)
+                    CurrentRepairBays++;
+                else
+                    RepairUnderConstruction++;
+            }
+        }
+
+        if (CurrentRepairBays + RepairUnderConstruction < OperationalHangers)
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] → Building VehicleRepair bay for hanger in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::VehicleRepair, Base);
+        }
+
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             if (TryBuildVehicle(Faction, Base))
                 continue;
         }
 
-        // === MISSION LAUNCH (only if no active mission from this base) ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
@@ -146,19 +164,16 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 if (UMissionGroup* Mission = MissionMgr->LaunchMissionFromBase(Base, 15))
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] Launched mission from base '%s'"), *Base->BaseName.ToString());
-                    // Do NOT continue here — let AI do other actions (research, purchase, etc.)
                 }
             }
         }
 
-        // 4. Extras
         UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
         TryBuildFacility(Faction, EFacilityType::Storage, Base);
         TryBuildFacility(Faction, EFacilityType::Hanger, Base);
         if (Base->GetNetPower() < 100) TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
     }
 
-    // === RECRUIT, RESEARCH, PURCHASE, PRODUCTION ===
     bool bRecruited = (SoldierMgr && TryRecruit(Faction));
     if (bRecruited) UE_LOG(LogTemp, Display, TEXT("[AI] Recruited soldier — continuing..."));
 
@@ -169,7 +184,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === FINAL: Build vehicle only if there is an available hanger slot ===
+// === Your existing helper functions (unchanged) ===
 bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -184,7 +199,6 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (!ResourceMgr) return false;
 
-    // === FIRST: Check if ANY hanger has space ===
     bool bHasAvailableSlot = false;
     int32 HangerIndex = 0;
 
@@ -194,7 +208,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
             continue;
 
         HangerIndex++;
-        int32 HangerCapacity = Hanger->FacilityDefinition->Capacity; // e.g. 2
+        int32 HangerCapacity = Hanger->FacilityDefinition->Capacity;
         int32 CurrentParked = Hanger->ParkedVehicles.Num();
 
         if (CurrentParked < HangerCapacity)
@@ -211,23 +225,19 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
         return false;
     }
 
-    // === SECOND: Check resources only if we have space ===
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < VehDef->BuildCost.Money || Res.Supplies < VehDef->BuildCost.Supplies)
     {
         return false;
     }
 
-    // Deduct cost
     ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
 
-    // Create the vehicle
     UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>();
     NewVehicle->VehicleDefinition = VehDef;
     NewVehicle->HomeBase = TargetBase;
     NewVehicle->RemainingFuelDays = VehDef->MaxMissionDurationDays;
 
-    // === PARK IN FIRST AVAILABLE HANGER ===
     HangerIndex = 0;
     for (UStrategyFacility* Hanger : TargetBase->Facilities)
     {
@@ -247,16 +257,14 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
                 *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), *TargetBase->BaseName.ToString(),
                 HangerIndex, CurrentParked + 1, HangerCapacity);
 
-            return true; // success
+            return true;
         }
     }
 
-    // Should never reach here
     UE_LOG(LogTemp, Warning, TEXT("[AI] Vehicle built but could not park in any hanger"));
     return false;
 }
 
-// === Your existing functions (unchanged) ===
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();

@@ -4,6 +4,8 @@
 #include "UFacilityDatabase.h"
 #include "UResourceManagerSubsystem.h"
 #include "UStrategyCampaignSubsystem.h"
+#include "UStrategyBase.h"
+#include "UStrategyFacility.h"
 
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -57,15 +59,13 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
             if (CommandDef)
             {
-                // === AFFORDABILITY CHECK ===
                 UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
                 if (ResourceMgr)
                 {
                     FResourceStockpile Current = ResourceMgr->GetResources(Faction);
                     if (Current.Money < CommandDef->BuildCost.Money || Current.Supplies < CommandDef->BuildCost.Supplies)
                     {
-                        UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center (%d Money, %d Supplies needed) — skipping cost deduction"),
-                            CommandDef->BuildCost.Money, CommandDef->BuildCost.Supplies);
+                        UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center — skipping cost deduction"));
                     }
                     else
                     {
@@ -73,11 +73,9 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
                         NegativeCost.Money = -NegativeCost.Money;
                         NegativeCost.Supplies = -NegativeCost.Supplies;
                         ResourceMgr->AddResources(Faction, NegativeCost);
-                        UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Paid for Command Center in new base '%s'"), *NewBase->BaseName.ToString());
                     }
                 }
 
-                // Start construction
                 UStrategyFacility* CommandFacility = BuildFacility(Faction, CommandDef, NewBase);
 
                 if (CommandFacility)
@@ -94,23 +92,13 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
                     bCommandCreated = true;
                 }
             }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[BASE] Command facility definition not found in database — falling back to direct creation"));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[BASE] FacilityDatabaseAsset not loaded yet — falling back to direct Command Center creation"));
         }
     }
 
-    // === IMPROVED FALLBACK: Always use real FacilityDefinition ===
     if (!bCommandCreated)
     {
         UStrategyFacility* CommandFacility = NewObject<UStrategyFacility>();
 
-        // Lookup the real Command Center definition for income/power/etc.
         if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
         {
             UFacilityDatabase* FacilityDB = Campaign->FacilityDatabaseAsset.Get();
@@ -143,8 +131,6 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
         if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
             EventDisp->OnFacilityCompleted.Broadcast(Faction, CommandFacility);
-
-        bCommandCreated = true;
     }
 
     return NewBase;
@@ -165,12 +151,10 @@ TArray<UStrategyBase*>& UBaseManagerSubsystem::GetMutableBases(EFactionType Fact
     return (Faction == EFactionType::Human) ? HumanBases : EnemyBases;
 }
 
-// === BuildFacility with Command gate + NEW AFFORDABILITY CHECK ===
 UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase /*= nullptr*/)
 {
     if (!FacilityDef) return nullptr;
 
-    // === AFFORDABILITY CHECK ===
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (ResourceMgr)
     {
@@ -182,7 +166,6 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
             return nullptr;
         }
 
-        // Deduct cost before building
         FResourceStockpile NegativeCost = FacilityDef->BuildCost;
         NegativeCost.Money = -NegativeCost.Money;
         NegativeCost.Supplies = -NegativeCost.Supplies;
@@ -218,7 +201,6 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
         return nullptr;
     }
 
-    // Command Center gate (still enforced)
     if (FacilityDef->FacilityType != EFacilityType::Command)
     {
         if (!ChosenBase->HasOperationalCommandCenter())
@@ -245,7 +227,6 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
     return NewFacility;
 }
 
-// All the aggregation functions (power, barracks, etc.) now sum across ALL bases
 int32 UBaseManagerSubsystem::GetTotalPowerProvided(EFactionType Faction) const
 {
     int32 Total = 0;
@@ -431,4 +412,23 @@ void UBaseManagerSubsystem::ResetAllBases()
     OnBaseListChanged.Broadcast(EFactionType::Enemy);
 
     UE_LOG(LogTemp, Display, TEXT("[RESET] All bases cleared for both factions"));
+}
+
+// === NEW: Daily Repair Tick for all VehicleRepair facilities ===
+void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
+{
+    UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Starting daily repairs for %s"), *UEnum::GetValueAsString(Faction));
+
+    for (UStrategyBase* Base : GetBasesInternal(Faction))
+    {
+        if (!Base) continue;
+
+        for (UStrategyFacility* Fac : Base->Facilities)
+        {
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
+            {
+                Fac->SimulateDailyRepair(Base);
+            }
+        }
+    }
 }

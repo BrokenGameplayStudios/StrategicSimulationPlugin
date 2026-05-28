@@ -3,13 +3,13 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "StrategicSimulationTypes.h"
-#include "UStrategyFacility.h"
+#include "UStrategyFacility.h"          // ← FIXED: Missing include
 #include "UFacilityDefinition.h"
 #include "UStrategyBase.h"
 #include "UTimeManagerSubsystem.h"
 #include "UBaseManagerSubsystem.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFacilityListChanged, EFactionType, Faction);  // kept for backward compat
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFacilityListChanged, EFactionType, Faction);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBaseListChanged, EFactionType, Faction);
 
 UCLASS()
@@ -20,7 +20,6 @@ class STRATEGICSIMULATIONPLUGIN_API UBaseManagerSubsystem : public UGameInstance
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-    // === NEW: Multiple Bases ===
     UFUNCTION(BlueprintCallable, Category = "Base")
     UStrategyBase* BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation);
 
@@ -33,7 +32,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetNumberOfOperationalHangers(EFactionType Faction) const;
 
-    // === Legacy functions (now aggregate across all bases) ===
     UFUNCTION(BlueprintCallable, Category = "Base")
     UStrategyFacility* BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase = nullptr);
 
@@ -59,15 +57,17 @@ public:
     void AdvanceFacilityConstruction(EFactionType Faction);
 
     UFUNCTION(BlueprintCallable, Category = "Base")
-    const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;  // returns all facilities across bases (for compatibility)
+    const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;
 
-    // Get available vehicle parking slots in all hangers
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalAvailableHangerSlots(EFactionType Faction) const;
 
-    // NEW: Full reset (used by Campaign ResetSimulation)
     UFUNCTION(BlueprintCallable, Category = "Base")
     void ResetAllBases();
+
+    // === NEW: Daily Repair Tick ===
+    UFUNCTION(BlueprintCallable, Category = "Repair")
+    void SimulateDailyRepairs(EFactionType Faction);
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnFacilityListChanged OnFacilityListChanged;
@@ -85,7 +85,6 @@ private:
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 
-    // Internal helper
     TArray<UStrategyBase*>& GetMutableBases(EFactionType Faction);
     const TArray<UStrategyBase*>& GetBasesInternal(EFactionType Faction) const;
 };

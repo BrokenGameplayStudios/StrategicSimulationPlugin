@@ -2,9 +2,7 @@
 #include "UStrategySaveGame.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
-#include "UMissionManagerSubsystem.h"   // Required for MissionManager binding
-
-// === NEW INCLUDES FOR REPAIR SYSTEM ===
+#include "UMissionManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
@@ -13,11 +11,7 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
 {
     Super::Initialize(Collection);
 
-    // === CRITICAL UE5 FIX: Declare dependencies so Unreal guarantees correct initialization order ===
-    // TimeManager MUST be fully initialized before any bindings
     Collection.InitializeDependency<UTimeManagerSubsystem>();
-
-    // Declare the other managers Campaign depends on
     Collection.InitializeDependency<UResourceManagerSubsystem>();
     Collection.InitializeDependency<USoldierManagerSubsystem>();
     Collection.InitializeDependency<UEngineeringManagerSubsystem>();
@@ -28,7 +22,6 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
 
     UE_LOG(LogTemp, Display, TEXT("✅ UStrategyCampaignSubsystem: All required subsystem dependencies declared"));
 
-    // Bind to every day that passes (AI)
     if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
     {
         TimeMgr->OnDayPassed.AddDynamic(this, &UStrategyCampaignSubsystem::OnDayPassed);
@@ -39,7 +32,6 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
         UE_LOG(LogTemp, Error, TEXT("Campaign could NOT get TimeManager for AI binding!"));
     }
 
-    // === Bind MissionManager to OnDayPassed (this fixes vehicles not returning) ===
     if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
     {
         if (UMissionManagerSubsystem* MissionMgr = GetMissionManager())
@@ -70,19 +62,18 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
         AI->RunAIForFaction(EFactionType::Enemy, NewDay);
     }
 
-    // === Daily Repair Tick for all Workshop/Repair Bays (both factions) ===
+    // === Daily Repair Tick for all VehicleRepair bays ===
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Starting daily repair for both factions"));
-
         for (EFactionType Faction : { EFactionType::Human, EFactionType::Enemy })
         {
             const TArray<UStrategyFacility*>& Facilities = BaseMgr->GetFacilities(Faction);
-            UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] %s has %d facilities"), *UEnum::GetValueAsString(Faction), Facilities.Num());
-
             for (UStrategyFacility* Fac : Facilities)
             {
-                if (Fac) Fac->SimulateDailyRepair();
+                if (Fac)
+                {
+                    BaseMgr->SimulateDailyRepairs(Faction);
+                }
             }
         }
     }
@@ -126,10 +117,8 @@ void UStrategyCampaignSubsystem::StartSimulation()
     GetTimeManager()->SetTimeScale(1.0f);
     UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED"));
 
-    // === COMPREHENSIVE DATA ASSET DEBUG PRINT (for balancing) ===
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));
 
-    // 1. Facility Database
     if (UFacilityDatabase* FacilityDB = FacilityDatabaseAsset.Get())
     {
         UE_LOG(LogTemp, Display, TEXT("[FACILITY DATABASE] Loaded %d facilities:"), FacilityDB->AvailableFacilities.Num());
@@ -159,7 +148,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
         UE_LOG(LogTemp, Warning, TEXT("[FACILITY DATABASE] FacilityDatabaseAsset is NULL!"));
     }
 
-    // 2. Soldier Class Database
     if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER DATABASE] Loaded %d soldier classes:"), SoldierDB->AvailableSoldierClasses.Num());
@@ -176,7 +164,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
         UE_LOG(LogTemp, Warning, TEXT("[SOLDIER DATABASE] SoldierClassDatabaseAsset is NULL!"));
     }
 
-    // 3. Research Database
     if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
     {
         UE_LOG(LogTemp, Display, TEXT("[RESEARCH DATABASE] Loaded %d research techs:"), ResearchDB->AvailableTechs.Num());
@@ -193,7 +180,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
         UE_LOG(LogTemp, Warning, TEXT("[RESEARCH DATABASE] ResearchDatabaseAsset is NULL!"));
     }
 
-    // 4. Item Database
     if (UItemDatabase* ItemDB = ItemDatabaseAsset.Get())
     {
         UE_LOG(LogTemp, Display, TEXT("[ITEM DATABASE] Loaded %d buyable items:"), ItemDB->BuyableItems.Num());
@@ -214,7 +200,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
         UE_LOG(LogTemp, Warning, TEXT("[ITEM DATABASE] ItemDatabaseAsset is NULL!"));
     }
 
-    // 5. Vehicle Database (NEW)
     if (UVehicleDatabase* VehicleDB = VehicleDatabaseAsset.Get())
     {
         UE_LOG(LogTemp, Display, TEXT("[VEHICLE DATABASE] Loaded %d vehicles:"), VehicleDB->AvailableVehicles.Num());
@@ -239,7 +224,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
         UE_LOG(LogTemp, Warning, TEXT("[VEHICLE DATABASE] VehicleDatabaseAsset is NULL!"));
     }
 
-    // === NEW: Current Resource Stockpile at Start ===
     if (UResourceManagerSubsystem* ResourceMgr = GetResourceManager())
     {
         FResourceStockpile HumanRes = ResourceMgr->GetResources(EFactionType::Human);

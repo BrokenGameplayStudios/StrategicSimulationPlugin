@@ -1,39 +1,23 @@
 #include "UStrategyFacility.h"
 #include "UStrategyVehicle.h"
 #include "UFacilityDefinition.h"
+#include "UStrategyBase.h"
 
-void UStrategyFacility::SimulateDailyRepair()
+void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] SimulateDailyRepair called on %s (Type: %s, Operational: %s, RepairHP/Day: %d, VehiclesInRepair: %d)"),
-        FacilityDefinition ? *FacilityDefinition->FacilityName.ToString() : TEXT("NULL"),
-        FacilityDefinition ? *UEnum::GetValueAsString(FacilityDefinition->FacilityType) : TEXT("NULL"),
-        bIsOperational ? TEXT("YES") : TEXT("NO"),
-        FacilityDefinition ? FacilityDefinition->RepairHealthPerDay : 0,
-        VehiclesInRepair.Num());
-
-    if (!FacilityDefinition)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[REPAIR TICK] Skipping - no FacilityDefinition"));
+    if (!FacilityDefinition || FacilityDefinition->RepairHealthPerDay <= 0 || !bIsOperational)
         return;
-    }
 
-    if (FacilityDefinition->RepairHealthPerDay <= 0)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Skipping - RepairHealthPerDay = %d"), FacilityDefinition->RepairHealthPerDay);
-        return;
-    }
-
-    if (!bIsOperational)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[REPAIR TICK] Skipping - facility is NOT operational (bIsOperational = false)"));
-        return;
-    }
+    UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] %s repairing %d vehicles (+%d HP/day)"),
+        *FacilityDefinition->FacilityName.ToString(), VehiclesInRepair.Num(), FacilityDefinition->RepairHealthPerDay);
 
     TArray<UStrategyVehicle*> ToReturn;
 
     for (UStrategyVehicle* Vehicle : VehiclesInRepair)
     {
         if (!Vehicle) continue;
+
+        int32 OldHealth = Vehicle->CurrentHealth;
 
         Vehicle->CurrentHealth = FMath::Min(
             Vehicle->CurrentHealth + FacilityDefinition->RepairHealthPerDay,
@@ -46,16 +30,44 @@ void UStrategyFacility::SimulateDailyRepair()
             Vehicle->CurrentHealth,
             Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100);
 
-        if (!Vehicle->NeedsRepair())
+        // If it reached full health this tick, schedule return
+        if (OldHealth < Vehicle->CurrentHealth && !Vehicle->NeedsRepair())
         {
+            UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s has reached full health — scheduling return to hanger"),
+                *Vehicle->VehicleDefinition->VehicleName.ToString());
             ToReturn.Add(Vehicle);
         }
     }
 
-    // Return fully repaired vehicles to home base
+    // Return fully repaired vehicles
     for (UStrategyVehicle* Vehicle : ToReturn)
     {
         VehiclesInRepair.Remove(Vehicle);
         Vehicle->ReturnFromRepair();
+    }
+
+    // Auto-assign any damaged vehicles sitting in hangers if we have open repair slots
+    if (OwningBase)
+    {
+        for (UStrategyFacility* Hanger : OwningBase->Facilities)
+        {
+            if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger)
+                continue;
+
+            for (int32 i = Hanger->ParkedVehicles.Num() - 1; i >= 0; --i)
+            {
+                UStrategyVehicle* Veh = Hanger->ParkedVehicles[i];
+                if (Veh && Veh->NeedsRepair() && VehiclesInRepair.Num() < FacilityDefinition->Capacity)
+                {
+                    if (Veh->CheckoutToRepair(this))
+                    {
+                        Hanger->ParkedVehicles.RemoveAt(i);
+                        VehiclesInRepair.Add(Veh);
+                        UE_LOG(LogTemp, Display, TEXT("[REPAIR] Auto-moved waiting damaged vehicle %s from hanger to repair bay"),
+                            *Veh->VehicleDefinition->VehicleName.ToString());
+                    }
+                }
+            }
+        }
     }
 }

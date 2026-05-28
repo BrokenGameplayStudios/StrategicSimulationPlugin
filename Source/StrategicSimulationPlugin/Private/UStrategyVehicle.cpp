@@ -41,7 +41,7 @@ bool UStrategyVehicle::NeedsRepair() const
 
 bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
 {
-    if (!RepairBay || !RepairBay->FacilityDefinition || RepairBay->FacilityDefinition->FacilityType != EFacilityType::Workshop)
+    if (!RepairBay || !RepairBay->FacilityDefinition || RepairBay->FacilityDefinition->FacilityType != EFacilityType::VehicleRepair)
     {
         UE_LOG(LogTemp, Error, TEXT("[VEHICLE] Cannot checkout to repair - invalid repair bay"));
         return false;
@@ -53,7 +53,6 @@ bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
         return false;
     }
 
-    // Remove from current hanger if parked
     if (CurrentHanger)
     {
         CurrentHanger->ParkedVehicles.Remove(this);
@@ -67,12 +66,15 @@ bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
 
 void UStrategyVehicle::ReturnFromRepair()
 {
-    if (!CurrentRepairBay) return;
+    if (!CurrentRepairBay)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] ReturnFromRepair called but no CurrentRepairBay set"));
+        return;
+    }
 
     CurrentHealth = VehicleDefinition ? VehicleDefinition->MaxHealth : 100;
     DamageState = EVehicleDamageState::Undamaged;
 
-    // === AUTO-PARK back into first available hanger slot ===
     bool Parked = false;
     if (HomeBase)
     {
@@ -95,7 +97,7 @@ void UStrategyVehicle::ReturnFromRepair()
 
     if (Parked)
     {
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s fully repaired and returned to hanger slot"), *VehicleDefinition->VehicleName.ToString());
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s fully repaired and returned to reserved hanger slot from repair bay"), *VehicleDefinition->VehicleName.ToString());
     }
     else
     {

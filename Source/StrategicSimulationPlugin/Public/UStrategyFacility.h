@@ -6,6 +6,9 @@
 #include "UFacilityDefinition.h"
 #include "UStrategyFacility.generated.h"
 
+class UStrategyVehicle;
+class UStrategyBase;
+
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategyFacility : public UObject
 {
@@ -16,7 +19,7 @@ public:
     UFacilityDefinition* FacilityDefinition;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Build")
-    int32 BuildProgressDays = 0;     // 0 = completed
+    int32 BuildProgressDays = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     bool bIsOperational = false;
@@ -24,16 +27,13 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     int32 CurrentPowerDraw = 0;
 
-    /** Vehicles currently parked in this hanger (only used if FacilityType == Hanger) */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hanger")
     TArray<class UStrategyVehicle*> ParkedVehicles;
 
-    // === NEW: Repair Bay Support (Phase 3.6) ===
-    /** Vehicles currently being repaired in this workshop/repair bay */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Repair")
     TArray<class UStrategyVehicle*> VehiclesInRepair;
 
     /** Simulate one day of repairs for all vehicles in this bay */
     UFUNCTION(BlueprintCallable, Category = "Repair")
-    void SimulateDailyRepair();
+    void SimulateDailyRepair(UStrategyBase* OwningBase);
 };
