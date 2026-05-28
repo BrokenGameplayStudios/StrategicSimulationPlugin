@@ -30,10 +30,7 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hanger")
     TArray<class UStrategyVehicle*> ParkedVehicles;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Repair")
-    TArray<class UStrategyVehicle*> VehiclesInRepair;
-
-    /** Simulate one day of repairs for all vehicles in this bay */
+    /** Simulate one day of repairs for parked vehicles in this base */
     UFUNCTION(BlueprintCallable, Category = "Repair")
     void SimulateDailyRepair(UStrategyBase* OwningBase);
 };

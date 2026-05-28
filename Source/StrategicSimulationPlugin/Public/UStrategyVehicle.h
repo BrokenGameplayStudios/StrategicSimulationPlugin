@@ -4,11 +4,11 @@
 #include "UObject/NoExportTypes.h"
 #include "UVehicleDefinition.h"
 #include "StrategicSimulationTypes.h"
-#include "UStrategyFacility.h"
 #include "UStrategyVehicle.generated.h"
 
 class UStrategyBase;
 class UMissionGroup;
+class UStrategyFacility;
 
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategyVehicle : public UObject
@@ -27,10 +27,6 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     UStrategyFacility* CurrentHanger;
 
-    /** Persistent reserved hanger slot (set when leaving for mission/repair). Guarantees return to correct slot. */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
-    UStrategyFacility* HomeHanger = nullptr;
-
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     UMissionGroup* CurrentMission;
 
@@ -47,11 +43,8 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Damage & Repair")
     int32 CurrentHealth = 100;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Damage & Repair")
-    UStrategyFacility* CurrentRepairBay = nullptr;
-
     UFUNCTION(BlueprintCallable, Category = "Vehicle")
-    bool IsAtHome() const { return CurrentMission == nullptr && CurrentRepairBay == nullptr; }
+    bool IsAtHome() const { return CurrentMission == nullptr; }
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void ApplyDamage(int32 DamageAmount);
@@ -59,12 +52,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Repair")
     bool NeedsRepair() const;
 
+    /** Updates DamageState based on CurrentHealth percentage. Call after any health change. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void UpdateDamageStateFromHealth();
-
-    UFUNCTION(BlueprintCallable, Category = "Vehicle|Repair")
-    bool CheckoutToRepair(UStrategyFacility* RepairBay);
-
-    UFUNCTION(BlueprintCallable, Category = "Vehicle|Repair")
-    void ReturnFromRepair();
 };

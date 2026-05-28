@@ -8,64 +8,46 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     if (!FacilityDefinition || FacilityDefinition->RepairHealthPerDay <= 0 || !bIsOperational)
         return;
 
-    UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] %s repairing %d vehicles (+%d HP/day)"),
-        *FacilityDefinition->FacilityName.ToString(), VehiclesInRepair.Num(), FacilityDefinition->RepairHealthPerDay);
+    if (!OwningBase)
+        return;
 
-    TArray<UStrategyVehicle*> ToReturn;
+    // Repair bays only heal parked vehicles — no moving, no lists
+    int32 RepairsRemaining = FacilityDefinition->Capacity;
 
-    // PHASE 1: Repair only vehicles already assigned to THIS bay
-    for (UStrategyVehicle* Vehicle : VehiclesInRepair)
+    UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] %s can repair up to %d vehicles (+%d HP each)"),
+        *FacilityDefinition->FacilityName.ToString(), RepairsRemaining, FacilityDefinition->RepairHealthPerDay);
+
+    for (UStrategyFacility* Hanger : OwningBase->Facilities)
     {
-        if (!Vehicle) continue;
+        if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger)
+            continue;
 
-        Vehicle->CurrentHealth = FMath::Min(
-            Vehicle->CurrentHealth + FacilityDefinition->RepairHealthPerDay,
-            Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100
-        );
-
-        Vehicle->UpdateDamageStateFromHealth();
-
-        UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s repaired +%d HP → %d/%d"),
-            *Vehicle->VehicleDefinition->VehicleName.ToString(),
-            FacilityDefinition->RepairHealthPerDay,
-            Vehicle->CurrentHealth,
-            Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100);
-
-        if (!Vehicle->NeedsRepair())
+        for (UStrategyVehicle* Vehicle : Hanger->ParkedVehicles)
         {
-            UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s has reached full health — scheduling return to hanger"),
-                *Vehicle->VehicleDefinition->VehicleName.ToString());
-            ToReturn.Add(Vehicle);
-        }
-    }
-
-    for (UStrategyVehicle* Vehicle : ToReturn)
-    {
-        VehiclesInRepair.Remove(Vehicle);
-        Vehicle->ReturnFromRepair();
-    }
-
-    // PHASE 2: Auto-assign (now with strict guard so only ONE repair bay can claim a vehicle)
-    if (OwningBase)
-    {
-        for (UStrategyFacility* Hanger : OwningBase->Facilities)
-        {
-            if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger)
+            if (!Vehicle || !Vehicle->NeedsRepair() || RepairsRemaining <= 0)
                 continue;
 
-            for (int32 i = Hanger->ParkedVehicles.Num() - 1; i >= 0; --i)
+            int32 OldHealth = Vehicle->CurrentHealth;
+
+            Vehicle->CurrentHealth = FMath::Min(
+                Vehicle->CurrentHealth + FacilityDefinition->RepairHealthPerDay,
+                Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100
+            );
+
+            Vehicle->UpdateDamageStateFromHealth();
+
+            UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s repaired +%d HP → %d/%d"),
+                *Vehicle->VehicleDefinition->VehicleName.ToString(),
+                FacilityDefinition->RepairHealthPerDay,
+                Vehicle->CurrentHealth,
+                Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100);
+
+            RepairsRemaining--;
+
+            if (!Vehicle->NeedsRepair())
             {
-                UStrategyVehicle* Veh = Hanger->ParkedVehicles[i];
-                if (Veh && Veh->NeedsRepair() && Veh->CurrentRepairBay == nullptr && VehiclesInRepair.Num() < FacilityDefinition->Capacity)
-                {
-                    if (Veh->CheckoutToRepair(this))
-                    {
-                        Hanger->ParkedVehicles.RemoveAt(i);
-                        VehiclesInRepair.Add(Veh);
-                        UE_LOG(LogTemp, Display, TEXT("[REPAIR] Auto-moved waiting damaged vehicle %s from hanger to repair bay"),
-                            *Veh->VehicleDefinition->VehicleName.ToString());
-                    }
-                }
+                UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s has reached full health"),
+                    *Vehicle->VehicleDefinition->VehicleName.ToString());
             }
         }
     }
