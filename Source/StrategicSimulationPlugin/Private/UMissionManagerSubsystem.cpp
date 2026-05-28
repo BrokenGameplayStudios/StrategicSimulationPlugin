@@ -5,6 +5,7 @@
 #include "UTimeManagerSubsystem.h"
 #include "UResourceManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
+#include "UStrategySoldier.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -80,17 +81,22 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     if (ResourceMgr) ResourceMgr->AddResources(EFactionType::Enemy, Reward);
 
+    // === SOLDIER WOUNDING (this is the block that was missing/broken) ===
     if (SoldierMgr && SoldiersLost > 0)
     {
         TArray<UStrategySoldier*> AllPassengers;
-        for (UStrategyVehicle* Veh : Mission->VehiclesInFleet) AllPassengers.Append(Veh->CurrentPassengers);
+        for (UStrategyVehicle* Veh : Mission->VehiclesInFleet)
+        {
+            AllPassengers.Append(Veh->CurrentPassengers);
+        }
+
+        UE_LOG(LogTemp, Display, TEXT("[MISSION] Wounding up to %d soldiers (found %d passengers)"), SoldiersLost, AllPassengers.Num());
 
         for (int32 i = 0; i < SoldiersLost && AllPassengers.Num() > 0; ++i)
         {
             int32 idx = FMath::RandRange(0, AllPassengers.Num() - 1);
             UStrategySoldier* Soldier = AllPassengers[idx];
 
-            // Wound instead of instant death (healing system now works)
             int32 WoundDamage = FMath::RandRange(4, 8);
             Soldier->ApplyDamage(WoundDamage);
 
@@ -110,8 +116,8 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
             if (Vehicle->CurrentHanger) Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
             Vehicle->CurrentHanger = nullptr;
             Vehicle->CurrentMission = nullptr;
-            Vehicle->HomeHanger = nullptr; // slot is now free forever
-            UE_LOG(LogTemp, Warning, TEXT("[MISSION] Vehicle '%s' was DESTROYED"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+            Vehicle->HomeHanger = nullptr;
+            UE_LOG(LogTemp, Warning, TEXT("[MISSION] Vehicle '%s' was DESTROYED — slot freed"), *Vehicle->VehicleDefinition->VehicleName.ToString());
             continue;
         }
 
@@ -122,7 +128,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
         Vehicle->CurrentMission = nullptr;
 
-        // === FORCE RETURN TO OWNED HomeHanger (reserved slot) ===
+        // Force return to owned HomeHanger
         bool Parked = false;
         if (Vehicle->HomeHanger && Vehicle->HomeHanger->FacilityDefinition &&
             Vehicle->HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -133,7 +139,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
             }
             else
             {
-                // Force reclaim slot
                 if (Vehicle->HomeHanger->ParkedVehicles.Num() > 0)
                 {
                     UStrategyVehicle* Evicted = Vehicle->HomeHanger->ParkedVehicles.Last();
@@ -178,7 +183,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     OnMissionCompleted.Broadcast(Mission);
 }
 
-// (StartMission and LaunchMissionFromBase remain unchanged — they already clear CurrentHanger correctly)
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
@@ -193,19 +197,38 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
     ActiveMissions.Add(NewMission);
 
-    for (UStrategyVehicle* Vehicle : Vehicles)
+    // === AUTO-ASSIGN SOLDIERS TO VEHICLES (this was missing) ===
+    USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
+    if (SoldierMgr)
     {
-        Vehicle->CurrentMission = NewMission;
+        TArray<UStrategySoldier*> AvailableSoldiers = SoldierMgr->GetRoster(EFactionType::Enemy);
+        int32 SoldierIndex = 0;
 
-        if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
+        for (UStrategyVehicle* Vehicle : Vehicles)
         {
-            Vehicle->HomeHanger = Vehicle->CurrentHanger;   // assign permanent reservation
-        }
+            Vehicle->CurrentPassengers.Empty(); // clear old passengers
+            Vehicle->CurrentMission = NewMission;
 
-        if (Vehicle->CurrentHanger)
-        {
-            Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
-            Vehicle->CurrentHanger = nullptr;
+            // Assign up to vehicle capacity
+            int32 Capacity = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->SoldierCapacity : 4;
+            for (int32 i = 0; i < Capacity && SoldierIndex < AvailableSoldiers.Num(); ++i)
+            {
+                UStrategySoldier* Soldier = AvailableSoldiers[SoldierIndex++];
+                Vehicle->CurrentPassengers.Add(Soldier);
+                Soldier->StationedBase = OriginBase; // ensure they know where they belong
+            }
+
+            // Reserve HomeHanger
+            if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
+            {
+                Vehicle->HomeHanger = Vehicle->CurrentHanger;
+            }
+
+            if (Vehicle->CurrentHanger)
+            {
+                Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
+                Vehicle->CurrentHanger = nullptr;
+            }
         }
     }
 
@@ -237,14 +260,5 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
     return StartMission(OriginBase, AvailableVehicles, DurationDays);
 }
 
-// ==================== GETTER HELPERS ====================
-
-UResourceManagerSubsystem* UMissionManagerSubsystem::GetResourceManager() const
-{
-    return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-}
-
-USoldierManagerSubsystem* UMissionManagerSubsystem::GetSoldierManager() const
-{
-    return GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-}
+UResourceManagerSubsystem* UMissionManagerSubsystem::GetResourceManager() const { return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>(); }
+USoldierManagerSubsystem* UMissionManagerSubsystem::GetSoldierManager() const { return GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>(); }
