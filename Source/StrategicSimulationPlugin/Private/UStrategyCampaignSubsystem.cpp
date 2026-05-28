@@ -57,17 +57,17 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Day %d passed — calling AI automatically"), NewDay);
 
-    if (UAIControllerSubsystem* AI = GetAIController())
-    {
-        AI->RunAIForFaction(EFactionType::Enemy, NewDay);
-    }
-
-    // === Daily Repair Tick for all VehicleRepair bays ===
-    // FIXED: Call SimulateDailyRepairs ONLY ONCE per faction (was inside facility loop = crash!)
+    // === CRITICAL FIX: Repairs run BEFORE AI so returned vehicles reclaim their reserved hanger slots first ===
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
     {
         BaseMgr->SimulateDailyRepairs(EFactionType::Human);
         BaseMgr->SimulateDailyRepairs(EFactionType::Enemy);
+        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Daily repairs completed for both factions"));
+    }
+
+    if (UAIControllerSubsystem* AI = GetAIController())
+    {
+        AI->RunAIForFaction(EFactionType::Enemy, NewDay);
     }
 }
 

@@ -65,9 +65,11 @@ bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
         return false;
     }
 
+    // === CRITICAL: Remember original hanger for return ===
     if (CurrentHanger && !HomeHanger)
     {
         HomeHanger = CurrentHanger;
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s → HomeHanger assigned to %s"), *VehicleDefinition->VehicleName.ToString(), *HomeHanger->FacilityDefinition->FacilityName.ToString());
     }
 
     if (CurrentHanger)
@@ -94,9 +96,19 @@ void UStrategyVehicle::ReturnFromRepair()
 
     bool Parked = false;
 
+    UE_LOG(LogTemp, Display, TEXT("[RETURN DEBUG] %s attempting return | HomeHanger=%s | HomeBase=%s"),
+        *VehicleDefinition->VehicleName.ToString(),
+        HomeHanger ? *HomeHanger->FacilityDefinition->FacilityName.ToString() : TEXT("NULL"),
+        HomeBase ? *HomeBase->BaseName.ToString() : TEXT("NULL"));
+
+    // PRIORITY 1: Original reserved HomeHanger
     if (HomeHanger && HomeHanger->FacilityDefinition && HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
     {
-        if (HomeHanger->ParkedVehicles.Num() < HomeHanger->FacilityDefinition->Capacity)
+        int32 CurrentSlots = HomeHanger->ParkedVehicles.Num();
+        int32 MaxSlots = HomeHanger->FacilityDefinition->Capacity;
+        UE_LOG(LogTemp, Display, TEXT("[RETURN DEBUG] HomeHanger '%s' capacity: %d/%d"), *HomeHanger->FacilityDefinition->FacilityName.ToString(), CurrentSlots, MaxSlots);
+
+        if (CurrentSlots < MaxSlots)
         {
             HomeHanger->ParkedVehicles.Add(this);
             CurrentHanger = HomeHanger;
@@ -105,13 +117,19 @@ void UStrategyVehicle::ReturnFromRepair()
         }
     }
 
+    // PRIORITY 2: Any available hanger in the base
     if (!Parked && HomeBase)
     {
+        UE_LOG(LogTemp, Display, TEXT("[RETURN DEBUG] No space in HomeHanger — checking all hangers in base '%s'"), *HomeBase->BaseName.ToString());
         for (UStrategyFacility* Hanger : HomeBase->Facilities)
         {
             if (Hanger && Hanger->FacilityDefinition && Hanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
             {
-                if (Hanger->ParkedVehicles.Num() < Hanger->FacilityDefinition->Capacity)
+                int32 CurrentSlots = Hanger->ParkedVehicles.Num();
+                int32 MaxSlots = Hanger->FacilityDefinition->Capacity;
+                UE_LOG(LogTemp, Display, TEXT("[RETURN DEBUG]   → Hanger '%s': %d/%d"), *Hanger->FacilityDefinition->FacilityName.ToString(), CurrentSlots, MaxSlots);
+
+                if (CurrentSlots < MaxSlots)
                 {
                     Hanger->ParkedVehicles.Add(this);
                     CurrentHanger = Hanger;
@@ -128,6 +146,6 @@ void UStrategyVehicle::ReturnFromRepair()
 
     if (!Parked)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s repaired but NO HANGER SPACE AVAILABLE anywhere"), *VehicleDefinition->VehicleName.ToString());
+        UE_LOG(LogTemp, Error, TEXT("[VEHICLE] CRITICAL — %s repaired but NO HANGER SPACE AVAILABLE anywhere!"), *VehicleDefinition->VehicleName.ToString());
     }
 }
