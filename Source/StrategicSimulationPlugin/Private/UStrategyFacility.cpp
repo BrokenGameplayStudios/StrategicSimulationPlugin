@@ -1,54 +1,71 @@
 #include "UStrategyFacility.h"
 #include "UStrategyVehicle.h"
+#include "UStrategySoldier.h"
 #include "UFacilityDefinition.h"
 #include "UStrategyBase.h"
 
 void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
 {
-    if (!FacilityDefinition || FacilityDefinition->RepairHealthPerDay <= 0 || !bIsOperational)
+    if (!FacilityDefinition || !bIsOperational || !OwningBase)
         return;
 
-    if (!OwningBase)
-        return;
-
-    // Repair bays only heal parked vehicles — no moving, no lists
-    int32 RepairsRemaining = FacilityDefinition->Capacity;
-
-    UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] %s can repair up to %d vehicles (+%d HP each)"),
-        *FacilityDefinition->FacilityName.ToString(), RepairsRemaining, FacilityDefinition->RepairHealthPerDay);
-
-    for (UStrategyFacility* Hanger : OwningBase->Facilities)
+    // === VEHICLE REPAIR ===
+    if (FacilityDefinition->RepairHealthPerDay > 0 && FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
     {
-        if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger)
-            continue;
+        int32 RepairsRemaining = FacilityDefinition->Capacity;
 
-        for (UStrategyVehicle* Vehicle : Hanger->ParkedVehicles)
+        UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] %s can repair up to %d vehicles (+%d HP each)"),
+            *FacilityDefinition->FacilityName.ToString(), RepairsRemaining, FacilityDefinition->RepairHealthPerDay);
+
+        for (UStrategyFacility* Hanger : OwningBase->Facilities)
         {
-            if (!Vehicle || !Vehicle->NeedsRepair() || RepairsRemaining <= 0)
+            if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger)
                 continue;
 
-            int32 OldHealth = Vehicle->CurrentHealth;
-
-            Vehicle->CurrentHealth = FMath::Min(
-                Vehicle->CurrentHealth + FacilityDefinition->RepairHealthPerDay,
-                Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100
-            );
-
-            Vehicle->UpdateDamageStateFromHealth();
-
-            UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s repaired +%d HP → %d/%d"),
-                *Vehicle->VehicleDefinition->VehicleName.ToString(),
-                FacilityDefinition->RepairHealthPerDay,
-                Vehicle->CurrentHealth,
-                Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100);
-
-            RepairsRemaining--;
-
-            if (!Vehicle->NeedsRepair())
+            for (UStrategyVehicle* Vehicle : Hanger->ParkedVehicles)
             {
-                UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s has reached full health"),
-                    *Vehicle->VehicleDefinition->VehicleName.ToString());
+                if (!Vehicle || !Vehicle->NeedsRepair() || RepairsRemaining <= 0)
+                    continue;
+
+                Vehicle->CurrentHealth = FMath::Min(
+                    Vehicle->CurrentHealth + FacilityDefinition->RepairHealthPerDay,
+                    Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100
+                );
+
+                Vehicle->UpdateDamageStateFromHealth();
+
+                UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s repaired +%d HP → %d/%d"),
+                    *Vehicle->VehicleDefinition->VehicleName.ToString(),
+                    FacilityDefinition->RepairHealthPerDay,
+                    Vehicle->CurrentHealth,
+                    Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100);
+
+                RepairsRemaining--;
+
+                if (!Vehicle->NeedsRepair())
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[REPAIR] %s has reached full health"),
+                        *Vehicle->VehicleDefinition->VehicleName.ToString());
+                }
             }
+        }
+    }
+
+    // === SOLDIER MEDICAL HEALING ===
+    if (FacilityDefinition->FacilityType == EFacilityType::Medical)
+    {
+        int32 HealsRemaining = FacilityDefinition->Capacity;
+
+        UE_LOG(LogTemp, Verbose, TEXT("[MEDICAL TICK] %s can heal up to %d soldiers"),
+            *FacilityDefinition->FacilityName.ToString(), HealsRemaining);
+
+        for (UStrategySoldier* Soldier : OwningBase->GetAllSoldiers()) // assume helper or loop rosters
+        {
+            if (!Soldier || !Soldier->NeedsHealing() || HealsRemaining <= 0)
+                continue;
+
+            Soldier->Heal(3); // heal 3 HP per day (adjustable later)
+            HealsRemaining--;
         }
     }
 }

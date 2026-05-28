@@ -84,10 +84,17 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     {
         TArray<UStrategySoldier*> AllPassengers;
         for (UStrategyVehicle* Veh : Mission->VehiclesInFleet) AllPassengers.Append(Veh->CurrentPassengers);
+
         for (int32 i = 0; i < SoldiersLost && AllPassengers.Num() > 0; ++i)
         {
             int32 idx = FMath::RandRange(0, AllPassengers.Num() - 1);
-            SoldierMgr->DismissSoldier(AllPassengers[idx]);
+            UStrategySoldier* Soldier = AllPassengers[idx];
+
+            // Wound instead of instant death (healing system now works)
+            int32 WoundDamage = FMath::RandRange(4, 8);
+            Soldier->ApplyDamage(WoundDamage);
+
+            UE_LOG(LogTemp, Display, TEXT("[MISSION] Soldier %s wounded (%d damage)"), *Soldier->SoldierName, WoundDamage);
             AllPassengers.RemoveAt(idx);
         }
     }
