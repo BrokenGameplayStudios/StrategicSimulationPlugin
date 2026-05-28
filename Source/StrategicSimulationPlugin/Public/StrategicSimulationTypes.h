@@ -91,7 +91,8 @@ enum class EFacilityType : uint8
     Command,
     LivingQuarters,
     Laboratory,
-    Workshop,           // Will be used for VehicleRepair bay
+    Workshop,
+    VehicleRepair, // Will be used for VehicleRepair bay
     Storage,
     Defense,
     Hanger,

@@ -73,9 +73,13 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     // === Daily Repair Tick for all Workshop/Repair Bays (both factions) ===
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
     {
+        UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Starting daily repair for both factions"));
+
         for (EFactionType Faction : { EFactionType::Human, EFactionType::Enemy })
         {
             const TArray<UStrategyFacility*>& Facilities = BaseMgr->GetFacilities(Faction);
+            UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] %s has %d facilities"), *UEnum::GetValueAsString(Faction), Facilities.Num());
+
             for (UStrategyFacility* Fac : Facilities)
             {
                 if (Fac) Fac->SimulateDailyRepair();

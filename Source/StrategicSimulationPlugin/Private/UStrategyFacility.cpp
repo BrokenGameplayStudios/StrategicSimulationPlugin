@@ -4,11 +4,30 @@
 
 void UStrategyFacility::SimulateDailyRepair()
 {
-    if (!FacilityDefinition || FacilityDefinition->RepairHealthPerDay <= 0)
+    UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] SimulateDailyRepair called on %s (Type: %s, Operational: %s, RepairHP/Day: %d, VehiclesInRepair: %d)"),
+        FacilityDefinition ? *FacilityDefinition->FacilityName.ToString() : TEXT("NULL"),
+        FacilityDefinition ? *UEnum::GetValueAsString(FacilityDefinition->FacilityType) : TEXT("NULL"),
+        bIsOperational ? TEXT("YES") : TEXT("NO"),
+        FacilityDefinition ? FacilityDefinition->RepairHealthPerDay : 0,
+        VehiclesInRepair.Num());
+
+    if (!FacilityDefinition)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[REPAIR TICK] Skipping - no FacilityDefinition"));
         return;
+    }
+
+    if (FacilityDefinition->RepairHealthPerDay <= 0)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Skipping - RepairHealthPerDay = %d"), FacilityDefinition->RepairHealthPerDay);
+        return;
+    }
 
     if (!bIsOperational)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[REPAIR TICK] Skipping - facility is NOT operational (bIsOperational = false)"));
         return;
+    }
 
     TArray<UStrategyVehicle*> ToReturn;
 
@@ -33,10 +52,10 @@ void UStrategyFacility::SimulateDailyRepair()
         }
     }
 
-    // Return fully repaired vehicles to home base (no longer occupy repair slot)
+    // Return fully repaired vehicles to home base
     for (UStrategyVehicle* Vehicle : ToReturn)
     {
         VehiclesInRepair.Remove(Vehicle);
-        Vehicle->ReturnFromRepair();   // This now automatically parks the vehicle back into a hanger
+        Vehicle->ReturnFromRepair();
     }
 }
