@@ -5,6 +5,11 @@
 #include "UMissionGroup.h"
 #include "UMissionManagerSubsystem.generated.h"
 
+class UResourceManagerSubsystem;
+class USoldierManagerSubsystem;
+class UStrategyBase;
+class UStrategyVehicle;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionCompleted, UMissionGroup*, Mission);
 
 UCLASS()
@@ -24,15 +29,18 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Mission")
     FOnMissionCompleted OnMissionCompleted;
 
-    /** Launches a simple mission with all parked vehicles in a base (for testing/AI) */
+    /** Launches a simple mission with all parked vehicles in a base (used by AI) */
     UFUNCTION(BlueprintCallable, Category = "Mission")
     UMissionGroup* LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays = 15);
 
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 
+    /** Helper getters (required by the .cpp) */
+    UResourceManagerSubsystem* GetResourceManager() const;
+    USoldierManagerSubsystem* GetSoldierManager() const;
+
 private:
-    /** Phase 3: Resolves random mission outcome + rewards/losses */
     void ResolveMissionOutcome(UMissionGroup* Mission);
 
     UPROPERTY(VisibleAnywhere, Transient, Category = "Missions")

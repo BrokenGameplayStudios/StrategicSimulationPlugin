@@ -75,8 +75,8 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->SoldiersKilled = SoldiersLost;
     Mission->VehiclesLost = VehiclesLostThisMission;
 
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GetResourceManager();
+    USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
 
     if (ResourceMgr) ResourceMgr->AddResources(EFactionType::Enemy, Reward);
 
@@ -103,46 +103,64 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
             if (Vehicle->CurrentHanger) Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
             Vehicle->CurrentHanger = nullptr;
             Vehicle->CurrentMission = nullptr;
-            UE_LOG(LogTemp, Warning, TEXT("[MISSION] 💥 Vehicle '%s' was DESTROYED"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+            Vehicle->HomeHanger = nullptr; // slot is now free forever
+            UE_LOG(LogTemp, Warning, TEXT("[MISSION] Vehicle '%s' was DESTROYED"), *Vehicle->VehicleDefinition->VehicleName.ToString());
             continue;
         }
 
-        if (BaseDamagePerVehicle > 0) Vehicle->ApplyDamage(BaseDamagePerVehicle);
+        if (BaseDamagePerVehicle > 0)
+        {
+            Vehicle->ApplyDamage(BaseDamagePerVehicle);
+        }
 
         Vehicle->CurrentMission = nullptr;
 
-        if (Vehicle->NeedsRepair())
+        // === FORCE RETURN TO OWNED HomeHanger (reserved slot) ===
+        bool Parked = false;
+        if (Vehicle->HomeHanger && Vehicle->HomeHanger->FacilityDefinition &&
+            Vehicle->HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
-            bool Repaired = false;
-            for (UStrategyFacility* Fac : Mission->OriginBase->Facilities)
+            if (Vehicle->HomeHanger->ParkedVehicles.Num() < Vehicle->HomeHanger->FacilityDefinition->Capacity)
             {
-                if (Fac && Fac->FacilityDefinition &&
-                    Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair &&
-                    Fac->VehiclesInRepair.Num() < Fac->FacilityDefinition->Capacity)
-                {
-                    if (Vehicle->CheckoutToRepair(Fac))
-                    {
-                        Fac->VehiclesInRepair.Add(Vehicle);
-                        Repaired = true;
-                        UE_LOG(LogTemp, Display, TEXT("[MISSION] 🔧 %s auto-checked into VehicleRepair bay"), *Vehicle->VehicleDefinition->VehicleName.ToString());
-                        break;
-                    }
-                }
+                Vehicle->HomeHanger->ParkedVehicles.Add(Vehicle);
             }
-            if (!Repaired)
+            else
             {
-                UE_LOG(LogTemp, Warning, TEXT("[MISSION] ⚠️ No VehicleRepair bay space for damaged vehicle '%s'"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+                // Force reclaim slot
+                if (Vehicle->HomeHanger->ParkedVehicles.Num() > 0)
+                {
+                    UStrategyVehicle* Evicted = Vehicle->HomeHanger->ParkedVehicles.Last();
+                    UE_LOG(LogTemp, Display, TEXT("[MISSION] HomeHanger full — evicting %s to reclaim slot for %s"),
+                        *Evicted->VehicleDefinition->VehicleName.ToString(), *Vehicle->VehicleDefinition->VehicleName.ToString());
+                    Vehicle->HomeHanger->ParkedVehicles.RemoveAt(Vehicle->HomeHanger->ParkedVehicles.Num() - 1);
+                }
+                Vehicle->HomeHanger->ParkedVehicles.Add(Vehicle);
+            }
+            Vehicle->CurrentHanger = Vehicle->HomeHanger;
+            Parked = true;
+        }
+
+        if (Parked)
+        {
+            if (Vehicle->NeedsRepair())
+            {
+                UE_LOG(LogTemp, Display, TEXT("[MISSION] %s returned damaged and parked in its reserved HOME HANGER — repair bays will heal it"),
+                    *Vehicle->VehicleDefinition->VehicleName.ToString());
+            }
+            else
+            {
+                UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' returned undamaged to its reserved hanger"), *Vehicle->VehicleDefinition->VehicleName.ToString());
             }
         }
         else
         {
-            UE_LOG(LogTemp, Display, TEXT("[MISSION] ✅ Vehicle '%s' returned undamaged to reserved hanger slot"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+            UE_LOG(LogTemp, Warning, TEXT("[MISSION] %s returned but NO HANGER SPACE AVAILABLE"), *Vehicle->VehicleDefinition->VehicleName.ToString());
         }
     }
 
     Mission->Status = EMissionStatus::Completed;
 
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] 🚀 Mission from '%s' RETURNED → %s | +%d 💰 +%d 📦 | %d soldiers KIA | %d vehicles lost"),
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Mission from '%s' RETURNED → %s | +%d 💰 +%d 📦 | %d soldiers KIA | %d vehicles lost"),
         *Mission->OriginBase->BaseName.ToString(),
         *OutcomeStr,
         Mission->ResourcesGained.Money,
@@ -153,6 +171,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     OnMissionCompleted.Broadcast(Mission);
 }
 
+// (StartMission and LaunchMissionFromBase remain unchanged — they already clear CurrentHanger correctly)
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
@@ -170,6 +189,17 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     for (UStrategyVehicle* Vehicle : Vehicles)
     {
         Vehicle->CurrentMission = NewMission;
+
+        if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
+        {
+            Vehicle->HomeHanger = Vehicle->CurrentHanger;   // assign permanent reservation
+        }
+
+        if (Vehicle->CurrentHanger)
+        {
+            Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
+            Vehicle->CurrentHanger = nullptr;
+        }
     }
 
     UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched mission with %d vehicles from base '%s' (duration: %d days) — slots reserved"),
@@ -182,26 +212,32 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
 {
     if (!OriginBase) return nullptr;
 
-    for (UMissionGroup* Existing : ActiveMissions)
-    {
-        if (Existing && Existing->OriginBase == OriginBase && Existing->Status == EMissionStatus::InProgress)
-            return nullptr;
-    }
-
     TArray<UStrategyVehicle*> AvailableVehicles;
     for (UStrategyFacility* Fac : OriginBase->Facilities)
     {
         if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
-            for (UStrategyVehicle* Veh : Fac->ParkedVehicles)
-            {
-                if (Veh && Veh->CurrentMission == nullptr)
-                    AvailableVehicles.Add(Veh);
-            }
+            AvailableVehicles.Append(Fac->ParkedVehicles);
         }
     }
 
-    if (AvailableVehicles.Num() == 0) return nullptr;
+    if (AvailableVehicles.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[MISSION] No vehicles available in base '%s'"), *OriginBase->BaseName.ToString());
+        return nullptr;
+    }
 
     return StartMission(OriginBase, AvailableVehicles, DurationDays);
+}
+
+// ==================== GETTER HELPERS ====================
+
+UResourceManagerSubsystem* UMissionManagerSubsystem::GetResourceManager() const
+{
+    return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+}
+
+USoldierManagerSubsystem* UMissionManagerSubsystem::GetSoldierManager() const
+{
+    return GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
 }

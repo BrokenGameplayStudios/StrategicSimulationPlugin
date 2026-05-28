@@ -27,6 +27,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     UStrategyFacility* CurrentHanger;
 
+    /** Permanent reserved hanger slot — belongs to this vehicle until it is destroyed */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
+    UStrategyFacility* HomeHanger = nullptr;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     UMissionGroup* CurrentMission;
 
@@ -52,7 +56,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Repair")
     bool NeedsRepair() const;
 
-    /** Updates DamageState based on CurrentHealth percentage. Call after any health change. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void UpdateDamageStateFromHealth();
 };
