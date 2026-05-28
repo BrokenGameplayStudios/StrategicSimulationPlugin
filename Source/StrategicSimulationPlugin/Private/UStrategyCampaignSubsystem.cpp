@@ -2,53 +2,55 @@
 #include "UStrategySaveGame.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
-#include "UMissionManagerSubsystem.h"   // ← Required for MissionManager binding
+#include "UMissionManagerSubsystem.h"   // Required for MissionManager binding
 
 void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    // === FORCE TIME MANAGER FIRST (critical fix) ===
-    GetTimeManager();   // This guarantees TimeManager is created before any bindings
+    // === CRITICAL UE5 FIX: Declare dependencies so Unreal guarantees correct initialization order ===
+    // TimeManager MUST be fully initialized before any bindings
+    Collection.InitializeDependency<UTimeManagerSubsystem>();
 
-    // Force all subsystems
-    GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>();
-    GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-    GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
-    GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-    GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
-    GetGameInstance()->GetSubsystem<UAIControllerSubsystem>();
-    GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    // Declare the other managers Campaign depends on
+    Collection.InitializeDependency<UResourceManagerSubsystem>();
+    Collection.InitializeDependency<USoldierManagerSubsystem>();
+    Collection.InitializeDependency<UEngineeringManagerSubsystem>();
+    Collection.InitializeDependency<UBaseManagerSubsystem>();
+    Collection.InitializeDependency<UResearchManagerSubsystem>();
+    Collection.InitializeDependency<UAIControllerSubsystem>();
+    Collection.InitializeDependency<UMissionManagerSubsystem>();
+
+    UE_LOG(LogTemp, Display, TEXT("✅ UStrategyCampaignSubsystem: All required subsystem dependencies declared"));
 
     // Bind to every day that passes (AI)
     if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
     {
         TimeMgr->OnDayPassed.AddDynamic(this, &UStrategyCampaignSubsystem::OnDayPassed);
-        UE_LOG(LogTemp, Display, TEXT("✅ Campaign — OnDayPassed bound to AI"));
+        UE_LOG(LogTemp, Display, TEXT("Campaign — OnDayPassed bound to AI"));
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("❌ Campaign could NOT get TimeManager for AI binding!"));
+        UE_LOG(LogTemp, Error, TEXT("Campaign could NOT get TimeManager for AI binding!"));
     }
 
-    // === Bind MissionManager to OnDayPassed (guaranteed correct order) ===
+    // === Bind MissionManager to OnDayPassed (this fixes vehicles not returning) ===
     if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
     {
         if (UMissionManagerSubsystem* MissionMgr = GetMissionManager())
         {
             TimeMgr->OnDayPassed.RemoveDynamic(MissionMgr, &UMissionManagerSubsystem::OnDayPassed);
             TimeMgr->OnDayPassed.AddDynamic(MissionMgr, &UMissionManagerSubsystem::OnDayPassed);
-            UE_LOG(LogTemp, Display, TEXT("✅ Campaign bound MissionManager to OnDayPassed"));
+            UE_LOG(LogTemp, Display, TEXT("Campaign bound MissionManager to OnDayPassed"));
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("❌ Campaign could NOT get MissionManager!"));
+            UE_LOG(LogTemp, Error, TEXT("Campaign could NOT get MissionManager!"));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("❌ Campaign could NOT get TimeManager for MissionManager binding!"));
+        UE_LOG(LogTemp, Error, TEXT("Campaign could NOT get TimeManager for MissionManager binding!"));
     }
 
     UE_LOG(LogTemp, Display, TEXT("UStrategyCampaignSubsystem initialized — All managers + AI forced active"));
@@ -56,7 +58,7 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
 
 void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
 {
-    UE_LOG(LogTemp, Display, TEXT("🔥 [CAMPAIGN] Day %d passed — calling AI automatically"), NewDay);
+    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Day %d passed — calling AI automatically"), NewDay);
 
     if (UAIControllerSubsystem* AI = GetAIController())
     {
