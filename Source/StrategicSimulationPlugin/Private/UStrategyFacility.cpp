@@ -13,6 +13,7 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
 
     TArray<UStrategyVehicle*> ToReturn;
 
+    // PHASE 1: Repair only vehicles already assigned to THIS bay
     for (UStrategyVehicle* Vehicle : VehiclesInRepair)
     {
         if (!Vehicle) continue;
@@ -44,6 +45,7 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
         Vehicle->ReturnFromRepair();
     }
 
+    // PHASE 2: Auto-assign (now with strict guard so only ONE repair bay can claim a vehicle)
     if (OwningBase)
     {
         for (UStrategyFacility* Hanger : OwningBase->Facilities)
@@ -54,7 +56,7 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
             for (int32 i = Hanger->ParkedVehicles.Num() - 1; i >= 0; --i)
             {
                 UStrategyVehicle* Veh = Hanger->ParkedVehicles[i];
-                if (Veh && Veh->NeedsRepair() && VehiclesInRepair.Num() < FacilityDefinition->Capacity)
+                if (Veh && Veh->NeedsRepair() && Veh->CurrentRepairBay == nullptr && VehiclesInRepair.Num() < FacilityDefinition->Capacity)
                 {
                     if (Veh->CheckoutToRepair(this))
                     {

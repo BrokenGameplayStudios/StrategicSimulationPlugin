@@ -48,7 +48,14 @@ void UStrategyVehicle::UpdateDamageStateFromHealth()
 bool UStrategyVehicle::NeedsRepair() const
 {
     int32 MaxH = VehicleDefinition ? VehicleDefinition->MaxHealth : 100;
-    return CurrentHealth < MaxH || DamageState != EVehicleDamageState::Undamaged;
+    bool bNeeds = CurrentHealth < MaxH || DamageState != EVehicleDamageState::Undamaged;
+
+    if (bNeeds && CurrentHealth >= MaxH)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s NeedsRepair() returned true even at full health! Forcing false."), *VehicleDefinition->VehicleName.ToString());
+        return false;
+    }
+    return bNeeds;
 }
 
 bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
@@ -61,11 +68,17 @@ bool UStrategyVehicle::CheckoutToRepair(UStrategyFacility* RepairBay)
 
     if (CurrentRepairBay)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s is already in repair"), *VehicleDefinition->VehicleName.ToString());
+        UE_LOG(LogTemp, Verbose, TEXT("[VEHICLE] %s is already checked out to another repair bay - skipping"), *VehicleDefinition->VehicleName.ToString());
         return false;
     }
 
-    // === CRITICAL: Remember original hanger for return ===
+    if (!NeedsRepair())
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[VEHICLE] %s is full health - skipping checkout"), *VehicleDefinition->VehicleName.ToString());
+        return false;
+    }
+
+    // Remember original hanger for return (only set once)
     if (CurrentHanger && !HomeHanger)
     {
         HomeHanger = CurrentHanger;
@@ -93,6 +106,7 @@ void UStrategyVehicle::ReturnFromRepair()
 
     CurrentHealth = VehicleDefinition ? VehicleDefinition->MaxHealth : 100;
     DamageState = EVehicleDamageState::Undamaged;
+    UpdateDamageStateFromHealth();
 
     bool Parked = false;
 
@@ -117,7 +131,7 @@ void UStrategyVehicle::ReturnFromRepair()
         }
     }
 
-    // PRIORITY 2: Any available hanger in the base
+    // PRIORITY 2: Fallback
     if (!Parked && HomeBase)
     {
         UE_LOG(LogTemp, Display, TEXT("[RETURN DEBUG] No space in HomeHanger — checking all hangers in base '%s'"), *HomeBase->BaseName.ToString());
