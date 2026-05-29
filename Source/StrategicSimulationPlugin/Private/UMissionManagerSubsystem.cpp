@@ -98,7 +98,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
     }
 
-    // === SOLDIER RETURN HANDLING (clean version — no type errors) ===
+    // === SOLDIER RETURN HANDLING — Clean & Robust ===
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
@@ -108,26 +108,43 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
             Soldier->StationedBase = Mission->OriginBase;
             Soldier->CurrentMission = nullptr;
 
-            // Force back into owned HomeBarracks (reclaim slot if needed)
-            if (Soldier->HomeBarracks && Soldier->HomeBarracks->FacilityDefinition &&
-                Soldier->HomeBarracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
+            if (Soldier->HomeBarracks == nullptr)
             {
-                TArray<UStrategySoldier*>& BarracksList = Soldier->HomeBarracks->ParkedSoldiers;
+                // Fallback assignment
+                for (UStrategyFacility* Barracks : Mission->OriginBase->Facilities)
+                {
+                    if (Barracks && Barracks->FacilityDefinition && Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
+                    {
+                        Soldier->HomeBarracks = Barracks;
+                        break;
+                    }
+                }
+            }
 
-                if (BarracksList.Num() < Soldier->HomeBarracks->FacilityDefinition->Capacity)
+            if (Soldier->HomeBarracks)
+            {
+                TArray<UStrategySoldier*>& List = Soldier->HomeBarracks->ParkedSoldiers;
+
+                // Only add if not already in the list
+                if (!List.Contains(Soldier))
                 {
-                    BarracksList.Add(Soldier);
+                    if (List.Num() < Soldier->HomeBarracks->FacilityDefinition->Capacity)
+                    {
+                        List.Add(Soldier);
+                    }
+                    else if (List.Num() > 0)
+                    {
+                        UStrategySoldier* Evicted = List.Last();
+                        List.RemoveAt(List.Num() - 1);
+                        List.Add(Soldier);
+                        UE_LOG(LogTemp, Display, TEXT("[MISSION] Barracks full — evicted %s to reclaim slot for %s"), *Evicted->SoldierName, *Soldier->SoldierName);
+                    }
                 }
-                else if (BarracksList.Num() > 0)
-                {
-                    UStrategySoldier* Evicted = BarracksList.Last();
-                    BarracksList.RemoveAt(BarracksList.Num() - 1);
-                    BarracksList.Add(Soldier);
-                    UE_LOG(LogTemp, Display, TEXT("[MISSION] Barracks full — evicted %s to reclaim slot for %s"), *Evicted->SoldierName, *Soldier->SoldierName);
-                }
-                UE_LOG(LogTemp, Display, TEXT("[MISSION] Soldier %s returned to reserved HomeBarracks"), *Soldier->SoldierName);
+                UE_LOG(LogTemp, Verbose, TEXT("[MISSION] Soldier %s returned to reserved HomeBarracks"), *Soldier->SoldierName);
             }
         }
+
+        Vehicle->CurrentPassengers.Empty(); // Prevent duplicate processing
     }
 
     // === Vehicle return handling (unchanged) ===
@@ -230,23 +247,21 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
             Vehicle->CurrentPassengers.Empty();
             Vehicle->CurrentMission = NewMission;
 
-            // Assign soldiers to vehicle
             int32 Capacity = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->SoldierCapacity : 4;
             for (int32 i = 0; i < Capacity && SoldierIndex < AvailableSoldiers.Num(); ++i)
             {
                 UStrategySoldier* Soldier = AvailableSoldiers[SoldierIndex++];
                 Vehicle->CurrentPassengers.Add(Soldier);
 
-                // === NEW: Assign HomeBarracks reservation (parallel to HomeHanger) ===
+                // Assign permanent HomeBarracks only if not already set
                 if (Soldier->HomeBarracks == nullptr)
                 {
-                    // Find which barracks the soldier is currently in (first LivingQuarters found)
                     for (UStrategyFacility* Barracks : OriginBase->Facilities)
                     {
                         if (Barracks && Barracks->FacilityDefinition && Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
                         {
                             Soldier->HomeBarracks = Barracks;
-                            UE_LOG(LogTemp, Display, TEXT("[MISSION] Soldier %s → HomeBarracks assigned to %s"), *Soldier->SoldierName, *Barracks->FacilityDefinition->FacilityName.ToString());
+                            UE_LOG(LogTemp, Verbose, TEXT("[MISSION] Soldier %s → HomeBarracks assigned to %s"), *Soldier->SoldierName, *Barracks->FacilityDefinition->FacilityName.ToString());
                             break;
                         }
                     }
@@ -255,9 +270,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
             // Reserve HomeHanger for vehicle
             if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
-            {
                 Vehicle->HomeHanger = Vehicle->CurrentHanger;
-            }
 
             if (Vehicle->CurrentHanger)
             {
