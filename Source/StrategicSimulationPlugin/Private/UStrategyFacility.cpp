@@ -3,6 +3,9 @@
 #include "UStrategySoldier.h"
 #include "UFacilityDefinition.h"
 #include "UStrategyBase.h"
+#include "UStrategyCampaignSubsystem.h"
+#include "UResourceManagerSubsystem.h"
+#include "Engine/World.h"
 
 void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
 {
@@ -20,7 +23,6 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     {
         int32 RepairsRemaining = FacilityDefinition->Capacity;
 
-        // REPAIR TICK  
         UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Vehicle Repair Shop can repair up to %d vehicles (+%d HP each)"),
             FacilityDefinition->Capacity, FacilityDefinition->RepairHealthPerDay);
 
@@ -63,7 +65,6 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     {
         int32 HealsRemaining = FacilityDefinition->Capacity;
 
-        // MEDICAL TICK
         UE_LOG(LogTemp, Verbose, TEXT("[MEDICAL TICK] Medical Bay can heal up to %d soldiers (+%d HP each)"),
             FacilityDefinition->Capacity, FacilityDefinition->RepairHealthPerDay);
 
@@ -77,4 +78,96 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
             HealsRemaining--;
         }
     }
+}
+
+// === NEW CONSTRUCTION QUEUE FUNCTIONS (added on top of your code) ===
+
+bool UStrategyFacility::CanQueueMoreOfType(EFacilityType Type) const
+{
+    int32 CurrentCount = 0;
+    if (OwningBase)
+    {
+        for (UStrategyFacility* Fac : OwningBase->Facilities)
+        {
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == Type)
+                CurrentCount++;
+        }
+    }
+
+    for (const FConstructionJob& Job : ActiveConstructionJobs)
+    {
+        if (Job.FacilityDef && Job.FacilityDef->FacilityType == Type)
+            CurrentCount++;
+    }
+
+    return CurrentCount < (FacilityDefinition ? FacilityDefinition->MaxBuilt : 999);
+}
+
+bool UStrategyFacility::StartConstruction(UFacilityDefinition* Def)
+{
+    if (!Def || !CanQueueMoreOfType(Def->FacilityType)) return false;
+
+    FConstructionJob Job;
+    Job.FacilityDef = Def;
+    Job.RemainingDays = Def->BuildTimeDays;
+    ActiveConstructionJobs.Add(Job);
+
+    UE_LOG(LogTemp, Display, TEXT("[BUILD] Order accepted → %s started construction (%d days)"),
+        *Def->FacilityName.ToString(), Def->BuildTimeDays);
+    return true;
+}
+
+void UStrategyFacility::AdvanceConstructionDay()
+{
+    for (int32 i = ActiveConstructionJobs.Num() - 1; i >= 0; --i)
+    {
+        FConstructionJob& Job = ActiveConstructionJobs[i];
+        if (Job.RemainingDays > 0)
+            Job.RemainingDays--;
+
+        if (Job.RemainingDays <= 0 && Job.FacilityDef && OwningBase)
+        {
+            UStrategyFacility* NewFacility = NewObject<UStrategyFacility>();
+            NewFacility->FacilityDefinition = Job.FacilityDef;
+            NewFacility->bIsOperational = true;
+            NewFacility->OwningBase = OwningBase;
+
+            OwningBase->AddFacility(NewFacility);
+            OwningBase->UpdatePowerFromFacilities();
+
+            UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed construction and is now operational"),
+                *Job.FacilityDef->FacilityName.ToString());
+
+            ActiveConstructionJobs.RemoveAt(i);
+        }
+    }
+}
+
+bool UStrategyFacility::CancelConstruction(int32 JobIndex, bool bFullRefund)
+{
+    if (JobIndex < 0 || JobIndex >= ActiveConstructionJobs.Num()) return false;
+
+    UFacilityDefinition* Def = ActiveConstructionJobs[JobIndex].FacilityDef;
+    if (bFullRefund && Def && OwningBase)
+    {
+        // Safe version that compiles with your current UStrategyBase
+        if (UWorld* World = OwningBase->GetWorld())
+        {
+            if (UResourceManagerSubsystem* ResMgr = World->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>())
+            {
+                // TODO: Replace EFactionType::Enemy with real faction once UStrategyBase stores it
+                ResMgr->AddResources(EFactionType::Enemy, Def->BuildCost);
+                UE_LOG(LogTemp, Display, TEXT("[BUILD] Cancelled %s — full refund issued"), *Def->FacilityName.ToString());
+            }
+        }
+    }
+
+    ActiveConstructionJobs.RemoveAt(JobIndex);
+    return true;
+}
+
+void UStrategyFacility::SimulateDaily()
+{
+    AdvanceConstructionDay();           // process build queue
+    SimulateDailyRepair(OwningBase);    // your original daily repair/healing logic (unchanged)
 }
