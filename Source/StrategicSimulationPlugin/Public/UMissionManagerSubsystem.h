@@ -33,6 +33,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission")
     UMissionGroup* LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays = 15);
 
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Missions")
+    TArray<UMissionGroup*> ActiveMissions;
+
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 
@@ -41,8 +44,5 @@ public:
     USoldierManagerSubsystem* GetSoldierManager() const;
 
 private:
-    void ResolveMissionOutcome(UMissionGroup* Mission);
-
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Missions")
-    TArray<UMissionGroup*> ActiveMissions;
+    void ResolveMissionOutcome(UMissionGroup* Mission);    
 };

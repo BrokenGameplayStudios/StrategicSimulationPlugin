@@ -10,6 +10,7 @@
 #include "UVehicleDatabase.h"
 #include "UStrategyBase.h"
 #include "UStrategyVehicle.h"
+#include "UMissionManagerSubsystem.h"
 #include "Engine/Engine.h"
 
 void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -214,14 +215,20 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
         int32 Capacity = Hanger->FacilityDefinition->Capacity;
         int32 CurrentlyParked = Hanger->ParkedVehicles.Num();
 
-        // Count how many slots in this hanger are reserved by vehicles CURRENTLY ON MISSION
+        // Count vehicles that own this hanger but are currently on mission (they reserve the slot)
         int32 ReservedByOnMission = 0;
-        for (UStrategyFacility* AnyHanger : TargetBase->Facilities)
+
+        UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+        if (MissionMgr)
         {
-            for (UStrategyVehicle* V : AnyHanger->ParkedVehicles)
+            for (UMissionGroup* Mission : MissionMgr->ActiveMissions) // scan active missions
             {
-                if (V && V->HomeHanger == Hanger && V->CurrentMission != nullptr)
-                    ReservedByOnMission++;
+                if (!Mission) continue;
+                for (UStrategyVehicle* V : Mission->VehiclesInFleet)
+                {
+                    if (V && V->HomeHanger == Hanger && V->CurrentMission != nullptr)
+                        ReservedByOnMission++;
+                }
             }
         }
 
@@ -229,7 +236,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
 
         if (EffectiveFreeSlots > 0)
         {
-            // Build and park the new vehicle
+            // Build and park
             ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
 
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>();
