@@ -20,8 +20,9 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     {
         int32 RepairsRemaining = FacilityDefinition->Capacity;
 
-        UE_LOG(LogTemp, Display, TEXT("[REPAIR TICK] %s can repair up to %d vehicles (+%d HP each)"),
-            *FacilityDefinition->FacilityName.ToString(), RepairsRemaining, FacilityDefinition->RepairHealthPerDay);
+        // REPAIR TICK  
+        UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Vehicle Repair Shop can repair up to %d vehicles (+%d HP each)"),
+            FacilityDefinition->Capacity, FacilityDefinition->RepairHealthPerDay);
 
         for (UStrategyFacility* Hanger : OwningBase->Facilities)
         {
@@ -62,8 +63,9 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     {
         int32 HealsRemaining = FacilityDefinition->Capacity;
 
-        UE_LOG(LogTemp, Display, TEXT("[MEDICAL TICK] %s can heal up to %d soldiers (+%d HP each)"),
-            *FacilityDefinition->FacilityName.ToString(), HealsRemaining, FacilityDefinition->RepairHealthPerDay);
+        // MEDICAL TICK
+        UE_LOG(LogTemp, Verbose, TEXT("[MEDICAL TICK] Medical Bay can heal up to %d soldiers (+%d HP each)"),
+            FacilityDefinition->Capacity, FacilityDefinition->RepairHealthPerDay);
 
         for (UStrategySoldier* Soldier : OwningBase->GetStationedSoldiers())
         {

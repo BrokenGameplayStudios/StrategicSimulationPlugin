@@ -55,17 +55,49 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
 
 void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
 {
+    // === BOLD DAY SEPARATOR (easy to spot) ===
+    UE_LOG(LogTemp, Display, TEXT(""));
+    UE_LOG(LogTemp, Display, TEXT("################################################################################"));
+    UE_LOG(LogTemp, Display, TEXT("##############################   DAY %d STARTED   ##############################"), NewDay);
+    UE_LOG(LogTemp, Display, TEXT("################################################################################"));
     UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Day %d passed — calling AI automatically"), NewDay);
 
-    // === CRITICAL FIX: Repairs run BEFORE AI so returned vehicles reclaim their reserved hanger slots first ===
+    // === DAILY SIMULATION (repairs + healing) ===
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
     {
         BaseMgr->SimulateDailyRepairs(EFactionType::Human);
         BaseMgr->SimulateDailyRepairs(EFactionType::Enemy);
-        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Daily repairs completed for both factions"));
     }
 
-    if (UAIControllerSubsystem* AI = GetAIController())
+    // === Clean daily summary (no spam) ===
+    int32 TotalMedical = 0;
+    int32 TotalRepair = 0;
+
+    if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
+    {
+        for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
+        {
+            if (!Base) continue;
+            for (UStrategyFacility* Fac : Base->Facilities)
+            {
+                if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
+                {
+                    if (Fac->FacilityDefinition->FacilityType == EFacilityType::Medical)
+                        TotalMedical += Fac->FacilityDefinition->Capacity;
+                    else if (Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
+                        TotalRepair += Fac->FacilityDefinition->Capacity;
+                }
+            }
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[DAILY SIM] Enemy — Medical Bays can heal %d soldiers | Vehicle Repair Shops can repair %d vehicles (+25 HP)"),
+        TotalMedical, TotalRepair);
+
+    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Daily repairs completed for both factions"));
+
+    // === AI Turn ===
+    if (UAIControllerSubsystem* AI = GetGameInstance()->GetSubsystem<UAIControllerSubsystem>())
     {
         AI->RunAIForFaction(EFactionType::Enemy, NewDay);
     }
