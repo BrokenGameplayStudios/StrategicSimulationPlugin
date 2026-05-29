@@ -123,7 +123,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (!Base->HasFacilityOfType(EFacilityType::Workshop)) TryBuildFacility(Faction, EFacilityType::Workshop, Base);
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory)) TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
 
-        // === NEW: Medical Bay (added here so AI builds it naturally) ===
+        // Medical Bay (now included naturally)
         if (!Base->HasFacilityOfType(EFacilityType::Medical)) TryBuildFacility(Faction, EFacilityType::Medical, Base);
 
         if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
@@ -188,7 +188,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === Your existing helper functions (unchanged) ===
+// === IMPROVED TryBuildVehicle — respects HomeHanger reservations for vehicles on mission ===
 bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -203,69 +203,54 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (!ResourceMgr) return false;
 
-    bool bHasAvailableSlot = false;
-    int32 HangerIndex = 0;
-
-    for (UStrategyFacility* Hanger : TargetBase->Facilities)
-    {
-        if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger || !Hanger->bIsOperational)
-            continue;
-
-        HangerIndex++;
-        int32 HangerCapacity = Hanger->FacilityDefinition->Capacity;
-        int32 CurrentParked = Hanger->ParkedVehicles.Num();
-
-        if (CurrentParked < HangerCapacity)
-        {
-            bHasAvailableSlot = true;
-            break;
-        }
-    }
-
-    if (!bHasAvailableSlot)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI] No available hanger slots in base '%s' — skipping vehicle build"),
-            *TargetBase->BaseName.ToString());
-        return false;
-    }
-
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < VehDef->BuildCost.Money || Res.Supplies < VehDef->BuildCost.Supplies)
     {
         return false;
     }
 
-    ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
-
-    UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>();
-    NewVehicle->VehicleDefinition = VehDef;
-    NewVehicle->HomeBase = TargetBase;
-    NewVehicle->RemainingFuelDays = VehDef->MaxMissionDurationDays;
-
-    HangerIndex = 0;
     for (UStrategyFacility* Hanger : TargetBase->Facilities)
     {
         if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger || !Hanger->bIsOperational)
             continue;
 
-        HangerIndex++;
-        int32 HangerCapacity = Hanger->FacilityDefinition->Capacity;
+        int32 Capacity = Hanger->FacilityDefinition->Capacity;
         int32 CurrentParked = Hanger->ParkedVehicles.Num();
 
-        if (CurrentParked < HangerCapacity)
+        // Count slots reserved by vehicles currently on mission that own this hanger
+        int32 ReservedByOnMission = 0;
+        for (UStrategyFacility* AnyHanger : TargetBase->Facilities)
         {
+            for (UStrategyVehicle* V : AnyHanger->ParkedVehicles)
+            {
+                if (V && V->HomeHanger == Hanger && V->CurrentMission != nullptr)
+                    ReservedByOnMission++;
+            }
+        }
+
+        int32 EffectiveFreeSlots = Capacity - CurrentParked - ReservedByOnMission;
+
+        if (EffectiveFreeSlots > 0)
+        {
+            ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
+
+            UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>();
+            NewVehicle->VehicleDefinition = VehDef;
+            NewVehicle->HomeBase = TargetBase;
+            NewVehicle->RemainingFuelDays = VehDef->MaxMissionDurationDays;
+
             NewVehicle->CurrentHanger = Hanger;
             Hanger->ParkedVehicles.Add(NewVehicle);
 
-            UE_LOG(LogTemp, Display, TEXT("[AI] %s completed construction of vehicle '%s' in base '%s' → parked in hanger %d (Slot %d of %d)"),
+            UE_LOG(LogTemp, Display, TEXT("[AI] %s completed construction of vehicle '%s' in base '%s' → parked in hanger (Slot %d of %d)"),
                 *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), *TargetBase->BaseName.ToString(),
-                HangerIndex, CurrentParked + 1, HangerCapacity);
+                CurrentParked + 1, Capacity);
 
             return true;
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[AI] Vehicle built but could not park in any hanger"));
+    UE_LOG(LogTemp, Verbose, TEXT("[AI] No truly free hanger slots in base '%s' (all slots reserved by vehicles on mission)"), *TargetBase->BaseName.ToString());
     return false;
 }
 
