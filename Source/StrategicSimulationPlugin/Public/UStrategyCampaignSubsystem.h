@@ -104,6 +104,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void Debug_RunAI();
 
+    /** Toggle for extra verbose facility tick logging (helps reduce console spam) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+    bool bVerboseFacilityLogging = false;
+
 private:
     UFUNCTION()
     void OnDayPassed(int32 NewDay);

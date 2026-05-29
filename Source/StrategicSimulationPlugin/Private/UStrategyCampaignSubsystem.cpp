@@ -135,10 +135,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
             }
         }
     }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[FACILITY DATABASE] FacilityDatabaseAsset is NULL!"));
-    }
 
     if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
     {
@@ -151,10 +147,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
             }
         }
     }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[SOLDIER DATABASE] SoldierClassDatabaseAsset is NULL!"));
-    }
 
     if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
     {
@@ -163,13 +155,23 @@ void UStrategyCampaignSubsystem::StartSimulation()
         {
             if (UResearchTechDefinition* Tech = SoftTech.Get())
             {
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Research Days: %d"), *Tech->ProjectName.ToString(), Tech->ResearchDays);
+                FString Unlocks = " (Unlocks: ";
+                bool First = true;
+                for (const TSoftObjectPtr<UItemDefinition>& ItemSoft : Tech->UnlocksItems)
+                {
+                    if (UItemDefinition* Item = ItemSoft.Get())
+                    {
+                        Unlocks += First ? "" : ", ";
+                        Unlocks += Item->ItemName.ToString();
+                        First = false;
+                    }
+                }
+                Unlocks += ")";
+
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Research Days: %d%s"),
+                    *Tech->ProjectName.ToString(), Tech->ResearchDays, *Unlocks);
             }
         }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[RESEARCH DATABASE] ResearchDatabaseAsset is NULL!"));
     }
 
     if (UItemDatabase* ItemDB = ItemDatabaseAsset.Get())
@@ -186,10 +188,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
                     Item->ProductionDays);
             }
         }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[ITEM DATABASE] ItemDatabaseAsset is NULL!"));
     }
 
     if (UVehicleDatabase* VehicleDB = VehicleDatabaseAsset.Get())
@@ -210,10 +208,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
                     Veh->ProductionDays);
             }
         }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE DATABASE] VehicleDatabaseAsset is NULL!"));
     }
 
     if (UResourceManagerSubsystem* ResourceMgr = GetResourceManager())

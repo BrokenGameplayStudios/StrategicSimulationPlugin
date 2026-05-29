@@ -9,8 +9,8 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
     if (!FacilityDefinition || !bIsOperational || !OwningBase)
         return;
 
-    // Debug: show every facility that is being processed
-    UE_LOG(LogTemp, Display, TEXT("[FACILITY TICK] %s (%s) in base '%s' is operational — processing daily simulation"),
+    // Change from Display to Verbose so it doesn't spam unless you want to see it
+    UE_LOG(LogTemp, Verbose, TEXT("[FACILITY TICK] %s (%s) in base '%s' is operational — processing daily simulation"),
         *FacilityDefinition->FacilityName.ToString(),
         *UEnum::GetValueAsString(FacilityDefinition->FacilityType),
         *OwningBase->BaseName.ToString());
