@@ -18,7 +18,7 @@ void AStrategyGameInitializer::BeginPlay()
         return;
     }
 
-    // Apply debug settings from the level actor (this is what you want)
+    // Apply debug settings from the actor in the level
     Campaign->bVerboseLogging = bVerboseLogging;
     Campaign->bShowUnlockMessages = bShowUnlockMessages;
     Campaign->bShowFacilityTicks = bShowFacilityTicks;
@@ -28,7 +28,7 @@ void AStrategyGameInitializer::BeginPlay()
         bShowUnlockMessages ? TEXT("ON") : TEXT("OFF"),
         bShowFacilityTicks ? TEXT("ON") : TEXT("OFF"));
 
-    // === ITEM DATABASE (unchanged) ===
+    // === DATABASE LOADING (unchanged) ===
     if (ItemDatabaseAsset.IsValid())
     {
         Campaign->ItemDatabaseAsset = ItemDatabaseAsset;
@@ -44,7 +44,6 @@ void AStrategyGameInitializer::BeginPlay()
         }
     }
 
-    // === DATABASES — FORCE LOAD EVERYTHING ===
     if (UFacilityDatabase* FacDB = FacilityDatabaseAsset.Get())
     {
         for (auto& Soft : FacDB->AvailableFacilities)

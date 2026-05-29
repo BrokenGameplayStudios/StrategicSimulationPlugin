@@ -121,7 +121,23 @@ void UStrategyCampaignSubsystem::StartSimulation()
                 FString RepairInfo = (Def->RepairHealthPerDay > 0) ?
                     FString::Printf(TEXT(" | Repair: +%d HP/day"), Def->RepairHealthPerDay) : TEXT("");
 
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days%s"),
+                FString UnlocksList = " (Unlocks: ";
+                bool First = true;
+
+                for (const TSoftObjectPtr<UResearchTechDefinition>& SoftResearch : Def->UnlocksResearch)
+                {
+                    if (UResearchTechDefinition* Research = SoftResearch.Get())
+                    {
+                        if (!First) UnlocksList += ", ";
+                        UnlocksList += Research->ProjectName.ToString();
+                        First = false;
+                    }
+                }
+
+                if (First) UnlocksList += "None";
+                UnlocksList += ")";
+
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days%s%s"),
                     *Def->FacilityName.ToString(),
                     *UEnum::GetValueAsString(Def->FacilityType),
                     Def->Capacity,
@@ -131,7 +147,8 @@ void UStrategyCampaignSubsystem::StartSimulation()
                     Def->BuildCost.Money,
                     Def->BuildCost.Supplies,
                     Def->BuildTimeDays,
-                    *RepairInfo);
+                    *RepairInfo,
+                    *UnlocksList);
             }
         }
     }
