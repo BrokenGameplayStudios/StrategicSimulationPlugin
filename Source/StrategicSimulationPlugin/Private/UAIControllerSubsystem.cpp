@@ -406,77 +406,86 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
 
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
-    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    auto* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    auto* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    auto* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    auto* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    auto* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
 
-    if (!SoldierMgr || !ResourceMgr || !Campaign || !BaseMgr)
+    if (!ResourceMgr || !BaseMgr || !SoldierMgr)
     {
         UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] Missing required subsystems!"));
-        return false;
-    }
-
-    USoldierClassDatabase* SoldierDB = Campaign->SoldierClassDatabaseAsset.Get();
-    if (!SoldierDB || SoldierDB->AvailableSoldierClasses.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] No soldier classes available!"));
-        return false;
-    }
-
-    USoldierClassDefinition* ClassDef = SoldierDB->AvailableSoldierClasses[0].Get();
-    if (!ClassDef)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] Soldier class is null!"));
-        return false;
-    }
-
-    UStrategyBase* TargetBase = nullptr;
-    int32 BestAvailableSlots = 0;
-
-    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    for (UStrategyBase* Base : Bases)
-    {
-        if (Base)
-        {
-            int32 Cap = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
-            int32 Stationed = SoldierMgr->GetNumSoldiersStationedAt(Base, Faction);
-            int32 Available = Cap - Stationed;
-
-            if (Available > BestAvailableSlots)
-            {
-                BestAvailableSlots = Available;
-                TargetBase = Base;
-            }
-        }
-    }
-
-    if (!TargetBase || BestAvailableSlots <= 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No base with available barracks capacity for %s"), *UEnum::GetValueAsString(Faction));
         return false;
     }
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < 500)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s cannot afford recruit (needs 500 Money)"), *UEnum::GetValueAsString(Faction));
+        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 500 Money)"), *UEnum::GetValueAsString(Faction));
         return false;
     }
 
-    if (SoldierMgr->RecruitSoldier(Faction, ClassDef, TargetBase))
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    for (UStrategyBase* Base : Bases)
     {
-        int32 CurrentCapacity = TargetBase->GetTotalCapacityForType(EFacilityType::LivingQuarters);
-        int32 CurrentSoldiers = SoldierMgr->GetNumSoldiersStationedAt(TargetBase, Faction);
+        if (!Base) continue;
 
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited a new soldier (%s) at base '%s' - Capacity %d/%d"),
-            *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(), *TargetBase->BaseName.ToString(),
-            CurrentSoldiers, CurrentCapacity);
+        int32 Capacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
+        int32 Stationed = SoldierMgr->GetNumSoldiersStationedAt(Base, Faction);
 
-        return true;
+        // Count soldiers currently on mission who own a HomeBarracks in this base
+        int32 ReservedByOnMission = 0;
+        if (MissionMgr)
+        {
+            for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+            {
+                if (Mission->OriginBase != Base) continue;
+                for (UStrategyVehicle* Veh : Mission->VehiclesInFleet)
+                {
+                    for (UStrategySoldier* Soldier : Veh->CurrentPassengers)
+                    {
+                        if (Soldier && Soldier->HomeBarracks && Soldier->HomeBarracks->FacilityDefinition)
+                        {
+                            // Check if this barracks belongs to the current base
+                            if (Base->Facilities.Contains(Soldier->HomeBarracks))
+                                ReservedByOnMission++;
+                        }
+                    }
+                }
+            }
+        }
+
+        int32 EffectiveFreeSlots = Capacity - Stationed - ReservedByOnMission;
+
+        if (EffectiveFreeSlots > 0)
+        {
+            // Recruit
+            USoldierClassDefinition* ClassDef = nullptr;
+            if (Campaign && Campaign->SoldierClassDatabaseAsset.IsValid())
+            {
+                if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
+                    if (DB->AvailableSoldierClasses.Num() > 0)
+                        ClassDef = DB->AvailableSoldierClasses[0].Get();
+            }
+
+            if (SoldierMgr->RecruitSoldier(Faction, ClassDef, Base))
+            {
+                Res.Money -= 500;                     // ← we subtract here
+                ResourceMgr->SetResources(Faction, Res); // push back the updated resources
+
+                UE_LOG(LogTemp, Display, TEXT("[AI] EFactionType::%s recruited a new soldier (Grunt) at base '%s' - Capacity %d/%d (reserved on-mission: %d)"),
+                    *UEnum::GetValueAsString(Faction), *Base->BaseName.ToString(), Stationed + 1, Capacity, ReservedByOnMission);
+                return true;
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d, %d reserved on-mission) — Trying extra LivingQuarters in '%s'"),
+                Stationed, Capacity, ReservedByOnMission, *Base->BaseName.ToString());
+        }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] RecruitSoldier call failed"));
+    UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No base with effective free barracks slots"));
     return false;
 }
 

@@ -125,20 +125,18 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
             {
                 TArray<UStrategySoldier*>& List = Soldier->HomeBarracks->ParkedSoldiers;
 
-                // Only add if not already in the list
-                if (!List.Contains(Soldier))
+                List.Remove(Soldier); // Safe — removes if exists, does nothing if not
+
+                if (List.Num() < Soldier->HomeBarracks->FacilityDefinition->Capacity)
                 {
-                    if (List.Num() < Soldier->HomeBarracks->FacilityDefinition->Capacity)
-                    {
-                        List.Add(Soldier);
-                    }
-                    else if (List.Num() > 0)
-                    {
-                        UStrategySoldier* Evicted = List.Last();
-                        List.RemoveAt(List.Num() - 1);
-                        List.Add(Soldier);
-                        UE_LOG(LogTemp, Display, TEXT("[MISSION] Barracks full — evicted %s to reclaim slot for %s"), *Evicted->SoldierName, *Soldier->SoldierName);
-                    }
+                    List.Add(Soldier);
+                }
+                else if (List.Num() > 0)
+                {
+                    UStrategySoldier* Evicted = List.Last();
+                    List.RemoveAt(List.Num() - 1);
+                    List.Add(Soldier);
+                    UE_LOG(LogTemp, Verbose, TEXT("[MISSION] Barracks full — evicted %s to reclaim slot for %s"), *Evicted->SoldierName, *Soldier->SoldierName);
                 }
                 UE_LOG(LogTemp, Verbose, TEXT("[MISSION] Soldier %s returned to reserved HomeBarracks"), *Soldier->SoldierName);
             }
