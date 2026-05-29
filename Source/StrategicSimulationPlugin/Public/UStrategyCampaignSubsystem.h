@@ -112,8 +112,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
     bool bVerboseLogging = true;
 
-    /** Debug toggles (controlled from AStrategyGameInitializer in the level) */
-    bool bVerboseLogging = false;
+    /** Debug toggles (controlled from AStrategyGameInitializer in the level) */    
     bool bShowUnlockMessages = true;
     bool bShowFacilityTicks = false;
 
