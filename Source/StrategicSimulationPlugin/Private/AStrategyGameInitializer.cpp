@@ -18,18 +18,15 @@ void AStrategyGameInitializer::BeginPlay()
         return;
     }
 
-    if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
-    {
-        Campaign->bVerboseLogging = bVerboseLogging;
-        Campaign->bShowUnlockMessages = bShowUnlockMessages;
-        Campaign->bShowFacilityTicks = bShowFacilityTicks;
+    // Apply debug settings from the level actor (this is what you want)
+    Campaign->bVerboseLogging = bVerboseLogging;
+    Campaign->bShowUnlockMessages = bShowUnlockMessages;
+    Campaign->bShowFacilityTicks = bShowFacilityTicks;
 
-        UE_LOG(LogTemp, Display, TEXT("[DEBUG] Settings → Verbose: %s | Unlocks: %s | FacilityTicks: %s"),
-            bVerboseLogging ? TEXT("ON") : TEXT("OFF"),
-            bShowUnlockMessages ? TEXT("ON") : TEXT("OFF"),
-            bShowFacilityTicks ? TEXT("ON") : TEXT("OFF"));
-    }
-
+    UE_LOG(LogTemp, Display, TEXT("[DEBUG] Settings applied → Verbose: %s | Unlocks: %s | FacilityTicks: %s"),
+        bVerboseLogging ? TEXT("ON") : TEXT("OFF"),
+        bShowUnlockMessages ? TEXT("ON") : TEXT("OFF"),
+        bShowFacilityTicks ? TEXT("ON") : TEXT("OFF"));
 
     // === ITEM DATABASE (unchanged) ===
     if (ItemDatabaseAsset.IsValid())
@@ -72,7 +69,6 @@ void AStrategyGameInitializer::BeginPlay()
         UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d research projects from ResearchDatabase"), ResearchDB->AvailableTechs.Num());
     }
 
-    // NEW: Vehicle Database
     if (UVehicleDatabase* VehicleDB = VehicleDatabaseAsset.Get())
     {
         for (auto& Soft : VehicleDB->AvailableVehicles)
