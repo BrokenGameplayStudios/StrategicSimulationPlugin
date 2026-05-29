@@ -153,23 +153,33 @@ void UStrategyCampaignSubsystem::StartSimulation()
         UE_LOG(LogTemp, Display, TEXT("[RESEARCH DATABASE] Loaded %d research techs:"), ResearchDB->AvailableTechs.Num());
         for (const TSoftObjectPtr<UResearchTechDefinition>& SoftTech : ResearchDB->AvailableTechs)
         {
-            if (UResearchTechDefinition* Tech = SoftTech.Get())
+            if (UResearchTechDefinition* Research = SoftTech.Get())
             {
-                FString Unlocks = " (Unlocks: ";
+                FString UnlockedList = " (Unlocks: ";
                 bool First = true;
-                for (const TSoftObjectPtr<UItemDefinition>& ItemSoft : Tech->UnlocksItems)
+
+                // Traverse the chain: ResearchTech → UnlocksTech → StrategyTech → UnlocksItems
+                for (const TSoftObjectPtr<UStrategyTechDefinition>& SoftStrategyTech : Research->UnlocksTech)
                 {
-                    if (UItemDefinition* Item = ItemSoft.Get())
+                    if (UStrategyTechDefinition* TechDef = SoftStrategyTech.Get())
                     {
-                        Unlocks += First ? "" : ", ";
-                        Unlocks += Item->ItemName.ToString();
-                        First = false;
+                        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : TechDef->UnlocksItems)
+                        {
+                            if (UItemDefinition* Item = SoftItem.Get())
+                            {
+                                if (!First) UnlockedList += ", ";
+                                UnlockedList += Item->ItemName.ToString();
+                                First = false;
+                            }
+                        }
                     }
                 }
-                Unlocks += ")";
+
+                if (First) UnlockedList += "None";
+                UnlockedList += ")";
 
                 UE_LOG(LogTemp, Display, TEXT("  • %s | Research Days: %d%s"),
-                    *Tech->ProjectName.ToString(), Tech->ResearchDays, *Unlocks);
+                    *Research->ProjectName.ToString(), Research->ResearchDays, *UnlockedList);
             }
         }
     }
