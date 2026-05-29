@@ -122,13 +122,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (!Base->HasFacilityOfType(EFacilityType::Storage)) TryBuildFacility(Faction, EFacilityType::Storage, Base);
         if (!Base->HasFacilityOfType(EFacilityType::Workshop)) TryBuildFacility(Faction, EFacilityType::Workshop, Base);
         if (!Base->HasFacilityOfType(EFacilityType::Laboratory)) TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
-
-        // Medical Bay (now included naturally)
         if (!Base->HasFacilityOfType(EFacilityType::Medical)) TryBuildFacility(Faction, EFacilityType::Medical, Base);
 
         if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
 
-        // === VehicleRepair bay logic (1 per operational hanger) ===
         int32 OperationalHangers = 0;
         for (UStrategyFacility* Fac : Base->Facilities)
         {
@@ -188,7 +185,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === IMPROVED TryBuildVehicle — respects HomeHanger reservations for vehicles on mission ===
+// === FIXED TryBuildVehicle — strictly respects HomeHanger reservations ===
 bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -215,9 +212,9 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
             continue;
 
         int32 Capacity = Hanger->FacilityDefinition->Capacity;
-        int32 CurrentParked = Hanger->ParkedVehicles.Num();
+        int32 CurrentlyParked = Hanger->ParkedVehicles.Num();
 
-        // Count slots reserved by vehicles currently on mission that own this hanger
+        // Count how many slots in this hanger are reserved by vehicles CURRENTLY ON MISSION
         int32 ReservedByOnMission = 0;
         for (UStrategyFacility* AnyHanger : TargetBase->Facilities)
         {
@@ -228,23 +225,23 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
             }
         }
 
-        int32 EffectiveFreeSlots = Capacity - CurrentParked - ReservedByOnMission;
+        int32 EffectiveFreeSlots = Capacity - CurrentlyParked - ReservedByOnMission;
 
         if (EffectiveFreeSlots > 0)
         {
+            // Build and park the new vehicle
             ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
 
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>();
             NewVehicle->VehicleDefinition = VehDef;
             NewVehicle->HomeBase = TargetBase;
             NewVehicle->RemainingFuelDays = VehDef->MaxMissionDurationDays;
-
             NewVehicle->CurrentHanger = Hanger;
             Hanger->ParkedVehicles.Add(NewVehicle);
 
             UE_LOG(LogTemp, Display, TEXT("[AI] %s completed construction of vehicle '%s' in base '%s' → parked in hanger (Slot %d of %d)"),
                 *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), *TargetBase->BaseName.ToString(),
-                CurrentParked + 1, Capacity);
+                CurrentlyParked + 1, Capacity);
 
             return true;
         }
