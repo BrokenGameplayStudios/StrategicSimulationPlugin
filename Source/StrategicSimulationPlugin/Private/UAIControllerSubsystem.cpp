@@ -337,7 +337,11 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
 
-    if (!Campaign || !BaseMgr || !ResourceMgr) return false;
+    if (!Campaign || !BaseMgr || !ResourceMgr)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AI] Missing subsystems for facility build"));
+        return false;
+    }
 
     UFacilityDatabase* DB = Campaign->FacilityDatabaseAsset.Get();
     if (!DB)
@@ -371,9 +375,7 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         for (UStrategyFacility* Fac : TargetBase->Facilities)
         {
             if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityTypeToBuild)
-            {
                 CurrentCountInBase++;
-            }
         }
 
         if (CurrentCountInBase >= FacilityDef->MaxBuilt)
@@ -385,9 +387,10 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
     }
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-    if (Res.Money < FacilityDef->BuildCost.Money)
+    if (Res.Money < FacilityDef->BuildCost.Money || Res.Supplies < FacilityDef->BuildCost.Supplies)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI] Not enough money for %s (needs %d)"), *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money);
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] Not enough resources for %s (needs %d Money, %d Supplies)"),
+            *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money, FacilityDef->BuildCost.Supplies);
         return false;
     }
 
