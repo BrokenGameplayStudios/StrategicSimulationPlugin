@@ -9,6 +9,7 @@
 
 class UStrategyBase;
 class UStrategyFacility;
+class UMissionGroup;   // ← Forward declaration (prevents compile errors)
 
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategySoldier : public UObject
@@ -42,17 +43,17 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     int32 DaysUntilRecovered = 0;
 
-    /** Permanent reserved barracks slot — belongs to this soldier until death (parallel to HomeHanger) */
+    /** Permanent reserved barracks slot — belongs to this soldier until death */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Location")
     UStrategyFacility* HomeBarracks = nullptr;
-
-    /** Which mission this soldier is currently on (parallel to vehicles) */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
-    UMissionGroup* CurrentMission = nullptr;
 
     /** Which base this soldier is currently stationed at */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Location")
     UStrategyBase* StationedBase = nullptr;
+
+    /** Which mission this soldier is currently on (parallel to vehicles) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
+    UMissionGroup* CurrentMission = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Loadout")
     TArray<TSoftObjectPtr<UItemDefinition>> CurrentLoadout;

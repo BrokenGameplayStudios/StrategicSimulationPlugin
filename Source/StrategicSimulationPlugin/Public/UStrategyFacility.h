@@ -30,7 +30,8 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hanger")
     TArray<class UStrategyVehicle*> ParkedVehicles;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hanger")
+    /** Soldiers currently stationed in this barracks (parallel to ParkedVehicles) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Barracks")
     TArray<class UStrategySoldier*> ParkedSoldiers;
 
     /** Simulate one day of repairs for parked vehicles in this base */
