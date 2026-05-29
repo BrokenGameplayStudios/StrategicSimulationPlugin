@@ -21,48 +21,6 @@ void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation)
 {
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-
-    if (!ResourceMgr || !Campaign)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[BASE] Critical — Missing subsystems"));
-        return nullptr;
-    }
-
-    // === STRICT AFFORDABILITY CHECK FIRST ===
-    UFacilityDefinition* CommandDef = nullptr;
-    if (UFacilityDatabase* FacilityDB = Campaign->FacilityDatabaseAsset.Get())
-    {
-        for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
-        {
-            if (UFacilityDefinition* Def = SoftDef.Get())
-            {
-                if (Def->FacilityType == EFacilityType::Command)
-                {
-                    CommandDef = Def;
-                    break;
-                }
-            }
-        }
-    }
-
-    FResourceStockpile CurrentRes = ResourceMgr->GetResources(Faction);
-    if (!CommandDef || CurrentRes.Money < CommandDef->BuildCost.Money || CurrentRes.Supplies < CommandDef->BuildCost.Supplies)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center — skipping new base creation"));
-        UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot afford Command Center (%d Money, %d Supplies needed)"),
-            CommandDef ? CommandDef->BuildCost.Money : 8500, CommandDef ? CommandDef->BuildCost.Supplies : 600);
-        return nullptr;   // ← ABORT — no base is created
-    }
-
-    // Deduct cost
-    FResourceStockpile NegativeCost = CommandDef->BuildCost;
-    NegativeCost.Money = -NegativeCost.Money;
-    NegativeCost.Supplies = -NegativeCost.Supplies;
-    ResourceMgr->AddResources(Faction, NegativeCost);
-
-    // === Now safe to create the base ===
     UStrategyBase* NewBase = NewObject<UStrategyBase>();
     NewBase->BaseName = BaseName.IsEmpty() ? FText::FromString("New Base") : BaseName;
     NewBase->MapLocation = MapLocation;
@@ -78,22 +36,105 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
     UE_LOG(LogTemp, Display, TEXT("Built new base '%s' for %s at (%.0f, %.0f)"),
         *NewBase->BaseName.ToString(), *UEnum::GetValueAsString(Faction), MapLocation.X, MapLocation.Y);
 
-    // === Start proper construction of Command Center (respects BuildTimeDays) ===
+    // === SPECIAL CASE: Initial Command Center (free + instant, no cost) ===
+    bool bIsInitialBase = (Faction == EFactionType::Enemy && EnemyBases.Num() == 1) ||
+        (Faction == EFactionType::Human && HumanBases.Num() == 1);
+
+    if (bIsInitialBase)
+    {
+        UStrategyFacility* CommandFacility = NewObject<UStrategyFacility>();
+
+        if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            if (UFacilityDatabase* FacilityDB = Campaign->FacilityDatabaseAsset.Get())
+            {
+                for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
+                {
+                    if (UFacilityDefinition* Def = SoftDef.Get())
+                    {
+                        if (Def->FacilityType == EFacilityType::Command)
+                        {
+                            CommandFacility->FacilityDefinition = Def;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        CommandFacility->BuildProgressDays = 0;
+        CommandFacility->bIsOperational = true;
+        NewBase->AddFacility(CommandFacility);
+        NewBase->UpdatePowerFromFacilities();
+
+        UE_LOG(LogTemp, Display, TEXT("[FACILITY] ✅ Initial Command Center is NOW OPERATIONAL in base '%s' (instant for starting base)"),
+            *NewBase->BaseName.ToString());
+
+        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+            EventDisp->OnFacilityCompleted.Broadcast(Faction, CommandFacility);
+
+        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial 'Command Center' base created successfully"));
+        return NewBase;
+    }
+
+    // === NORMAL PAID EXPANSION — AI already checked affordability, but we double-check and deduct here ===
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+
+    UFacilityDefinition* CommandDef = nullptr;
+    if (Campaign)
+    {
+        if (UFacilityDatabase* FacilityDB = Campaign->FacilityDatabaseAsset.Get())
+        {
+            for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
+            {
+                if (UFacilityDefinition* Def = SoftDef.Get())
+                {
+                    if (Def->FacilityType == EFacilityType::Command)
+                    {
+                        CommandDef = Def;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if (ResourceMgr && CommandDef)
+    {
+        FResourceStockpile Current = ResourceMgr->GetResources(Faction);
+        if (Current.Money < CommandDef->BuildCost.Money || Current.Supplies < CommandDef->BuildCost.Supplies)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center — ABORTING new base (money already spent elsewhere?)"));
+            // Cleanup to avoid ghost base
+            if (Faction == EFactionType::Enemy) EnemyBases.Remove(NewBase);
+            else HumanBases.Remove(NewBase);
+            return nullptr;
+        }
+
+        // === DEDUCT MONEY HERE (order accepted) ===
+        FResourceStockpile NegativeCost = CommandDef->BuildCost;
+        NegativeCost.Money = -NegativeCost.Money;
+        NegativeCost.Supplies = -NegativeCost.Supplies;
+        ResourceMgr->AddResources(Faction, NegativeCost);
+
+        UE_LOG(LogTemp, Display, TEXT("[BUILD] Order accepted — deducted cost for Command Center"));
+    }
+
+    // === Start proper construction (respects build time) ===
     UStrategyFacility* CommandFacility = BuildFacility(Faction, CommandDef, NewBase);
 
     if (CommandFacility)
     {
-        CommandFacility->bIsOperational = false;   // will become operational after build time
+        CommandFacility->bIsOperational = false; // will become operational after build timer
         NewBase->AddFacility(CommandFacility);
         NewBase->UpdatePowerFromFacilities();
 
-        UE_LOG(LogTemp, Display, TEXT("[FACILITY] ✅ Command Center construction started in new base '%s' (%d days)"),
-            *NewBase->BaseName.ToString(), CommandDef->BuildTimeDays);
-
-        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-            EventDisp->OnFacilityCompleted.Broadcast(Faction, CommandFacility);  // you can change this to OnFacilityStarted if you prefer
+        UE_LOG(LogTemp, Display, TEXT("[FACILITY] Command Center construction started in new base '%s' (%d days)"),
+            *NewBase->BaseName.ToString(), CommandDef ? CommandDef->BuildTimeDays : 4);
     }
 
+    UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Expanded to new base '%s'"), *NewBase->BaseName.ToString());
     return NewBase;
 }
 
