@@ -108,6 +108,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
     bool bVerboseFacilityLogging = false;
 
+    /** Master toggle for extra debug logging (Facility Ticks, etc.). Set false in production. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+    bool bVerboseLogging = true;
+
 private:
     UFUNCTION()
     void OnDayPassed(int32 NewDay);

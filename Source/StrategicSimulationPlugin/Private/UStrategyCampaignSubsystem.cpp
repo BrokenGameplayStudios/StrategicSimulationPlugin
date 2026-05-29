@@ -158,7 +158,6 @@ void UStrategyCampaignSubsystem::StartSimulation()
                 FString UnlockedList = " (Unlocks: ";
                 bool First = true;
 
-                // Traverse the chain: ResearchTech → UnlocksTech → StrategyTech → UnlocksItems
                 for (const TSoftObjectPtr<UStrategyTechDefinition>& SoftStrategyTech : Research->UnlocksTech)
                 {
                     if (UStrategyTechDefinition* TechDef = SoftStrategyTech.Get())
