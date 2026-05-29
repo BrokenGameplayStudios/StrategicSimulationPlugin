@@ -37,8 +37,8 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
 
     if (!bHasOperationalLab)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — No operational Research Lab found in any base!"),
-            *ProjectDef->ProjectName.ToString());
+       // UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — No operational Research Lab found in any base!"),
+       //     *ProjectDef->ProjectName.ToString());
         return nullptr;
     }
 
