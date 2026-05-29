@@ -42,7 +42,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     int32 DaysUntilRecovered = 0;
 
-    /** Permanent reserved barracks slot — belongs to this soldier until death */
+    /** Permanent reserved barracks slot — belongs to this soldier until death (parallel to HomeHanger) */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Location")
     UStrategyFacility* HomeBarracks = nullptr;
 

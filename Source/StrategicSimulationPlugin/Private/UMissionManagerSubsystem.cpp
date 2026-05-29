@@ -81,25 +81,17 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     if (ResourceMgr) ResourceMgr->AddResources(EFactionType::Enemy, Reward);
 
-    // === SOLDIER WOUNDING (this is the block that was missing/broken) ===
     if (SoldierMgr && SoldiersLost > 0)
     {
         TArray<UStrategySoldier*> AllPassengers;
-        for (UStrategyVehicle* Veh : Mission->VehiclesInFleet)
-        {
-            AllPassengers.Append(Veh->CurrentPassengers);
-        }
-
-        UE_LOG(LogTemp, Display, TEXT("[MISSION] Wounding up to %d soldiers (found %d passengers)"), SoldiersLost, AllPassengers.Num());
+        for (UStrategyVehicle* Veh : Mission->VehiclesInFleet) AllPassengers.Append(Veh->CurrentPassengers);
 
         for (int32 i = 0; i < SoldiersLost && AllPassengers.Num() > 0; ++i)
         {
             int32 idx = FMath::RandRange(0, AllPassengers.Num() - 1);
             UStrategySoldier* Soldier = AllPassengers[idx];
-
             int32 WoundDamage = FMath::RandRange(4, 8);
             Soldier->ApplyDamage(WoundDamage);
-
             UE_LOG(LogTemp, Display, TEXT("[MISSION] Soldier %s wounded (%d damage)"), *Soldier->SoldierName, WoundDamage);
             AllPassengers.RemoveAt(idx);
         }
@@ -130,8 +122,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
         // Force return to owned HomeHanger
         bool Parked = false;
-        if (Vehicle->HomeHanger && Vehicle->HomeHanger->FacilityDefinition &&
-            Vehicle->HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+        if (Vehicle->HomeHanger && Vehicle->HomeHanger->FacilityDefinition && Vehicle->HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
             if (Vehicle->HomeHanger->ParkedVehicles.Num() < Vehicle->HomeHanger->FacilityDefinition->Capacity)
             {
@@ -197,7 +188,6 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
     ActiveMissions.Add(NewMission);
 
-    // === AUTO-ASSIGN SOLDIERS TO VEHICLES (this was missing) ===
     USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
     if (SoldierMgr)
     {
@@ -206,19 +196,33 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
         for (UStrategyVehicle* Vehicle : Vehicles)
         {
-            Vehicle->CurrentPassengers.Empty(); // clear old passengers
+            Vehicle->CurrentPassengers.Empty();
             Vehicle->CurrentMission = NewMission;
 
-            // Assign up to vehicle capacity
+            // Assign soldiers to vehicle
             int32 Capacity = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->SoldierCapacity : 4;
             for (int32 i = 0; i < Capacity && SoldierIndex < AvailableSoldiers.Num(); ++i)
             {
                 UStrategySoldier* Soldier = AvailableSoldiers[SoldierIndex++];
                 Vehicle->CurrentPassengers.Add(Soldier);
-                Soldier->StationedBase = OriginBase; // ensure they know where they belong
+
+                // === NEW: Assign HomeBarracks reservation (parallel to HomeHanger) ===
+                if (Soldier->HomeBarracks == nullptr)
+                {
+                    // Find which barracks the soldier is currently in (first LivingQuarters found)
+                    for (UStrategyFacility* Barracks : OriginBase->Facilities)
+                    {
+                        if (Barracks && Barracks->FacilityDefinition && Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
+                        {
+                            Soldier->HomeBarracks = Barracks;
+                            UE_LOG(LogTemp, Display, TEXT("[MISSION] Soldier %s → HomeBarracks assigned to %s"), *Soldier->SoldierName, *Barracks->FacilityDefinition->FacilityName.ToString());
+                            break;
+                        }
+                    }
+                }
             }
 
-            // Reserve HomeHanger
+            // Reserve HomeHanger for vehicle
             if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
             {
                 Vehicle->HomeHanger = Vehicle->CurrentHanger;
@@ -253,7 +257,7 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
 
     if (AvailableVehicles.Num() == 0)
     {
-        // UE_LOG(LogTemp, Warning, TEXT("[MISSION] No vehicles available in base '%s'"), *OriginBase->BaseName.ToString());
+        UE_LOG(LogTemp, Warning, TEXT("[MISSION] No vehicles available in base '%s'"), *OriginBase->BaseName.ToString());
         return nullptr;
     }
 
