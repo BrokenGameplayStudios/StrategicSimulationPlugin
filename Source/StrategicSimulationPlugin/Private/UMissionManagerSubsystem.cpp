@@ -81,6 +81,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     if (ResourceMgr) ResourceMgr->AddResources(EFactionType::Enemy, Reward);
 
+    // Soldier wounding
     if (SoldierMgr && SoldiersLost > 0)
     {
         TArray<UStrategySoldier*> AllPassengers;
@@ -97,6 +98,39 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
     }
 
+    // === SOLDIER RETURN HANDLING (clean version — no type errors) ===
+    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+    {
+        for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+        {
+            if (!Soldier) continue;
+
+            Soldier->StationedBase = Mission->OriginBase;
+            Soldier->CurrentMission = nullptr;
+
+            // Force back into owned HomeBarracks (reclaim slot if needed)
+            if (Soldier->HomeBarracks && Soldier->HomeBarracks->FacilityDefinition &&
+                Soldier->HomeBarracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
+            {
+                TArray<UStrategySoldier*>& BarracksList = Soldier->HomeBarracks->ParkedSoldiers;
+
+                if (BarracksList.Num() < Soldier->HomeBarracks->FacilityDefinition->Capacity)
+                {
+                    BarracksList.Add(Soldier);
+                }
+                else if (BarracksList.Num() > 0)
+                {
+                    UStrategySoldier* Evicted = BarracksList.Last();
+                    BarracksList.RemoveAt(BarracksList.Num() - 1);
+                    BarracksList.Add(Soldier);
+                    UE_LOG(LogTemp, Display, TEXT("[MISSION] Barracks full — evicted %s to reclaim slot for %s"), *Evicted->SoldierName, *Soldier->SoldierName);
+                }
+                UE_LOG(LogTemp, Display, TEXT("[MISSION] Soldier %s returned to reserved HomeBarracks"), *Soldier->SoldierName);
+            }
+        }
+    }
+
+    // === Vehicle return handling (unchanged) ===
     int32 VehiclesToDestroy = VehiclesLostThisMission;
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
@@ -120,7 +154,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
         Vehicle->CurrentMission = nullptr;
 
-        // Force return to owned HomeHanger
         bool Parked = false;
         if (Vehicle->HomeHanger && Vehicle->HomeHanger->FacilityDefinition && Vehicle->HomeHanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
@@ -133,8 +166,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                 if (Vehicle->HomeHanger->ParkedVehicles.Num() > 0)
                 {
                     UStrategyVehicle* Evicted = Vehicle->HomeHanger->ParkedVehicles.Last();
-                    UE_LOG(LogTemp, Display, TEXT("[MISSION] HomeHanger full — evicting %s to reclaim slot for %s"),
-                        *Evicted->VehicleDefinition->VehicleName.ToString(), *Vehicle->VehicleDefinition->VehicleName.ToString());
                     Vehicle->HomeHanger->ParkedVehicles.RemoveAt(Vehicle->HomeHanger->ParkedVehicles.Num() - 1);
                 }
                 Vehicle->HomeHanger->ParkedVehicles.Add(Vehicle);

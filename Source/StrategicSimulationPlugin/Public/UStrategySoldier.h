@@ -46,6 +46,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Location")
     UStrategyFacility* HomeBarracks = nullptr;
 
+    /** Which mission this soldier is currently on (parallel to vehicles) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
+    UMissionGroup* CurrentMission = nullptr;
+
     /** Which base this soldier is currently stationed at */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Location")
     UStrategyBase* StationedBase = nullptr;
