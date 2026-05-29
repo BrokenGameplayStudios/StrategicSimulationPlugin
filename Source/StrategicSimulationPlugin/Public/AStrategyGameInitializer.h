@@ -19,6 +19,18 @@ public:
 
     virtual void BeginPlay() override;
 
+    /** Master toggle for extra debug logging (Facility Ticks, etc.) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+    bool bVerboseLogging = false;
+
+    /** Show [UNLOCK] messages when something new becomes available */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+    bool bShowUnlockMessages = true;
+
+    /** Show detailed facility tick logs (can be very noisy with many bases) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+    bool bShowFacilityTicks = false;
+
     // === DATABASES ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UItemDatabase> ItemDatabaseAsset;

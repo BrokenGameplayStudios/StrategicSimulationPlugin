@@ -289,8 +289,17 @@ bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefin
                         {
                             if (UnlockedItem.Get() == ItemDef)
                             {
-                                UE_LOG(LogTemp, Display, TEXT("[UNLOCK] ✅ %s unlocked via Tech %s"),
-                                    *ItemDef->ItemName.ToString(), *Tech->TechName.ToString());
+                                if (bShowUnlockMessages)
+                                {
+                                    FString Key = ItemDef->ItemName.ToString();
+
+                                    if (!const_cast<UStrategyCampaignSubsystem*>(this)->AnnouncedUnlocks.Contains(Key))
+                                    {
+                                        const_cast<UStrategyCampaignSubsystem*>(this)->AnnouncedUnlocks.Add(Key);
+                                        UE_LOG(LogTemp, Display, TEXT("[UNLOCK] ✅ %s unlocked via Tech %s"),
+                                            *ItemDef->ItemName.ToString(), *Tech->TechName.ToString());
+                                    }
+                                }
                                 return true;
                             }
                         }

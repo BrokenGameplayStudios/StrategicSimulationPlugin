@@ -112,6 +112,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
     bool bVerboseLogging = true;
 
+    /** Debug toggles (controlled from AStrategyGameInitializer in the level) */
+    bool bVerboseLogging = false;
+    bool bShowUnlockMessages = true;
+    bool bShowFacilityTicks = false;
+
+    /** Tracks already announced unlocks to prevent daily spam */
+    TSet<FString> AnnouncedUnlocks;
+
 private:
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
