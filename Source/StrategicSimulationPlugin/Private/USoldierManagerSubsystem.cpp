@@ -38,12 +38,11 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
         if (BaseMgr)
         {
             const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-            if (!Bases.IsEmpty())
-                TargetBase = Bases[0];
+            if (!Bases.IsEmpty()) TargetBase = Bases[0];
         }
     }
 
-    // === RESTORED: Base must be operational and have power ===
+    // === RESTORED: Cannot recruit to dead / no-power base ===
     if (TargetBase)
     {
         if (!TargetBase->IsOperational() || TargetBase->GetNetPower() < 0)
@@ -58,14 +57,14 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
 
         if (CurrentCapacity <= 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s base '%s' has no operational living quarters (0/%d) — cannot recruit"),
+            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s base '%s' has no operational living quarters (0/%d)"),
                 *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString(), CurrentCapacity);
             return nullptr;
         }
 
         if (CurrentSoldiers >= CurrentCapacity)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s base '%s' barracks full (%d/%d) — cannot recruit"),
+            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s base '%s' barracks full (%d/%d)"),
                 *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString(), CurrentSoldiers, CurrentCapacity);
             return nullptr;
         }
@@ -81,10 +80,7 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
     NewSoldier->StationedBase = TargetBase;
 
     for (const TSoftObjectPtr<UItemDefinition>& Gear : ClassDef->StartingGear)
-    {
-        if (UItemDefinition* Item = Gear.Get())
-            NewSoldier->CurrentLoadout.Add(Item);
-    }
+        if (UItemDefinition* Item = Gear.Get()) NewSoldier->CurrentLoadout.Add(Item);
 
     if (Faction == EFactionType::Human)
         HumanRoster.Add(NewSoldier);
@@ -132,12 +128,12 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
         if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
         {
             Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, NewSoldier);
-            Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, EnemyRoster);   // full list — UI refresh
+            Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, EnemyRoster);
             Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ Soldier trained + FULL LIST broadcast to UI (pre-queue behavior restored)"));
+    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ Soldier trained + FULL LIST broadcast to UI"));
 }
 
 void USoldierManagerSubsystem::DismissSoldier(UStrategySoldier* Soldier)
@@ -145,7 +141,6 @@ void USoldierManagerSubsystem::DismissSoldier(UStrategySoldier* Soldier)
     if (!Soldier) return;
     HumanRoster.Remove(Soldier);
     EnemyRoster.Remove(Soldier);
-
     BroadcastSoldierListChanged(EFactionType::Human);
     BroadcastSoldierListChanged(EFactionType::Enemy);
 }

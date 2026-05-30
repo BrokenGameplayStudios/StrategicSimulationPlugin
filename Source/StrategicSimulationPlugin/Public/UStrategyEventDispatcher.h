@@ -10,9 +10,9 @@
 #include "UStrategyVehicle.h"
 #include "UStrategyEventDispatcher.generated.h"
 
-// === ALL DELEGATES — SINGLE SOURCE OF TRUTH (no duplicates anywhere) ===
+// === ALL EVENTS — SINGLE SOURCE OF TRUTH ===
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierRecruited, EFactionType, Faction, UStrategySoldier*, Soldier);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierListChanged, EFactionType, Faction, const TArray<UStrategySoldier*>&, Soldiers); // full list — what your UI expects
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierListChanged, EFactionType, Faction, const TArray<UStrategySoldier*>&, Soldiers);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierLoadoutChanged, EFactionType, Faction, UStrategySoldier*, Soldier);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierDismissed, EFactionType, Faction, UStrategySoldier*, Soldier);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnResearchCompleted, EFactionType, Faction, UResearchTechDefinition*, Tech);
@@ -28,39 +28,16 @@ class STRATEGICSIMULATIONPLUGIN_API UStrategyEventDispatcher : public UGameInsta
     GENERATED_BODY()
 
 public:
-    virtual void Initialize(FSubsystemCollectionBase& Collection) override
-    {
-        Super::Initialize(Collection);
-        UE_LOG(LogTemp, Display, TEXT("UStrategyEventDispatcher initialized — ALL UI events ready (full soldier list + loadout)"));
-    }
+    virtual void Initialize(FSubsystemCollectionBase& Collection) override;   // ← declaration only (body in .cpp)
 
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnSoldierRecruited OnSoldierRecruited;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnSoldierListChanged OnSoldierListChanged;   // full array refresh
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnSoldierLoadoutChanged OnSoldierLoadoutChanged;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnSoldierDismissed OnSoldierDismissed;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnResearchCompleted OnResearchCompleted;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnVehicleCompleted OnVehicleCompleted;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnItemProduced OnItemProduced;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnFacilityCompleted OnFacilityCompleted;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnProductionCompleted OnProductionCompleted;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnMonthlyEvent OnMonthlyEvent;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnSoldierRecruited OnSoldierRecruited;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnSoldierListChanged OnSoldierListChanged;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnSoldierLoadoutChanged OnSoldierLoadoutChanged;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnSoldierDismissed OnSoldierDismissed;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnResearchCompleted OnResearchCompleted;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnVehicleCompleted OnVehicleCompleted;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnItemProduced OnItemProduced;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnFacilityCompleted OnFacilityCompleted;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnProductionCompleted OnProductionCompleted;
+    UPROPERTY(BlueprintAssignable, Category = "Events") FOnMonthlyEvent OnMonthlyEvent;
 };
