@@ -108,12 +108,14 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
     USoldierClassDefinition* ClassDef = Cast<USoldierClassDefinition>(SoldierClassAsset);
     if (!ClassDef)
     {
-        // Safe fallback (no Base->GetWorld() dependency)
+        // Safe fallback (no reliance on Base->GetWorld())
         if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
         {
             if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
+            {
                 if (DB->AvailableSoldierClasses.Num() > 0)
                     ClassDef = DB->AvailableSoldierClasses[0].Get();
+            }
         }
     }
 
@@ -123,14 +125,16 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
         return;
     }
 
-    // Full creation + roster add (safe)
+    // Full creation via the safe RecruitSoldier path
     UStrategySoldier* NewSoldier = RecruitSoldier(EFactionType::Enemy, ClassDef, Base);
 
     if (NewSoldier)
     {
-        // Safe dispatcher access — use the manager's own GameInstance (never relies on transient facility)
+        // Broadcasting happens here in the stable GameInstanceSubsystem
         if (UStrategyEventDispatcher* Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
         {
+            Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, EnemyRoster);
+            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, NewSoldier);
             Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
         }
 

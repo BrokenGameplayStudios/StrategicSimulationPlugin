@@ -166,19 +166,19 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
-
+    // === MINIMAL SAFE DELEGATION — NO CONTEXT CALLS IN TRANSIENT FACILITY ===
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
-        USoldierManagerSubsystem* SoldierMgr = GI ? GI->GetSubsystem<USoldierManagerSubsystem>() : nullptr;
-        if (!SoldierMgr) SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
-
-        if (SoldierMgr)
+        // Delegate to stable GameInstanceSubsystem (the only safe place)
+        UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
+        if (GI)
         {
-            SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
-            // All broadcasts happen safely inside the manager (no transient facility context)
+            if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
+            {
+                SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
+            }
         }
     }
     else if (Job.Type == EProductionType::Vehicle)
@@ -188,7 +188,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         {
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
 
-            UObject* Outer = GI ? static_cast<UObject*>(GI) : static_cast<UObject*>(this);
+            UObject* Outer = UGameplayStatics::GetGameInstance(this) ? static_cast<UObject*>(UGameplayStatics::GetGameInstance(this)) : static_cast<UObject*>(this);
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
 
             NewVehicle->VehicleDefinition = VehDef;
