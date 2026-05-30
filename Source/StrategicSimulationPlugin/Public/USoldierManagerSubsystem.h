@@ -45,6 +45,10 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnSoldierListChanged OnSoldierListChanged;
 
+    // Called when training queue completes
+    UFUNCTION(BlueprintCallable, Category = "Soldier")
+    void FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset);
+
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Soldiers")
     TArray<UStrategySoldier*> HumanRoster;

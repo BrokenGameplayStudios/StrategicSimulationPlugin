@@ -2,6 +2,8 @@
 #include "UStrategyEventDispatcher.h"
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyBase.h"
+#include "USoldierClassDatabase.h"
+#include "UStrategyCampaignSubsystem.h"
 #include "Engine/Engine.h"
 
 void USoldierManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -153,4 +155,38 @@ void USoldierManagerSubsystem::Debug_PrintTeamRoster(EFactionType Faction) const
         if (Soldier) Soldier->PrintInfo();
     }
     UE_LOG(LogTemp, Display, TEXT("=== END %s ROSTER ===\n"), *UEnum::GetValueAsString(Faction));
+}
+
+void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset)
+{
+    if (!Base) return;
+
+    USoldierClassDefinition* ClassDef = Cast<USoldierClassDefinition>(SoldierClassAsset);
+    if (!ClassDef)
+    {
+        if (UStrategyCampaignSubsystem* Campaign = Base->GetWorld()->GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
+                if (DB->AvailableSoldierClasses.Num() > 0)
+                    ClassDef = DB->AvailableSoldierClasses[0].Get();
+        }
+    }
+
+    UStrategySoldier* NewSoldier = NewObject<UStrategySoldier>();
+    NewSoldier->ClassDefinition = ClassDef;
+    NewSoldier->CurrentStats.Health = 10;          // Correct field from GitHub
+    NewSoldier->HomeBarracks = Base->Facilities.Num() > 0 ? Base->Facilities[0] : nullptr;
+
+    EnemyRoster.Add(NewSoldier);
+
+    UWorld* World = Base->GetWorld();
+    if (World)
+    {
+        if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+        {
+            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, NewSoldier);   // Matches your current GitHub dispatcher
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ New soldier added to roster and UI notified"));
 }

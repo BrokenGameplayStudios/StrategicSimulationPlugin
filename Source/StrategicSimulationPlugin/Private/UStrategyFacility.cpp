@@ -8,6 +8,8 @@
 #include "Engine/World.h"
 #include "USoldierClassDatabase.h"
 #include "UVehicleDatabase.h"
+#include "USoldierManagerSubsystem.h"
+#include "UStrategyEventDispatcher.h"
 
 void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
 {
@@ -136,14 +138,38 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     if (!Job.TargetAsset || !OwningBase) return;
 
-    if (Job.Type == EProductionType::Soldier){
+    UWorld* World = OwningBase->GetWorld();
+    if (!World) return;
+
+    if (Job.Type == EProductionType::Soldier)
+    {
         UE_LOG(LogTemp, Display, TEXT("[RECRUIT] Training complete → Soldier ready from %s"), *FacilityDefinition->FacilityName.ToString());
+
+        if (USoldierManagerSubsystem* SoldierMgr = World->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
+        {
+            SoldierMgr->FinishSoldierTraining(OwningBase, Job.TargetAsset);
+        }
     }
-    else if (Job.Type == EProductionType::Vehicle){
+    else if (Job.Type == EProductionType::Vehicle)
+    {
         UE_LOG(LogTemp, Display, TEXT("[VEHICLE] Construction complete → Ship ready from %s"), *FacilityDefinition->FacilityName.ToString());
+
+        if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // reuse existing event or change to your vehicle one
     }
-    else if (Job.Type == EProductionType::Facility){
+    else if (Job.Type == EProductionType::Facility)
+    {
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
+    }
+    else if (Job.Type == EProductionType::Research || Job.Type == EProductionType::Item)
+    {
+        if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+        {
+            if (Job.Type == EProductionType::Research)
+                Disp->OnResearchCompleted.Broadcast(EFactionType::Enemy, Cast<UResearchTechDefinition>(Job.TargetAsset));
+            else
+                Disp->OnProductionCompleted.Broadcast(EFactionType::Enemy, Cast<UItemDefinition>(Job.TargetAsset));
+        }
     }
 }
 
