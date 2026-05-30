@@ -1,6 +1,9 @@
 #include "UResearchManagerSubsystem.h"
 #include "UStrategyEventDispatcher.h"
 #include "Engine/Engine.h"
+#include "UBaseManagerSubsystem.h"
+#include "UStrategyFacility.h"
+#include "UStrategyBase.h"
 
 void UResearchManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -37,11 +40,43 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
 
     if (!bHasOperationalLab)
     {
-       // UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — No operational Research Lab found in any base!"),
-       //     *ProjectDef->ProjectName.ToString());
+        // UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — No operational Research Lab found in any base!"),
+        //     *ProjectDef->ProjectName.ToString());
         return nullptr;
     }
 
+    // === NEW UNIFIED QUEUE: Find a Lab and queue it ===
+    for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
+    {
+        for (UStrategyFacility* Lab : Base->Facilities)
+        {
+            if (Lab && Lab->FacilityDefinition && Lab->FacilityDefinition->FacilityType == EFacilityType::Laboratory)
+            {
+                if (Lab->HasFreeProductionSlot())
+                {
+                    if (Lab->StartProduction(EProductionType::Research, ProjectDef, ProjectDef->ResearchDays))
+                    {
+                        UActiveResearchProject* NewProject = NewObject<UActiveResearchProject>();
+                        NewProject->ResearchDefinition = ProjectDef;
+                        NewProject->RemainingDays = ProjectDef->ResearchDays;
+
+                        if (Faction == EFactionType::Human)
+                            HumanResearchQueue.Add(NewProject);
+                        else
+                            EnemyResearchQueue.Add(NewProject);
+
+                        OnResearchListChanged.Broadcast(Faction);
+                        UE_LOG(LogTemp, Display, TEXT("Started research '%s' for %s (%d days)"),
+                            *ProjectDef->ProjectName.ToString(), *UEnum::GetValueAsString(Faction), NewProject->RemainingDays);
+
+                        return NewProject;
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback to old logic if no free slot
     UActiveResearchProject* NewProject = NewObject<UActiveResearchProject>();
     NewProject->ResearchDefinition = ProjectDef;
     NewProject->RemainingDays = ProjectDef->ResearchDays;
@@ -144,7 +179,6 @@ void UResearchManagerSubsystem::AdvanceDay(EFactionType Faction)
     }
 }
 
-// NEW FUNCTION
 void UResearchManagerSubsystem::ResetResearch()
 {
     for (UActiveResearchProject* Proj : HumanResearchQueue)

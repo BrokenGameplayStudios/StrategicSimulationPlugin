@@ -7,6 +7,7 @@
 #include "UItemDatabase.h"
 #include "UActiveProductionJob.h"
 #include "UStrategyBase.h"
+#include "UStrategyFacility.h"
 #include "Engine/Engine.h"
 
 void UEngineeringManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -49,7 +50,6 @@ bool UEngineeringManagerSubsystem::PurchaseItem(EFactionType Faction, UItemDefin
     return true;
 }
 
-// FULL PRODUCTION WITH SLOTS + QUEUE
 UActiveProductionJob* UEngineeringManagerSubsystem::StartProduction(EFactionType Faction, UItemDefinition* ItemDef, int32 Quantity, UStrategyBase* TargetBase)
 {
     if (!ItemDef) return nullptr;
@@ -65,40 +65,35 @@ UActiveProductionJob* UEngineeringManagerSubsystem::StartProduction(EFactionType
     }
     if (!ChosenBase) return nullptr;
 
-    // Count currently active jobs on this base
-    int32 CurrentActive = 0;
-    TArray<UActiveProductionJob*>& Queue = (Faction == EFactionType::Human) ? HumanProductionQueue : EnemyProductionQueue;
-
-    for (UActiveProductionJob* Job : Queue)
+    // NEW: Use Workshop Production Slots
+    for (UStrategyFacility* Workshop : ChosenBase->Facilities)
     {
-        if (Job && Job->OwningBase == ChosenBase && !Job->bIsCompleted) CurrentActive++;
+        if (Workshop && Workshop->FacilityDefinition && Workshop->FacilityDefinition->FacilityType == EFacilityType::Workshop)
+        {
+            if (Workshop->HasFreeProductionSlot())
+            {
+                if (Workshop->StartProduction(EProductionType::Item, ItemDef, ItemDef->ProductionDays))
+                {
+                    UActiveProductionJob* NewJob = NewObject<UActiveProductionJob>();
+                    NewJob->ItemToProduce = ItemDef;
+                    NewJob->Quantity = Quantity;
+                    NewJob->RemainingDays = ItemDef->ProductionDays;
+                    NewJob->OwningBase = ChosenBase;
+
+                    if (Faction == EFactionType::Human)
+                        HumanProductionQueue.Add(NewJob);
+                    else
+                        EnemyProductionQueue.Add(NewJob);
+
+                    UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] %s started %s x%d in base '%s'"),
+                        *UEnum::GetValueAsString(Faction), *ItemDef->ItemName.ToString(), Quantity, *ChosenBase->BaseName.ToString());
+                    return NewJob;
+                }
+            }
+        }
     }
 
-    UActiveProductionJob* NewJob = NewObject<UActiveProductionJob>();
-    NewJob->ItemToProduce = ItemDef;
-    NewJob->Quantity = Quantity;
-    NewJob->RemainingDays = ItemDef->ProductionDays;
-    NewJob->OwningBase = ChosenBase;
-
-    if (CurrentActive >= ChosenBase->GetTotalProductionSlots())
-    {
-        // Add to queue (waiting)
-        NewJob->bIsQueued = true;
-        UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] %s — No free slots in base '%s' (queued)"),
-            *UEnum::GetValueAsString(Faction), *ChosenBase->BaseName.ToString());
-    }
-    else
-    {
-        NewJob->bIsQueued = false;
-    }
-
-    Queue.Add(NewJob);
-
-    UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] %s started %s x%d in base '%s' (%s)"),
-        *UEnum::GetValueAsString(Faction), *ItemDef->ItemName.ToString(), Quantity, *ChosenBase->BaseName.ToString(),
-        NewJob->bIsQueued ? TEXT("queued") : TEXT("active"));
-
-    return NewJob;
+    return nullptr;
 }
 
 TArray<UActiveProductionJob*> UEngineeringManagerSubsystem::GetActiveProduction(EFactionType Faction) const
@@ -108,8 +103,7 @@ TArray<UActiveProductionJob*> UEngineeringManagerSubsystem::GetActiveProduction(
 
 bool UEngineeringManagerSubsystem::TryProduce(EFactionType Faction)
 {
-    // Simple AI production call - can be expanded later
-    return false;
+    return false; // Now handled by facility queue
 }
 
 void UEngineeringManagerSubsystem::OnDayPassed(int32 NewDay)
@@ -124,7 +118,6 @@ void UEngineeringManagerSubsystem::OnDayPassed(int32 NewDay)
         {
             if (Job->bIsQueued)
             {
-                // Try to start queued job if slot is now free
                 int32 ActiveCount = 0;
                 for (UActiveProductionJob* J : HumanQueue)
                 {
@@ -183,7 +176,6 @@ void UEngineeringManagerSubsystem::OnDayPassed(int32 NewDay)
     }
 }
 
-// NEW FUNCTION
 void UEngineeringManagerSubsystem::ResetProduction()
 {
     for (UActiveProductionJob* Job : HumanProductionQueue)

@@ -19,7 +19,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Procurement")
     bool PurchaseItem(EFactionType Faction, UItemDefinition* ItemDef, UStrategySoldier* TargetSoldier = nullptr);
 
-    // PRODUCTION WITH PER-BASE SLOTS + QUEUE
     UFUNCTION(BlueprintCallable, Category = "Production")
     UActiveProductionJob* StartProduction(EFactionType Faction, UItemDefinition* ItemDef, int32 Quantity = 1, UStrategyBase* TargetBase = nullptr);
 
@@ -32,14 +31,13 @@ public:
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 
-    // NEW: Full reset (used by Campaign ResetSimulation)
     UFUNCTION(BlueprintCallable, Category = "Production")
     void ResetProduction();
 
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Production")
-    TArray<UActiveProductionJob*> HumanProductionQueue;   // active + queued
+    TArray<UActiveProductionJob*> HumanProductionQueue;
 
     UPROPERTY(VisibleAnywhere, Transient, Category = "Production")
-    TArray<UActiveProductionJob*> EnemyProductionQueue;   // active + queued
+    TArray<UActiveProductionJob*> EnemyProductionQueue;
 };
