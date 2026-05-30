@@ -12,6 +12,7 @@
 #include "UStrategyEventDispatcher.h"
 #include "Engine/Engine.h"
 #include "UBaseManagerSubsystem.h"
+#include "UProductionManagerSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 
 void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
@@ -164,51 +165,14 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     if (!Job.TargetAsset) return;
 
-    UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
-
-    // === ULTRA-MINIMAL DELEGATION — NO CONTEXT CALLS IN TRANSIENT FACILITY ===
-    if (Job.Type == EProductionType::Soldier)
+    // === NEW STABLE DELEGATION — NO TRANSIENT CONTEXT CALLS ===
+    if (UProductionManagerSubsystem* ProdMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UProductionManagerSubsystem>())
     {
-        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
-
-        // Delegate to stable manager (no GI lookup in the transient facility)
-        UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
-        if (GI)
-        {
-            if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
-            {
-                SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
-                // Broadcasting stays inside the stable manager (safe)
-            }
-        }
+        ProdMgr->CompleteJob(Job, this);
     }
-    else if (Job.Type == EProductionType::Vehicle)
+    else
     {
-        UVehicleDefinition* VehDef = Cast<UVehicleDefinition>(Job.TargetAsset);
-        if (VehDef && FacilityDefinition && FacilityDefinition->FacilityType == EFacilityType::Hanger)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
-
-            UObject* Outer = UGameplayStatics::GetGameInstance(this) ? static_cast<UObject*>(UGameplayStatics::GetGameInstance(this)) : static_cast<UObject*>(this);
-            UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
-
-            NewVehicle->VehicleDefinition = VehDef;
-            NewVehicle->CurrentHanger = this;
-            NewVehicle->HomeHanger = this;
-            NewVehicle->HomeBase = UseBase;
-            NewVehicle->CurrentHealth = VehDef->MaxHealth;
-            NewVehicle->RemainingFuelDays = 30;
-
-            ParkedVehicles.Add(NewVehicle);
-
-            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s added to hanger '%s' (now %d parked)"),
-                *VehDef->VehicleName.ToString(), *FacilityDefinition->FacilityName.ToString(), ParkedVehicles.Num());
-        }
-    }
-    else if (Job.Type == EProductionType::Facility)
-    {
-        bIsOperational = true;
-        UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
+        UE_LOG(LogTemp, Warning, TEXT("[COMPLETE] Could not get ProductionManagerSubsystem"));
     }
 }
 
