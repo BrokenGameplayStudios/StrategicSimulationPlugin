@@ -222,7 +222,7 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 
     ChosenBase->AddFacility(NewFacility);
 
-    // === QUEUE INTEGRATION (added) ===
+    // === QUEUE INTEGRATION (added, original code untouched) ===
     if (FacilityDef->BuildTimeDays > 0)
     {
         NewFacility->StartConstruction(FacilityDef);

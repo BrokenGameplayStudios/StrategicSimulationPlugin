@@ -11,6 +11,7 @@
 #include "UStrategyBase.h"
 #include "UStrategyVehicle.h"
 #include "UMissionManagerSubsystem.h"
+#include "UBaseManagerSubsystem.h"
 #include "Engine/Engine.h"
 
 void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -106,8 +107,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         if (Base->GetNetPower() < 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
         {
-            if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base))
-                continue;
+            TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
         }
 
         int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
@@ -117,8 +117,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — Trying extra LivingQuarters in '%s'"),
                 CurrentSoldiers, CurrentCapacity, *Base->BaseName.ToString());
-            if (TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base))
-                UE_LOG(LogTemp, Display, TEXT("[AI] → SUCCESS extra LivingQuarters started in '%s'"), *Base->BaseName.ToString());
+            TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base);
         }
 
         if (!Base->HasFacilityOfType(EFacilityType::Storage)) TryBuildFacility(Faction, EFacilityType::Storage, Base);
@@ -222,7 +221,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
         UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
         if (MissionMgr)
         {
-            for (UMissionGroup* Mission : MissionMgr->ActiveMissions) // scan active missions
+            for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
             {
                 if (!Mission) continue;
                 for (UStrategyVehicle* V : Mission->VehiclesInFleet)
@@ -370,19 +369,25 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return false;
     }
 
+    // === ANTI-SPAM CHECK: Already queued/under construction? ===
     if (TargetBase)
     {
         int32 CurrentCountInBase = 0;
+        int32 UnderConstruction = 0;
         for (UStrategyFacility* Fac : TargetBase->Facilities)
         {
             if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityTypeToBuild)
+            {
                 CurrentCountInBase++;
+                if (!Fac->bIsOperational)
+                    UnderConstruction++;
+            }
         }
 
-        if (CurrentCountInBase >= FacilityDef->MaxBuilt)
+        if (CurrentCountInBase + UnderConstruction >= FacilityDef->MaxBuilt)
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[AI] MaxBuilt reached for %s in base '%s' (%d/%d) — skipping"),
-                *UEnum::GetValueAsString(FacilityTypeToBuild), *TargetBase->BaseName.ToString(), CurrentCountInBase, FacilityDef->MaxBuilt);
+            UE_LOG(LogTemp, Verbose, TEXT("[AI] MaxBuilt or already queued for %s in base '%s' (%d built + %d building) — skipping"),
+                *UEnum::GetValueAsString(FacilityTypeToBuild), *TargetBase->BaseName.ToString(), CurrentCountInBase, UnderConstruction);
             return false;
         }
     }
@@ -450,7 +455,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
                     {
                         if (Soldier && Soldier->HomeBarracks && Soldier->HomeBarracks->FacilityDefinition)
                         {
-                            // Check if this barracks belongs to the current base
                             if (Base->Facilities.Contains(Soldier->HomeBarracks))
                                 ReservedByOnMission++;
                         }
@@ -463,7 +467,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 
         if (EffectiveFreeSlots > 0)
         {
-            // Recruit
             USoldierClassDefinition* ClassDef = nullptr;
             if (Campaign && Campaign->SoldierClassDatabaseAsset.IsValid())
             {
@@ -474,8 +477,8 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 
             if (SoldierMgr->RecruitSoldier(Faction, ClassDef, Base))
             {
-                Res.Money -= 500;                     // ← we subtract here
-                ResourceMgr->SetResources(Faction, Res); // push back the updated resources
+                Res.Money -= 500;
+                ResourceMgr->SetResources(Faction, Res);
 
                 UE_LOG(LogTemp, Display, TEXT("[AI] EFactionType::%s recruited a new soldier (Grunt) at base '%s' - Capacity %d/%d (reserved on-mission: %d)"),
                     *UEnum::GetValueAsString(Faction), *Base->BaseName.ToString(), Stationed + 1, Capacity, ReservedByOnMission);

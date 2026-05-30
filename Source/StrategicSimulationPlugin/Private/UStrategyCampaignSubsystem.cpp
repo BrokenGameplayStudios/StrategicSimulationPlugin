@@ -169,18 +169,19 @@ void UStrategyCampaignSubsystem::StartSimulation()
                 if (First) UnlocksList += "None";
                 UnlocksList += ")";
 
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days%s%s"),
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days %s"),
                     *Def->FacilityName.ToString(),
                     *UEnum::GetValueAsString(Def->FacilityType),
                     Def->Capacity,
+                    Def->ProductionSlots,                  // NEW
+                    Def->ProductionSpeedMultiplier,        // NEW
                     Def->MaxBuilt,
                     Def->PowerProvided,
                     Def->PowerDraw,
                     Def->BuildCost.Money,
                     Def->BuildCost.Supplies,
                     Def->BuildTimeDays,
-                    *RepairInfo,
-                    *UnlocksList);
+                    Def->UnlocksResearch.Num() > 0 ? TEXT("(Unlocks Research)") : TEXT("(Unlocks: None)"));
             }
         }
     }
