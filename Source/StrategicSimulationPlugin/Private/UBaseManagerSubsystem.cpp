@@ -64,6 +64,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
         CommandFacility->BuildProgressDays = 0;
         CommandFacility->bIsOperational = true;
+        CommandFacility->CurrentPowerDraw = 0;
         NewBase->AddFacility(CommandFacility);
         NewBase->UpdatePowerFromFacilities();
 
@@ -77,7 +78,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         return NewBase;
     }
 
-    // === NORMAL PAID EXPANSION — AI already checked affordability, but we double-check and deduct here ===
+    // === NORMAL PAID EXPANSION ===
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
 
@@ -106,13 +107,11 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         if (Current.Money < CommandDef->BuildCost.Money || Current.Supplies < CommandDef->BuildCost.Supplies)
         {
             UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center — ABORTING new base (money already spent elsewhere?)"));
-            // Cleanup to avoid ghost base
             if (Faction == EFactionType::Enemy) EnemyBases.Remove(NewBase);
             else HumanBases.Remove(NewBase);
             return nullptr;
         }
 
-        // === DEDUCT MONEY HERE (order accepted) ===
         FResourceStockpile NegativeCost = CommandDef->BuildCost;
         NegativeCost.Money = -NegativeCost.Money;
         NegativeCost.Supplies = -NegativeCost.Supplies;
@@ -121,12 +120,11 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         UE_LOG(LogTemp, Display, TEXT("[BUILD] Order accepted — deducted cost for Command Center"));
     }
 
-    // === Start proper construction (respects build time) ===
     UStrategyFacility* CommandFacility = BuildFacility(Faction, CommandDef, NewBase);
 
     if (CommandFacility)
     {
-        CommandFacility->bIsOperational = false; // will become operational after build timer
+        CommandFacility->bIsOperational = false;
         NewBase->AddFacility(CommandFacility);
         NewBase->UpdatePowerFromFacilities();
 
@@ -222,7 +220,6 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 
     ChosenBase->AddFacility(NewFacility);
 
-    // === QUEUE INTEGRATION (added, original code untouched) ===
     if (FacilityDef->BuildTimeDays > 0)
     {
         NewFacility->StartConstruction(FacilityDef);
@@ -266,7 +263,7 @@ int32 UBaseManagerSubsystem::GetTotalPowerDrawn(EFactionType Faction) const
         {
             for (UStrategyFacility* Fac : Base->Facilities)
             {
-                if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
+                if (Fac && Fac->bIsOperational)
                     Total += Fac->CurrentPowerDraw;
             }
         }
@@ -430,27 +427,25 @@ void UBaseManagerSubsystem::ResetAllBases()
     UE_LOG(LogTemp, Display, TEXT("[RESET] All bases cleared for both factions"));
 }
 
-// === NEW: Daily Repair Tick for all VehicleRepair facilities ===
 void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[DAILY SIM] Starting daily repair/medical simulation for %s"), *UEnum::GetValueAsString(Faction));
+    UE_LOG(LogTemp, Verbose, TEXT("[DAILY SIM] %s — Medical Bays can heal X soldiers | Vehicle Repair Shops can repair X vehicles (+25 HP)"),
+        *UEnum::GetValueAsString(Faction));
 
     for (UStrategyBase* Base : GetBasesInternal(Faction))
     {
         if (!Base) continue;
 
-        // Call on EVERY operational facility — this makes Medical bays work exactly like VehicleRepair
         for (UStrategyFacility* Fac : Base->Facilities)
         {
             if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
             {
-                Fac->SimulateDaily();   // This now runs both your repair logic + the new construction queue
+                Fac->SimulateDaily();
             }
         }
     }
 }
 
-// === NEW: Queue advancement (added) ===
 void UBaseManagerSubsystem::AdvanceAllConstruction()
 {
     for (UStrategyBase* Base : EnemyBases)

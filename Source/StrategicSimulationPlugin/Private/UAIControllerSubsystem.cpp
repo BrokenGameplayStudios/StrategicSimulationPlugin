@@ -186,7 +186,65 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === FIXED TryBuildVehicle — strictly respects HomeHanger reservations ===
+// === UPDATED: Queues soldier training in Barracks using Production Slots ===
+bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
+{
+    auto* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    auto* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    auto* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    auto* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+
+    if (!ResourceMgr || !BaseMgr || !SoldierMgr)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] Missing required subsystems!"));
+        return false;
+    }
+
+    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+    if (Res.Money < 500)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 500 Money)"), *UEnum::GetValueAsString(Faction));
+        return false;
+    }
+
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    for (UStrategyBase* Base : Bases)
+    {
+        if (!Base) continue;
+
+        for (UStrategyFacility* Barracks : Base->Facilities)
+        {
+            if (Barracks && Barracks->FacilityDefinition && Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
+            {
+                if (Barracks->HasFreeProductionSlot())
+                {
+                    USoldierClassDefinition* ClassDef = nullptr;
+                    if (Campaign && Campaign->SoldierClassDatabaseAsset.IsValid())
+                    {
+                        if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
+                            if (DB->AvailableSoldierClasses.Num() > 0)
+                                ClassDef = DB->AvailableSoldierClasses[0].Get();
+                    }
+
+                    if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, 4)) // 4 day training
+                    {
+                        Res.Money -= 500;
+                        ResourceMgr->SetResources(Faction, Res);
+
+                        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ EFactionType::%s queued soldier training in %s (4 days)"),
+                            *UEnum::GetValueAsString(Faction), *Barracks->FacilityDefinition->FacilityName.ToString());
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No base with free barracks production slots"));
+    return false;
+}
+
+// === UPDATED: Queues vehicle construction in Hanger using Production Slots ===
 bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -203,58 +261,27 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < VehDef->BuildCost.Money || Res.Supplies < VehDef->BuildCost.Supplies)
-    {
         return false;
-    }
 
     for (UStrategyFacility* Hanger : TargetBase->Facilities)
     {
-        if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger || !Hanger->bIsOperational)
-            continue;
-
-        int32 Capacity = Hanger->FacilityDefinition->Capacity;
-        int32 CurrentlyParked = Hanger->ParkedVehicles.Num();
-
-        // Count vehicles that own this hanger but are currently on mission (they reserve the slot)
-        int32 ReservedByOnMission = 0;
-
-        UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
-        if (MissionMgr)
+        if (Hanger && Hanger->FacilityDefinition && Hanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
-            for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+            if (Hanger->HasFreeProductionSlot())
             {
-                if (!Mission) continue;
-                for (UStrategyVehicle* V : Mission->VehiclesInFleet)
+                if (Hanger->StartProduction(EProductionType::Vehicle, VehDef, VehDef->ProductionDays))
                 {
-                    if (V && V->HomeHanger == Hanger && V->CurrentMission != nullptr)
-                        ReservedByOnMission++;
+                    ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
+
+                    UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s queued vehicle '%s' in hanger (%d days)"),
+                        *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), VehDef->ProductionDays);
+                    return true;
                 }
             }
         }
-
-        int32 EffectiveFreeSlots = Capacity - CurrentlyParked - ReservedByOnMission;
-
-        if (EffectiveFreeSlots > 0)
-        {
-            // Build and park
-            ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
-
-            UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>();
-            NewVehicle->VehicleDefinition = VehDef;
-            NewVehicle->HomeBase = TargetBase;
-            NewVehicle->RemainingFuelDays = VehDef->MaxMissionDurationDays;
-            NewVehicle->CurrentHanger = Hanger;
-            Hanger->ParkedVehicles.Add(NewVehicle);
-
-            UE_LOG(LogTemp, Display, TEXT("[AI] %s completed construction of vehicle '%s' in base '%s' → parked in hanger (Slot %d of %d)"),
-                *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), *TargetBase->BaseName.ToString(),
-                CurrentlyParked + 1, Capacity);
-
-            return true;
-        }
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[AI] No truly free hanger slots in base '%s' (all slots reserved by vehicles on mission)"), *TargetBase->BaseName.ToString());
+    UE_LOG(LogTemp, Verbose, TEXT("[AI] No free hanger production slot"));
     return false;
 }
 
@@ -369,7 +396,6 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return false;
     }
 
-    // === ANTI-SPAM CHECK: Already queued/under construction? ===
     if (TargetBase)
     {
         int32 CurrentCountInBase = 0;
@@ -410,89 +436,6 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
 
     UE_LOG(LogTemp, Warning, TEXT("[AI] BuildFacility failed for %s in base '%s'"),
         *FacilityDef->FacilityName.ToString(), TargetBase ? *TargetBase->BaseName.ToString() : TEXT("unknown"));
-    return false;
-}
-
-bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
-{
-    auto* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    auto* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-    auto* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-    auto* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
-    auto* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-
-    if (!ResourceMgr || !BaseMgr || !SoldierMgr)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] Missing required subsystems!"));
-        return false;
-    }
-
-    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-    if (Res.Money < 500)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 500 Money)"), *UEnum::GetValueAsString(Faction));
-        return false;
-    }
-
-    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    for (UStrategyBase* Base : Bases)
-    {
-        if (!Base) continue;
-
-        int32 Capacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
-        int32 Stationed = SoldierMgr->GetNumSoldiersStationedAt(Base, Faction);
-
-        // Count soldiers currently on mission who own a HomeBarracks in this base
-        int32 ReservedByOnMission = 0;
-        if (MissionMgr)
-        {
-            for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
-            {
-                if (Mission->OriginBase != Base) continue;
-                for (UStrategyVehicle* Veh : Mission->VehiclesInFleet)
-                {
-                    for (UStrategySoldier* Soldier : Veh->CurrentPassengers)
-                    {
-                        if (Soldier && Soldier->HomeBarracks && Soldier->HomeBarracks->FacilityDefinition)
-                        {
-                            if (Base->Facilities.Contains(Soldier->HomeBarracks))
-                                ReservedByOnMission++;
-                        }
-                    }
-                }
-            }
-        }
-
-        int32 EffectiveFreeSlots = Capacity - Stationed - ReservedByOnMission;
-
-        if (EffectiveFreeSlots > 0)
-        {
-            USoldierClassDefinition* ClassDef = nullptr;
-            if (Campaign && Campaign->SoldierClassDatabaseAsset.IsValid())
-            {
-                if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
-                    if (DB->AvailableSoldierClasses.Num() > 0)
-                        ClassDef = DB->AvailableSoldierClasses[0].Get();
-            }
-
-            if (SoldierMgr->RecruitSoldier(Faction, ClassDef, Base))
-            {
-                Res.Money -= 500;
-                ResourceMgr->SetResources(Faction, Res);
-
-                UE_LOG(LogTemp, Display, TEXT("[AI] EFactionType::%s recruited a new soldier (Grunt) at base '%s' - Capacity %d/%d (reserved on-mission: %d)"),
-                    *UEnum::GetValueAsString(Faction), *Base->BaseName.ToString(), Stationed + 1, Capacity, ReservedByOnMission);
-                return true;
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d, %d reserved on-mission) — Trying extra LivingQuarters in '%s'"),
-                Stationed, Capacity, ReservedByOnMission, *Base->BaseName.ToString());
-        }
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No base with effective free barracks slots"));
     return false;
 }
 

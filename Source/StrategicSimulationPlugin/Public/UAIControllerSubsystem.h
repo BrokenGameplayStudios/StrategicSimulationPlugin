@@ -16,7 +16,6 @@ class STRATEGICSIMULATIONPLUGIN_API UAIControllerSubsystem : public UGameInstanc
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-    // Phase 23 - AI Control Toggle (for StateTree / manual / player control later)
     UFUNCTION(BlueprintCallable, Category = "AI Control")
     void SetAIEnabled(bool bEnable);
 
@@ -42,6 +41,4 @@ private:
     bool TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase = nullptr);
     bool TryResearch(EFactionType Faction);
     bool TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase);
-    // Queue-aware helpers
-    bool CanBuildMoreOfType(EFactionType Faction, EFacilityType Type, UStrategyBase* TargetBase);
 };
