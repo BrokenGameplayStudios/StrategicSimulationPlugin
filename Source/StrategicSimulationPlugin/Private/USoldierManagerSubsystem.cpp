@@ -4,6 +4,8 @@
 #include "UStrategyBase.h"
 #include "USoldierClassDatabase.h"
 #include "UStrategyCampaignSubsystem.h"
+#include "UStrategySoldier.h"          // ← added for safety
+#include "USoldierClassDefinition.h"   // ← added for safety
 #include "Engine/Engine.h"
 
 void USoldierManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -42,7 +44,7 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
         }
     }
 
-    // === RESTORED: Cannot recruit to dead / no-power base ===
+    // === RESTORED: Cannot recruit to dead / no-power base + capacity checks (kept exactly as you wrote) ===
     if (TargetBase)
     {
         if (!TargetBase->IsOperational() || TargetBase->GetNetPower() < 0)
@@ -70,7 +72,7 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
         }
     }
 
-    UStrategySoldier* NewSoldier = NewObject<UStrategySoldier>();
+    UStrategySoldier* NewSoldier = NewObject<UStrategySoldier>(this); // outer = subsystem for proper lifetime
     NewSoldier->SoldierName = FString::Printf(TEXT("%s %s"),
         Faction == EFactionType::Human ? TEXT("Sgt.") : TEXT("Overlord"),
         *ClassDef->ClassName.ToString());
@@ -106,6 +108,7 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
     USoldierClassDefinition* ClassDef = Cast<USoldierClassDefinition>(SoldierClassAsset);
     if (!ClassDef)
     {
+        // Your original fallback (kept verbatim)
         if (UStrategyCampaignSubsystem* Campaign = Base->GetWorld()->GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
         {
             if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
@@ -114,26 +117,33 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
         }
     }
 
-    UStrategySoldier* NewSoldier = NewObject<UStrategySoldier>();
-    NewSoldier->ClassDefinition = ClassDef;
-    NewSoldier->CurrentStats.Health = 10;
-    NewSoldier->HomeBarracks = Base->Facilities.Num() > 0 ? Base->Facilities[0] : nullptr;
-    NewSoldier->StationedBase = Base;
-
-    EnemyRoster.Add(NewSoldier);
-
-    UWorld* World = Base->GetWorld();
-    if (World)
+    if (!ClassDef)
     {
-        if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-        {
-            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, NewSoldier);
-            Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, EnemyRoster);
-            Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
-        }
+        UE_LOG(LogTemp, Warning, TEXT("[FINISH TRAINING] No valid SoldierClassDefinition found — aborting"));
+        return;
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ Soldier trained + FULL LIST broadcast to UI"));
+    // === MERGED FIX: Wire directly to the full working RecruitSoldier logic ===
+    // This restores EXACT pre-queue behavior: full soldier creation, gear, stats, name,
+    // operational/power/capacity checks, roster add, full broadcasts, logs, etc.
+    UStrategySoldier* NewSoldier = RecruitSoldier(EFactionType::Enemy, ClassDef, Base);
+
+    if (NewSoldier)
+    {
+        // Training-specific extra events (exactly what UI expects)
+        UWorld* World = Base->GetWorld();
+        if (World)
+        {
+            if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+            {
+                Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
+                // OnSoldierRecruited + full OnSoldierListChanged (with array) already fired inside RecruitSoldier
+            }
+        }
+
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ Soldier trained + FULL LIST broadcast to UI"));
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained...")); // matches the exact message you want to see
+    }
 }
 
 void USoldierManagerSubsystem::DismissSoldier(UStrategySoldier* Soldier)

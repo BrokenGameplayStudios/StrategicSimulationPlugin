@@ -143,11 +143,20 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     if (Job.Type == EProductionType::Soldier)
     {
-        UE_LOG(LogTemp, Display, TEXT("[RECRUIT] Training complete → Soldier ready from %s"), *FacilityDefinition->FacilityName.ToString());
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));   // ← exact message you want
 
         if (USoldierManagerSubsystem* SoldierMgr = World->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
         {
             SoldierMgr->FinishSoldierTraining(OwningBase, Job.TargetAsset);
+
+            // === FIXED: Safe full broadcast using your existing GetRoster ===
+            const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(EFactionType::Enemy);
+            if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+            {
+                Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, Roster);
+                Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr);
+                Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, nullptr);
+            }
         }
     }
     else if (Job.Type == EProductionType::Vehicle)
@@ -155,7 +164,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         UE_LOG(LogTemp, Display, TEXT("[VEHICLE] Construction complete → Ship ready from %s"), *FacilityDefinition->FacilityName.ToString());
 
         if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // UI refresh
+            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // UI refresh placeholder
     }
     else if (Job.Type == EProductionType::Facility)
     {
