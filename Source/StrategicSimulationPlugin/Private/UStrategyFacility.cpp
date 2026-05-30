@@ -82,6 +82,26 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
     }
 }
 
+// ======================== FIXED DAILY SIMULATION ========================
+void UStrategyFacility::SimulateDaily()
+{
+    if (!FacilityDefinition) return;
+
+    // CRITICAL FIX: Always advance production if we have jobs (barracks works even during/after construction)
+    if (ActiveProductionJobs.Num() > 0 || !bIsOperational)
+    {
+        AdvanceProductionDay();  // Guaranteed tick for Soldier/Vehicle/Item jobs
+    }
+
+    SimulateDailyRepair(OwningBase);
+
+    if (FacilityDefinition->FacilityType == EFacilityType::LivingQuarters && ActiveProductionJobs.Num() > 0)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[BARRACKS LIVE] %s — %d soldier jobs active (debug tick confirmed)"),
+            *FacilityDefinition->FacilityName.ToString(), ActiveProductionJobs.Num());
+    }
+}
+
 // ======================== UNIFIED PRODUCTION + CONSTRUCTION ========================
 bool UStrategyFacility::HasFreeProductionSlot() const
 {
@@ -120,10 +140,14 @@ void UStrategyFacility::AdvanceProductionDay()
     {
         FProductionJob& Job = ActiveProductionJobs[i];
         if (Job.RemainingDays > 0)
-            Job.RemainingDays = FMath::Max(0, Job.RemainingDays - 1);
+        {
+            Job.RemainingDays--;
+            UE_LOG(LogTemp, Verbose, TEXT("[PROD TICK] %s job — %d days left"), *UEnum::GetValueAsString(Job.Type), Job.RemainingDays);
+        }
 
         if (Job.RemainingDays <= 0)
         {
+            UE_LOG(LogTemp, Display, TEXT("[COMPLETE] %s production job finishing now!"), *UEnum::GetValueAsString(Job.Type));
             CompleteProductionJob(i);
         }
     }
@@ -136,22 +160,15 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     FProductionJob Job = ActiveProductionJobs[Index];
     ActiveProductionJobs.RemoveAt(Index);
 
-    if (!Job.TargetAsset || !OwningBase) return;
-
-    UWorld* World = OwningBase->GetWorld();
-    if (!World) return;
-
-    if (Job.Type == EProductionType::Soldier)
+    if (Job.Type == EProductionType::Soldier && Job.TargetAsset && OwningBase)
     {
-        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));   // ← exact message you want
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
-        if (USoldierManagerSubsystem* SoldierMgr = World->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
+        if (USoldierManagerSubsystem* SoldierMgr = OwningBase->GetWorld()->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
         {
             SoldierMgr->FinishSoldierTraining(OwningBase, Job.TargetAsset);
-
-            // === FIXED: Safe full broadcast using your existing GetRoster ===
             const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(EFactionType::Enemy);
-            if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+            if (UStrategyEventDispatcher* Disp = OwningBase->GetWorld()->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
             {
                 Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, Roster);
                 Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr);
@@ -159,14 +176,14 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
             }
         }
     }
-    else if (Job.Type == EProductionType::Vehicle)
+    else if (Job.Type == EProductionType::Vehicle && Job.TargetAsset && OwningBase)
     {
         UE_LOG(LogTemp, Display, TEXT("[VEHICLE] Construction complete → Ship ready from %s"), *FacilityDefinition->FacilityName.ToString());
 
-        if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+        if (UStrategyEventDispatcher* Disp = OwningBase->GetWorld()->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
             Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // UI refresh placeholder
     }
-    else if (Job.Type == EProductionType::Facility)
+    else if (Job.Type == EProductionType::Facility && Job.TargetAsset && OwningBase)
     {
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
     }
@@ -215,10 +232,4 @@ bool UStrategyFacility::CancelConstruction(int32 JobIndex, bool bFullRefund)
 void UStrategyFacility::AdvanceConstructionDay()
 {
     AdvanceProductionDay();   // unified
-}
-
-void UStrategyFacility::SimulateDaily()
-{
-    AdvanceConstructionDay();
-    SimulateDailyRepair(OwningBase);
 }
