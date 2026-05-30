@@ -6,11 +6,10 @@
 #include "UFacilityDefinition.h"
 #include "UStrategyFacility.generated.h"
 
+// Forward declarations only
 class UStrategyVehicle;
 class UStrategySoldier;
 class UStrategyBase;
-class UItemDefinition;
-class UResearchTechDefinition;
 class USoldierClassDefinition;
 class UVehicleDefinition;
 
