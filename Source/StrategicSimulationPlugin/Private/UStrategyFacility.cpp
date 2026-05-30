@@ -166,7 +166,6 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === SAFE, MODULAR DELEGATION — NO TRANSIENT CONTEXT PROBLEMS ===
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
 
     if (Job.Type == EProductionType::Soldier)
@@ -179,7 +178,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         if (SoldierMgr)
         {
             SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
-            // All broadcasts (OnSoldierListChanged, OnSoldierRecruited, OnSoldierLoadoutChanged) happen safely inside the manager
+            // All broadcasts happen safely inside the manager (no transient facility context)
         }
     }
     else if (Job.Type == EProductionType::Vehicle)
@@ -189,7 +188,6 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         {
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
 
-            // Your suggested safe outer (avoids ternary type mismatch)
             UObject* Outer = GI ? static_cast<UObject*>(GI) : static_cast<UObject*>(this);
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
 

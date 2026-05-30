@@ -103,13 +103,13 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
 
 void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset)
 {
-    if (!Base) return;
+    if (!SoldierClassAsset) return;
 
     USoldierClassDefinition* ClassDef = Cast<USoldierClassDefinition>(SoldierClassAsset);
     if (!ClassDef)
     {
-        // Your original fallback (kept verbatim)
-        if (UStrategyCampaignSubsystem* Campaign = Base->GetWorld()->GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+        // Safe fallback (no Base->GetWorld() dependency)
+        if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
         {
             if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
                 if (DB->AvailableSoldierClasses.Num() > 0)
@@ -123,26 +123,19 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
         return;
     }
 
-    // === MERGED FIX: Wire directly to the full working RecruitSoldier logic ===
-    // This restores EXACT pre-queue behavior: full soldier creation, gear, stats, name,
-    // operational/power/capacity checks, roster add, full broadcasts, logs, etc.
+    // Full creation + roster add (safe)
     UStrategySoldier* NewSoldier = RecruitSoldier(EFactionType::Enemy, ClassDef, Base);
 
     if (NewSoldier)
     {
-        // Training-specific extra events (exactly what UI expects)
-        UWorld* World = Base->GetWorld();
-        if (World)
+        // Safe dispatcher access — use the manager's own GameInstance (never relies on transient facility)
+        if (UStrategyEventDispatcher* Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
         {
-            if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-            {
-                Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
-                // OnSoldierRecruited + full OnSoldierListChanged (with array) already fired inside RecruitSoldier
-            }
+            Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
         }
 
-        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ Soldier trained + FULL LIST broadcast to UI"));
-        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained...")); // matches the exact message you want to see
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained + FULL LIST broadcast to UI"));
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
     }
 }
 
