@@ -5,26 +5,45 @@
 #include "StrategicSimulationTypes.h"
 #include "UFacilityDefinition.h"
 #include "UStrategyFacility.generated.h"
-// #include "UStrategyBase.h"   ← Removed to break circular dependency
 
-// Forward declaration - this is the correct way in Unreal
-class UStrategyBase;
 class UStrategyVehicle;
 class UStrategySoldier;
+class UStrategyBase;
+class UItemDefinition;
+class UResearchTechDefinition;
+class USoldierClassDefinition;
+class UVehicleDefinition;
+
+UENUM(BlueprintType)
+enum class EProductionType : uint8
+{
+    None = 0,
+    Soldier = 1,
+    Vehicle = 2,
+    Item = 3,
+    Research = 4,
+    Facility = 5
+};
 
 USTRUCT(BlueprintType)
-struct FConstructionJob
+struct FProductionJob
 {
     GENERATED_BODY()
 
     UPROPERTY()
-    UFacilityDefinition* FacilityDef = nullptr;
+    EProductionType Type = EProductionType::None;
+
+    UPROPERTY()
+    UObject* TargetAsset = nullptr;          // SoldierClass, VehicleDef, ItemDef, etc.
 
     UPROPERTY()
     int32 RemainingDays = 0;
 
     UPROPERTY()
-    bool bIsPaused = false;
+    float SpeedMultiplier = 1.0f;
+
+    UPROPERTY()
+    UStrategyBase* AssignedBase = nullptr;
 };
 
 UCLASS(BlueprintType)
@@ -34,37 +53,53 @@ class STRATEGICSIMULATIONPLUGIN_API UStrategyFacility : public UObject
 
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Facility")
-    UFacilityDefinition* FacilityDefinition = nullptr;
+    UFacilityDefinition* FacilityDefinition;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Status")
+    bool bIsOperational = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Build")
+    int32 BuildProgressDays = 0;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ownership")
     UStrategyBase* OwningBase = nullptr;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Build")
-    int32 BuildProgressDays = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
-    bool bIsOperational = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Power")
     int32 CurrentPowerDraw = 0;
 
+    // === UNIFIED PRODUCTION QUEUE ===
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Production")
+    TArray<FProductionJob> ActiveProductionJobs;
+
+    // Existing
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hanger")
     TArray<class UStrategyVehicle*> ParkedVehicles;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Barracks")
     TArray<class UStrategySoldier*> ParkedSoldiers;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Construction")
-    TArray<FConstructionJob> ActiveConstructionJobs;
+    /** Full daily simulation (repair + production + construction) */
+    UFUNCTION(BlueprintCallable, Category = "Simulation")
+    void SimulateDaily();
 
-    /** Simulate one day of repairs for parked vehicles in this base */
+    /** Legacy alias for compatibility */
     UFUNCTION(BlueprintCallable, Category = "Repair")
     void SimulateDailyRepair(UStrategyBase* InOwningBase);
 
-    // Queue functions
-    UFUNCTION(BlueprintCallable, Category = "Construction")
-    bool CanQueueMoreOfType(EFacilityType Type) const;
+    // === PRODUCTION API ===
+    UFUNCTION(BlueprintCallable, Category = "Production")
+    bool StartProduction(EProductionType Type, UObject* TargetAsset, int32 BaseDays);
 
+    UFUNCTION(BlueprintCallable, Category = "Production")
+    void AdvanceProductionDay();
+
+    UFUNCTION(BlueprintCallable, Category = "Production")
+    bool HasFreeProductionSlot() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Production")
+    int32 GetAvailableProductionSlots() const;
+
+    // Construction (kept exactly as before)
     UFUNCTION(BlueprintCallable, Category = "Construction")
     bool StartConstruction(UFacilityDefinition* Def);
 
@@ -74,6 +109,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Construction")
     bool CancelConstruction(int32 JobIndex, bool bFullRefund = true);
 
-    UFUNCTION(BlueprintCallable, Category = "Construction")
-    void SimulateDaily();
+    // Helpers
+    bool CanTrainMoreSoldiers() const { return HasFreeProductionSlot() && FacilityDefinition && FacilityDefinition->FacilityType == EFacilityType::LivingQuarters; }
+    bool CanBuildMoreVehicles() const { return HasFreeProductionSlot() && FacilityDefinition && FacilityDefinition->FacilityType == EFacilityType::Hanger; }
+
+private:
+    void CompleteProductionJob(int32 Index);
 };
