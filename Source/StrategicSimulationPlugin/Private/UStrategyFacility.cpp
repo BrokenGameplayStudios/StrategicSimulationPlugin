@@ -7,16 +7,15 @@
 #include "UResourceManagerSubsystem.h"
 #include "Engine/World.h"
 
-void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
+void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
 {
-    if (!FacilityDefinition || !bIsOperational || !OwningBase)
+    if (!FacilityDefinition || !bIsOperational || !InOwningBase)
         return;
 
-    // Change from Display to Verbose so it doesn't spam unless you want to see it
     UE_LOG(LogTemp, Verbose, TEXT("[FACILITY TICK] %s (%s) in base '%s' is operational — processing daily simulation"),
         *FacilityDefinition->FacilityName.ToString(),
         *UEnum::GetValueAsString(FacilityDefinition->FacilityType),
-        *OwningBase->BaseName.ToString());
+        *InOwningBase->BaseName.ToString());
 
     // === VEHICLE REPAIR ===
     if (FacilityDefinition->RepairHealthPerDay > 0 && FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
@@ -26,7 +25,7 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
         UE_LOG(LogTemp, Verbose, TEXT("[REPAIR TICK] Vehicle Repair Shop can repair up to %d vehicles (+%d HP each)"),
             FacilityDefinition->Capacity, FacilityDefinition->RepairHealthPerDay);
 
-        for (UStrategyFacility* Hanger : OwningBase->Facilities)
+        for (UStrategyFacility* Hanger : InOwningBase->Facilities)
         {
             if (!Hanger || !Hanger->FacilityDefinition || Hanger->FacilityDefinition->FacilityType != EFacilityType::Hanger)
                 continue;
@@ -60,7 +59,7 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
         }
     }
 
-    // === SOLDIER MEDICAL HEALING (exact parallel to vehicle repair) ===
+    // === SOLDIER MEDICAL HEALING ===
     if (FacilityDefinition->FacilityType == EFacilityType::Medical)
     {
         int32 HealsRemaining = FacilityDefinition->Capacity;
@@ -68,20 +67,18 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* OwningBase)
         UE_LOG(LogTemp, Verbose, TEXT("[MEDICAL TICK] Medical Bay can heal up to %d soldiers (+%d HP each)"),
             FacilityDefinition->Capacity, FacilityDefinition->RepairHealthPerDay);
 
-        for (UStrategySoldier* Soldier : OwningBase->GetStationedSoldiers())
+        for (UStrategySoldier* Soldier : InOwningBase->GetStationedSoldiers())
         {
             if (!Soldier || !Soldier->NeedsHealing() || HealsRemaining <= 0)
                 continue;
 
-            Soldier->Heal(FacilityDefinition->RepairHealthPerDay);   // uses same per-day value as vehicles
-
+            Soldier->Heal(FacilityDefinition->RepairHealthPerDay);
             HealsRemaining--;
         }
     }
 }
 
-// === NEW CONSTRUCTION QUEUE FUNCTIONS (added on top of your code) ===
-
+// Construction Queue (added on top of your original code)
 bool UStrategyFacility::CanQueueMoreOfType(EFacilityType Type) const
 {
     int32 CurrentCount = 0;
@@ -150,13 +147,11 @@ bool UStrategyFacility::CancelConstruction(int32 JobIndex, bool bFullRefund)
     UFacilityDefinition* Def = ActiveConstructionJobs[JobIndex].FacilityDef;
     if (bFullRefund && Def && OwningBase)
     {
-        // Safe version that compiles with your current UStrategyBase
         if (UWorld* World = OwningBase->GetWorld())
         {
             if (UResourceManagerSubsystem* ResMgr = World->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>())
             {
-                // TODO: Replace EFactionType::Enemy with real faction once UStrategyBase stores it
-                ResMgr->AddResources(EFactionType::Enemy, Def->BuildCost);
+                ResMgr->AddResources(EFactionType::Enemy, Def->BuildCost); // TODO: Change to OwningBase->OwningFaction later
                 UE_LOG(LogTemp, Display, TEXT("[BUILD] Cancelled %s — full refund issued"), *Def->FacilityName.ToString());
             }
         }
@@ -168,6 +163,6 @@ bool UStrategyFacility::CancelConstruction(int32 JobIndex, bool bFullRefund)
 
 void UStrategyFacility::SimulateDaily()
 {
-    AdvanceConstructionDay();           // process build queue
-    SimulateDailyRepair(OwningBase);    // your original daily repair/healing logic (unchanged)
+    AdvanceConstructionDay();
+    SimulateDailyRepair(OwningBase);
 }

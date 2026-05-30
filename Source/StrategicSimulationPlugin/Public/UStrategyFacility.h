@@ -4,9 +4,11 @@
 #include "UObject/NoExportTypes.h"
 #include "StrategicSimulationTypes.h"
 #include "UFacilityDefinition.h"
-#include "UStrategyBase.h"
 #include "UStrategyFacility.generated.h"
+// #include "UStrategyBase.h"   ← Removed to break circular dependency
 
+// Forward declaration - this is the correct way in Unreal
+class UStrategyBase;
 class UStrategyVehicle;
 class UStrategySoldier;
 
@@ -32,10 +34,10 @@ class STRATEGICSIMULATIONPLUGIN_API UStrategyFacility : public UObject
 
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Facility")
-    UFacilityDefinition* FacilityDefinition;
+    UFacilityDefinition* FacilityDefinition = nullptr;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ownership")
-    UStrategyBase* OwningBase = nullptr;   // ← Added to fix all OwningBase errors
+    UStrategyBase* OwningBase = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Build")
     int32 BuildProgressDays = 0;
@@ -49,19 +51,17 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hanger")
     TArray<class UStrategyVehicle*> ParkedVehicles;
 
-    /** Soldiers currently stationed in this barracks (parallel to ParkedVehicles) */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Barracks")
     TArray<class UStrategySoldier*> ParkedSoldiers;
 
-    // === NEW: Construction Queue System (added, nothing removed) ===
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Construction")
     TArray<FConstructionJob> ActiveConstructionJobs;
 
     /** Simulate one day of repairs for parked vehicles in this base */
     UFUNCTION(BlueprintCallable, Category = "Repair")
-    void SimulateDailyRepair(UStrategyBase* OwningBase);
+    void SimulateDailyRepair(UStrategyBase* InOwningBase);
 
-    // === Queue Management (new) ===
+    // Queue functions
     UFUNCTION(BlueprintCallable, Category = "Construction")
     bool CanQueueMoreOfType(EFacilityType Type) const;
 
