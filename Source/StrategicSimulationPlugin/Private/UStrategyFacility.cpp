@@ -166,20 +166,20 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === MINIMAL SAFE DELEGATION — CACHED GI TO AVOID TRANSIENT CRASH ===
-    UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
-
+    // === ULTRA-MINIMAL DELEGATION — NO CONTEXT CALLS IN TRANSIENT FACILITY ===
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
-        USoldierManagerSubsystem* SoldierMgr = GI ? GI->GetSubsystem<USoldierManagerSubsystem>() : nullptr;
-        if (!SoldierMgr) SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
-
-        if (SoldierMgr)
+        // Delegate to stable manager (no GI lookup in the transient facility)
+        UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
+        if (GI)
         {
-            SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
-            // All broadcasts happen safely inside the stable manager
+            if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
+            {
+                SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
+                // Broadcasting stays inside the stable manager (safe)
+            }
         }
     }
     else if (Job.Type == EProductionType::Vehicle)
@@ -189,8 +189,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         {
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
 
-            // Safe cached outer (exactly as you suggested)
-            UObject* Outer = GI ? static_cast<UObject*>(GI) : static_cast<UObject*>(this);
+            UObject* Outer = UGameplayStatics::GetGameInstance(this) ? static_cast<UObject*>(UGameplayStatics::GetGameInstance(this)) : static_cast<UObject*>(this);
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
 
             NewVehicle->VehicleDefinition = VehDef;
