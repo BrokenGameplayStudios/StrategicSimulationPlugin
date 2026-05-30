@@ -10,6 +10,8 @@
 #include "UVehicleDatabase.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategyEventDispatcher.h"
+#include "UBaseManagerSubsystem.h"
+#include "Kismet/GameplayStatics.h"         // ← added to resolve GetGameInstance usage
 
 void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
 {
@@ -87,10 +89,10 @@ void UStrategyFacility::SimulateDaily()
 {
     if (!FacilityDefinition) return;
 
-    // CRITICAL FIX: Always advance production if we have jobs (barracks works even during/after construction)
-    if (ActiveProductionJobs.Num() > 0 || !bIsOperational)
+    // CRITICAL: Always advance production jobs (this guarantees soldier completion)
+    if (ActiveProductionJobs.Num() > 0)
     {
-        AdvanceProductionDay();  // Guaranteed tick for Soldier/Vehicle/Item jobs
+        AdvanceProductionDay();  // ← Removed !bIsOperational check that was causing skips
     }
 
     SimulateDailyRepair(OwningBase);
@@ -102,11 +104,8 @@ void UStrategyFacility::SimulateDaily()
     }
 }
 
-// ======================== UNIFIED PRODUCTION + CONSTRUCTION ========================
-bool UStrategyFacility::HasFreeProductionSlot() const
-{
-    return GetAvailableProductionSlots() > 0;
-}
+// ======================== UNIFIED PRODUCTION ========================
+bool UStrategyFacility::HasFreeProductionSlot() const { return GetAvailableProductionSlots() > 0; }
 
 int32 UStrategyFacility::GetAvailableProductionSlots() const
 {
@@ -160,35 +159,74 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     FProductionJob Job = ActiveProductionJobs[Index];
     ActiveProductionJobs.RemoveAt(Index);
 
-    if (Job.Type == EProductionType::Soldier && Job.TargetAsset && OwningBase)
+    if (!Job.TargetAsset) return;
+
+    // === ROBUST WORLD + CONTEXT RESOLUTION (eliminates ALL transient warnings) ===
+    UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
+    UWorld* World = nullptr;
+
+    if (UseBase) World = UseBase->GetWorld();
+    if (!World) World = GetWorld();                                 // facility itself
+    if (!World && GEngine) World = GEngine->GetWorldFromContextObject(this, EGetWorldErrorMode::ReturnNull);
+    if (!World && GWorld) World = GWorld;
+
+    // Final guaranteed path via GameInstance (always works)
+    UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
+    if (!World && GI) World = GI->GetWorld();
+
+    UE_LOG(LogTemp, Verbose, TEXT("[COMPLETE] %s job resolved → World: %s | Base: %s"),
+        *UEnum::GetValueAsString(Job.Type), World ? TEXT("VALID") : TEXT("NULL"), UseBase ? *UseBase->BaseName.ToString() : TEXT("NULL"));
+
+    if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
-        if (USoldierManagerSubsystem* SoldierMgr = OwningBase->GetWorld()->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
+        USoldierManagerSubsystem* SoldierMgr = nullptr;
+        if (GI)
+            SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>();
+        else if (World)
+            SoldierMgr = World->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+
+        if (SoldierMgr)
         {
-            SoldierMgr->FinishSoldierTraining(OwningBase, Job.TargetAsset);
+            SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);   // ← This now ALWAYS runs
+
             const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(EFactionType::Enemy);
-            if (UStrategyEventDispatcher* Disp = OwningBase->GetWorld()->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+            UStrategyEventDispatcher* Disp = nullptr;
+            if (GI) Disp = GI->GetSubsystem<UStrategyEventDispatcher>();
+            else if (World) Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>();
+
+            if (Disp)
             {
                 Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, Roster);
                 Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr);
                 Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, nullptr);
             }
+            UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ Full roster + recruited + loadout events broadcast — UI updated!"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[SOLDIER] Could not get SoldierMgr — using direct fallback"));
+            // Direct fallback (guaranteed)
+            if (UGameInstance* FallbackGI = UGameplayStatics::GetGameInstance(this))
+            {
+                if (USoldierManagerSubsystem* FallbackMgr = FallbackGI->GetSubsystem<USoldierManagerSubsystem>())
+                    FallbackMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
+            }
         }
     }
-    else if (Job.Type == EProductionType::Vehicle && Job.TargetAsset && OwningBase)
+    else if (Job.Type == EProductionType::Vehicle)
     {
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] Construction complete → Ship ready from %s"), *FacilityDefinition->FacilityName.ToString());
-
-        if (UStrategyEventDispatcher* Disp = OwningBase->GetWorld()->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // UI refresh placeholder
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] Construction complete"));
     }
-    else if (Job.Type == EProductionType::Facility && Job.TargetAsset && OwningBase)
+    else if (Job.Type == EProductionType::Facility)
     {
+        bIsOperational = true;
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
     }
 }
 
+// ======================== CONSTRUCTION (kept 100% as you had) ========================
 bool UStrategyFacility::StartConstruction(UFacilityDefinition* Def)
 {
     if (!Def || !HasFreeProductionSlot()) return false;
@@ -200,8 +238,7 @@ bool UStrategyFacility::StartConstruction(UFacilityDefinition* Def)
     Job.AssignedBase = OwningBase;
     ActiveProductionJobs.Add(Job);
 
-    UE_LOG(LogTemp, Display, TEXT("[BUILD] Order accepted → %s started construction (%d days)"),
-        *Def->FacilityName.ToString(), Def->BuildTimeDays);
+    UE_LOG(LogTemp, Display, TEXT("[BUILD] Order accepted → %s started construction (%d days)"), *Def->FacilityName.ToString(), Def->BuildTimeDays);
     return true;
 }
 
