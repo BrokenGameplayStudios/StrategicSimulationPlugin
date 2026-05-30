@@ -166,36 +166,25 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === NEW SAFE METHOD: Always use UGameplayStatics for transient facilities ===
-    UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
-    if (!GI && UseBase && UseBase->GetWorld())
+    // === NEW STABLE PATH: Use CampaignSubsystem as the reliable anchor ===
+    UStrategyCampaignSubsystem* Campaign = UGameplayStatics::GetGameInstance(this)
+        ? UGameplayStatics::GetGameInstance(this)->GetSubsystem<UStrategyCampaignSubsystem>()
+        : nullptr;
+
+    if (!Campaign)
     {
-        GI = UseBase->GetWorld()->GetGameInstance();
+        UE_LOG(LogTemp, Warning, TEXT("[COMPLETE] Could not get CampaignSubsystem — skipping job"));
+        return;
     }
 
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
-        USoldierManagerSubsystem* SoldierMgr = nullptr;
-        if (GI) SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>();
-        if (!SoldierMgr) SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
-
-        if (SoldierMgr)
+        if (USoldierManagerSubsystem* SoldierMgr = Campaign->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
         {
             SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
-
-            const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(EFactionType::Enemy);
-            UStrategyEventDispatcher* Disp = GI ? GI->GetSubsystem<UStrategyEventDispatcher>() : nullptr;
-            if (!Disp) Disp = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UStrategyEventDispatcher>();
-
-            if (Disp)
-            {
-                Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, Roster);
-                Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr);
-                Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, nullptr);
-            }
-            UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ Full roster + recruited + loadout events broadcast — UI updated!"));
+            // Broadcasting now happens safely inside FinishSoldierTraining (no transient facility issues)
         }
     }
     else if (Job.Type == EProductionType::Vehicle)
@@ -205,7 +194,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         {
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
 
-            UObject* Outer = GI ? static_cast<UObject*>(GI) : this;
+            UObject* Outer = Campaign->GetGameInstance() ? Campaign->GetGameInstance() : this;
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
 
             NewVehicle->VehicleDefinition = VehDef;
@@ -220,10 +209,8 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s added to hanger '%s' (now %d parked)"),
                 *VehDef->VehicleName.ToString(), *FacilityDefinition->FacilityName.ToString(), ParkedVehicles.Num());
 
-            UStrategyEventDispatcher* Disp = GI ? GI->GetSubsystem<UStrategyEventDispatcher>() : nullptr;
-            if (!Disp) Disp = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UStrategyEventDispatcher>();
-
-            if (Disp)
+            // Broadcasting happens safely via Campaign (or future vehicle manager)
+            if (UStrategyEventDispatcher* Disp = Campaign->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
             {
                 Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // temporary UI refresh
             }
