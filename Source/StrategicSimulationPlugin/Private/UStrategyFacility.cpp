@@ -166,7 +166,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === MINIMAL SAFE DELEGATION — NO TRANSIENT CONTEXT CALLS ===
+    // === MINIMAL SAFE DELEGATION — CACHED GI TO AVOID TRANSIENT CRASH ===
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
 
     if (Job.Type == EProductionType::Soldier)
@@ -189,6 +189,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         {
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
 
+            // Safe cached outer (exactly as you suggested)
             UObject* Outer = GI ? static_cast<UObject*>(GI) : static_cast<UObject*>(this);
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
 
