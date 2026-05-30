@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "StrategicSimulationTypes.h"
-#include "UStrategyFacility.h"          // ← FIXED: Missing include
+#include "UStrategyFacility.h"
 #include "UFacilityDefinition.h"
 #include "UStrategyBase.h"
 #include "UTimeManagerSubsystem.h"
@@ -65,9 +65,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     void ResetAllBases();
 
-    // === NEW: Daily Repair Tick ===
     UFUNCTION(BlueprintCallable, Category = "Repair")
     void SimulateDailyRepairs(EFactionType Faction);
+
+    // === NEW: Queue integration ===
+    UFUNCTION(BlueprintCallable, Category = "Construction")
+    void AdvanceAllConstruction();
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnFacilityListChanged OnFacilityListChanged;

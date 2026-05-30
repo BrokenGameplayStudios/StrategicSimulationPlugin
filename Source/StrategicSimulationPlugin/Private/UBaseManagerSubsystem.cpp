@@ -218,8 +218,19 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
     NewFacility->BuildProgressDays = FacilityDef->BuildTimeDays;
     NewFacility->bIsOperational = false;
     NewFacility->CurrentPowerDraw = FacilityDef->PowerDraw;
+    NewFacility->OwningBase = ChosenBase;
 
     ChosenBase->AddFacility(NewFacility);
+
+    // === QUEUE INTEGRATION (added) ===
+    if (FacilityDef->BuildTimeDays > 0)
+    {
+        NewFacility->StartConstruction(FacilityDef);
+    }
+    else
+    {
+        NewFacility->bIsOperational = true;
+    }
 
     OnFacilityListChanged.Broadcast(Faction);
 
@@ -356,6 +367,9 @@ void UBaseManagerSubsystem::OnDayPassed(int32 NewDay)
 {
     AdvanceFacilityConstruction(EFactionType::Human);
     AdvanceFacilityConstruction(EFactionType::Enemy);
+    AdvanceAllConstruction();           // NEW: Processes the construction queue every day
+    SimulateDailyRepairs(EFactionType::Human);
+    SimulateDailyRepairs(EFactionType::Enemy);
 }
 
 bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const
@@ -430,8 +444,22 @@ void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
         {
             if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
             {
-                Fac->SimulateDailyRepair(Base);
+                Fac->SimulateDaily();   // This now runs both your repair logic + the new construction queue
             }
         }
     }
+}
+
+// === NEW: Queue advancement (added) ===
+void UBaseManagerSubsystem::AdvanceAllConstruction()
+{
+    for (UStrategyBase* Base : EnemyBases)
+    {
+        for (UStrategyFacility* Fac : Base->Facilities)
+        {
+            if (Fac)
+                Fac->AdvanceConstructionDay();
+        }
+    }
+    // Add HumanBases when you enable player side
 }

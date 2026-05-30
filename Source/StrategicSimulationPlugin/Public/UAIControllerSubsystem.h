@@ -42,4 +42,6 @@ private:
     bool TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase = nullptr);
     bool TryResearch(EFactionType Faction);
     bool TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase);
+    // Queue-aware helpers
+    bool CanBuildMoreOfType(EFactionType Faction, EFacilityType Type, UStrategyBase* TargetBase);
 };

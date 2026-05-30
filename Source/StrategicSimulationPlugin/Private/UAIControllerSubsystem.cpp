@@ -33,6 +33,7 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
     if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
     {
         BaseMgr->AdvanceFacilityConstruction(EFactionType::Enemy);
+        BaseMgr->AdvanceAllConstruction();   // NEW: Queue processing
     }
 
     RunAIForFaction(EFactionType::Enemy, NewDay);
