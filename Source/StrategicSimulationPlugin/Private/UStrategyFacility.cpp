@@ -166,27 +166,22 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === ROBUST GAME INSTANCE RESOLUTION (identical to soldier path) ===
-    UGameInstance* GI = nullptr;
+    // === SAFE GAME INSTANCE RESOLUTION (identical pattern to working soldier code) ===
+    UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
     UWorld* World = nullptr;
-
     if (UseBase) World = UseBase->GetWorld();
     if (!World) World = GetWorld();
     if (!World && GEngine) World = GEngine->GetWorldFromContextObject(this, EGetWorldErrorMode::ReturnNull);
     if (!World && GWorld) World = GWorld;
-
-    if (World) GI = World->GetGameInstance();
-    if (!GI) GI = GetGameInstance();
-    if (!GI) GI = UGameplayStatics::GetGameInstance(this);   // last resort
+    if (!GI && World) GI = World->GetGameInstance();
 
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
-        USoldierManagerSubsystem* SoldierMgr = nullptr;
-        if (GI) SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>();
-        else if (World) SoldierMgr = World->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-        if (!SoldierMgr) SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+        USoldierManagerSubsystem* SoldierMgr = GI ? GI->GetSubsystem<USoldierManagerSubsystem>() : nullptr;
+        if (!SoldierMgr && World) SoldierMgr = World->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+        if (!SoldierMgr) SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
 
         if (SoldierMgr)
         {
@@ -195,7 +190,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
             const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(EFactionType::Enemy);
             UStrategyEventDispatcher* Disp = GI ? GI->GetSubsystem<UStrategyEventDispatcher>() : nullptr;
             if (!Disp && World) Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>();
-            if (!Disp) Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>();
+            if (!Disp) Disp = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UStrategyEventDispatcher>();
 
             if (Disp)
             {
@@ -213,8 +208,8 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         {
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
 
-            // FIXED: Safe outer selection (matches soldier style exactly)
-            UObject* Outer = GI ? GI : this;
+            // FIXED: Safe outer for NewObject (GI or this)
+            UObject* Outer = GI ? static_cast<UObject*>(GI) : this;
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
 
             NewVehicle->VehicleDefinition = VehDef;
@@ -229,14 +224,13 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s added to hanger '%s' (now %d parked)"),
                 *VehDef->VehicleName.ToString(), *FacilityDefinition->FacilityName.ToString(), ParkedVehicles.Num());
 
-            // Same dispatcher pattern as soldier
             UStrategyEventDispatcher* Disp = GI ? GI->GetSubsystem<UStrategyEventDispatcher>() : nullptr;
             if (!Disp && World) Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>();
-            if (!Disp) Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>();
+            if (!Disp) Disp = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UStrategyEventDispatcher>();
 
             if (Disp)
             {
-                Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // temporary refresh
+                Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // temporary UI refresh
             }
         }
     }
