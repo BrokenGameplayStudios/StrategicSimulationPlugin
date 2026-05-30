@@ -3,15 +3,8 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "StrategicSimulationTypes.h"
-#include "UStrategySoldier.h"
-#include "USoldierClassDefinition.h"
-#include "Delegates/DelegateCombinations.h"
+#include "UStrategyEventDispatcher.h"
 #include "USoldierManagerSubsystem.generated.h"
-
-// Forward declaration — fixes circular dependency with UStrategyBase / CampaignSubsystem
-class UStrategyBase;
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSoldierListChanged, EFactionType, Faction);
 
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API USoldierManagerSubsystem : public UGameInstanceSubsystem
@@ -21,38 +14,31 @@ class STRATEGICSIMULATIONPLUGIN_API USoldierManagerSubsystem : public UGameInsta
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-    /**
-     * Recruit a soldier for the given faction and class definition to a SPECIFIC base.
-     * TargetBase is now required for per-base barracks capacity checks.
-     * Falls back gracefully if nullptr (uses first available base for that faction).
-     */
-    UFUNCTION(BlueprintCallable, Category = "Soldiers")
-    UStrategySoldier* RecruitSoldier(EFactionType Faction, USoldierClassDefinition* ClassDef, UStrategyBase* TargetBase = nullptr);
+    UFUNCTION(BlueprintCallable, Category = "Soldier")
+    UStrategySoldier* RecruitSoldier(EFactionType Faction, USoldierClassDefinition* ClassDef, UStrategyBase* TargetBase);
 
-    UFUNCTION(BlueprintCallable, Category = "Soldiers")
+    UFUNCTION(BlueprintCallable, Category = "Soldier")
+    void FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset);
+
+    UFUNCTION(BlueprintCallable, Category = "Soldier")
     void DismissSoldier(UStrategySoldier* Soldier);
 
-    UFUNCTION(BlueprintCallable, Category = "Soldiers")
-    TArray<UStrategySoldier*> GetRoster(EFactionType Faction) const;
+    UFUNCTION(BlueprintCallable, Category = "Soldier")
+    const TArray<UStrategySoldier*>& GetRoster(EFactionType Faction) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Soldier")
+    int32 GetNumSoldiersStationedAt(UStrategyBase* Base, EFactionType Faction) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Soldier")
+    void BroadcastSoldierListChanged(EFactionType Faction);
 
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void Debug_PrintTeamRoster(EFactionType Faction) const;
 
-    /** Returns the number of soldiers currently stationed at a specific base (per-base capacity helper) */
-    UFUNCTION(BlueprintCallable, Category = "Soldiers")
-    int32 GetNumSoldiersStationedAt(UStrategyBase* Base, EFactionType Faction) const;
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnSoldierListChanged OnSoldierListChanged;
-
-    // Called when training queue completes
-    UFUNCTION(BlueprintCallable, Category = "Soldier")
-    void FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset);
-
 private:
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Soldiers")
+    UPROPERTY(VisibleAnywhere, Transient)
     TArray<UStrategySoldier*> HumanRoster;
 
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Soldiers")
+    UPROPERTY(VisibleAnywhere, Transient)
     TArray<UStrategySoldier*> EnemyRoster;
 };

@@ -15,24 +15,14 @@ void USoldierManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
 
-    // Human initial base (if any)
     UStrategyBase* HumanBase = nullptr;
-    if (BaseMgr)
-    {
-        const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(EFactionType::Human);
-        if (!Bases.IsEmpty())
-            HumanBase = Bases[0];
-    }
+    if (BaseMgr && !BaseMgr->GetBases(EFactionType::Human).IsEmpty())
+        HumanBase = BaseMgr->GetBases(EFactionType::Human)[0];
     RecruitSoldier(EFactionType::Human, DefaultClass, HumanBase);
 
-    // Enemy initial base (if any)
     UStrategyBase* EnemyBase = nullptr;
-    if (BaseMgr)
-    {
-        const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(EFactionType::Enemy);
-        if (!Bases.IsEmpty())
-            EnemyBase = Bases[0];
-    }
+    if (BaseMgr && !BaseMgr->GetBases(EFactionType::Enemy).IsEmpty())
+        EnemyBase = BaseMgr->GetBases(EFactionType::Enemy)[0];
     RecruitSoldier(EFactionType::Enemy, DefaultClass, EnemyBase);
 
     UE_LOG(LogTemp, Display, TEXT("USoldierManagerSubsystem initialized — rosters created for both factions"));
@@ -42,7 +32,6 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
 {
     if (!ClassDef) return nullptr;
 
-    // Fallback: pick first available base for this faction if none provided
     if (!TargetBase)
     {
         UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -50,15 +39,20 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
         {
             const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
             if (!Bases.IsEmpty())
-            {
                 TargetBase = Bases[0];
-            }
         }
     }
 
-    // === PER-BASE CAPACITY CHECK (strictly per-base now) ===
+    // === RESTORED: Base must be operational and have power ===
     if (TargetBase)
     {
+        if (!TargetBase->IsOperational() || TargetBase->GetNetPower() < 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s cannot recruit — base '%s' is not operational or has no power (%d)"),
+                *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString(), TargetBase->GetNetPower());
+            return nullptr;
+        }
+
         int32 CurrentCapacity = TargetBase->GetTotalCapacityForType(EFacilityType::LivingQuarters);
         int32 CurrentSoldiers = GetNumSoldiersStationedAt(TargetBase, Faction);
 
@@ -76,9 +70,7 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
             return nullptr;
         }
     }
-    // (if no base yet, we still allow creation for early-game init)
 
-    // === SOLDIER CREATION (original logic — unchanged) ===
     UStrategySoldier* NewSoldier = NewObject<UStrategySoldier>();
     NewSoldier->SoldierName = FString::Printf(TEXT("%s %s"),
         Faction == EFactionType::Human ? TEXT("Sgt.") : TEXT("Overlord"),
@@ -86,24 +78,20 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
     NewSoldier->ClassDefinition = ClassDef;
     NewSoldier->CurrentStats = ClassDef->BaseStats;
     NewSoldier->XP = ClassDef->StartingXP;
+    NewSoldier->StationedBase = TargetBase;
 
     for (const TSoftObjectPtr<UItemDefinition>& Gear : ClassDef->StartingGear)
     {
         if (UItemDefinition* Item = Gear.Get())
-        {
             NewSoldier->CurrentLoadout.Add(Item);
-        }
     }
-
-    // NEW: Assign to the target base for location tracking
-    NewSoldier->StationedBase = TargetBase;
 
     if (Faction == EFactionType::Human)
         HumanRoster.Add(NewSoldier);
     else
         EnemyRoster.Add(NewSoldier);
 
-    OnSoldierListChanged.Broadcast(Faction);
+    BroadcastSoldierListChanged(Faction);
 
     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
         EventDisp->OnSoldierRecruited.Broadcast(Faction, NewSoldier);
@@ -113,48 +101,6 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
         *NewSoldier->SoldierName, *UEnum::GetValueAsString(Faction), *BaseNameStr, NewSoldier->CurrentLoadout.Num());
 
     return NewSoldier;
-}
-
-// === NEW HELPER (add this at the bottom of the file) ===
-int32 USoldierManagerSubsystem::GetNumSoldiersStationedAt(UStrategyBase* Base, EFactionType Faction) const
-{
-    if (!Base) return 0;
-
-    const TArray<UStrategySoldier*>& Roster = (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
-    int32 Count = 0;
-    for (UStrategySoldier* Soldier : Roster)
-    {
-        if (Soldier && Soldier->StationedBase == Base)
-        {
-            Count++;
-        }
-    }
-    return Count;
-}
-void USoldierManagerSubsystem::DismissSoldier(UStrategySoldier* Soldier)
-{
-    if (!Soldier) return;
-    HumanRoster.Remove(Soldier);
-    EnemyRoster.Remove(Soldier);
-
-    OnSoldierListChanged.Broadcast(EFactionType::Human);
-    OnSoldierListChanged.Broadcast(EFactionType::Enemy);
-}
-
-TArray<UStrategySoldier*> USoldierManagerSubsystem::GetRoster(EFactionType Faction) const
-{
-    return (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
-}
-
-void USoldierManagerSubsystem::Debug_PrintTeamRoster(EFactionType Faction) const
-{
-    UE_LOG(LogTemp, Display, TEXT("=== %s TEAM ROSTER ==="), *UEnum::GetValueAsString(Faction));
-    const TArray<UStrategySoldier*>& Roster = (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
-    for (UStrategySoldier* Soldier : Roster)
-    {
-        if (Soldier) Soldier->PrintInfo();
-    }
-    UE_LOG(LogTemp, Display, TEXT("=== END %s ROSTER ===\n"), *UEnum::GetValueAsString(Faction));
 }
 
 void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset)
@@ -176,6 +122,7 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
     NewSoldier->ClassDefinition = ClassDef;
     NewSoldier->CurrentStats.Health = 10;
     NewSoldier->HomeBarracks = Base->Facilities.Num() > 0 ? Base->Facilities[0] : nullptr;
+    NewSoldier->StationedBase = Base;
 
     EnemyRoster.Add(NewSoldier);
 
@@ -185,10 +132,52 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
         if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
         {
             Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, NewSoldier);
-            Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, EnemyRoster);   // full list for UI refresh
+            Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, EnemyRoster);   // full list — UI refresh
             Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ New soldier added to roster + BOTH UI events fired"));
+    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ Soldier trained + FULL LIST broadcast to UI (pre-queue behavior restored)"));
+}
+
+void USoldierManagerSubsystem::DismissSoldier(UStrategySoldier* Soldier)
+{
+    if (!Soldier) return;
+    HumanRoster.Remove(Soldier);
+    EnemyRoster.Remove(Soldier);
+
+    BroadcastSoldierListChanged(EFactionType::Human);
+    BroadcastSoldierListChanged(EFactionType::Enemy);
+}
+
+int32 USoldierManagerSubsystem::GetNumSoldiersStationedAt(UStrategyBase* Base, EFactionType Faction) const
+{
+    if (!Base) return 0;
+    const TArray<UStrategySoldier*>& Roster = (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
+    int32 Count = 0;
+    for (UStrategySoldier* S : Roster)
+        if (S && S->StationedBase == Base) Count++;
+    return Count;
+}
+
+const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetRoster(EFactionType Faction) const
+{
+    return (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
+}
+
+void USoldierManagerSubsystem::Debug_PrintTeamRoster(EFactionType Faction) const
+{
+    UE_LOG(LogTemp, Display, TEXT("=== %s TEAM ROSTER ==="), *UEnum::GetValueAsString(Faction));
+    const TArray<UStrategySoldier*>& Roster = (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
+    for (UStrategySoldier* S : Roster)
+        if (S) S->PrintInfo();
+    UE_LOG(LogTemp, Display, TEXT("=== END %s ROSTER ===\n"), *UEnum::GetValueAsString(Faction));
+}
+
+void USoldierManagerSubsystem::BroadcastSoldierListChanged(EFactionType Faction)
+{
+    if (UStrategyEventDispatcher* Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
+        Disp->OnSoldierListChanged.Broadcast(Faction, Faction == EFactionType::Enemy ? EnemyRoster : HumanRoster);
+    }
 }
