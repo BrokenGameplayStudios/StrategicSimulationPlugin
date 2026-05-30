@@ -166,7 +166,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === SAFE GAME INSTANCE RESOLUTION (identical pattern to working soldier code) ===
+    // === CLEAN & ROBUST GAME INSTANCE RESOLUTION (no more warnings) ===
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
     UWorld* World = nullptr;
     if (UseBase) World = UseBase->GetWorld();
@@ -208,7 +208,6 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         {
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
 
-            // FIXED: Safe outer for NewObject (GI or this)
             UObject* Outer = GI ? static_cast<UObject*>(GI) : this;
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
 
