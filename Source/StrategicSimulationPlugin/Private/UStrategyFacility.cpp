@@ -165,50 +165,10 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     if (!Job.TargetAsset) return;
 
-    UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
-
-    // === ULTRA-SAFE DELEGATION — CACHED GI + FULL NULL CHECK ===
-    UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
-
-    if (Job.Type == EProductionType::Soldier)
+    // === DELEGATE TO STABLE PRODUCTION MANAGER (no transient context calls) ===
+    if (UProductionManagerSubsystem* ProdMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UProductionManagerSubsystem>())
     {
-        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
-
-        if (GI)
-        {
-            if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
-            {
-                SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
-            }
-        }
-    }
-    else if (Job.Type == EProductionType::Vehicle)
-    {
-        UVehicleDefinition* VehDef = Cast<UVehicleDefinition>(Job.TargetAsset);
-        if (VehDef && FacilityDefinition && FacilityDefinition->FacilityType == EFacilityType::Hanger)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
-
-            UObject* Outer = GI ? static_cast<UObject*>(GI) : static_cast<UObject*>(this);
-            UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
-
-            NewVehicle->VehicleDefinition = VehDef;
-            NewVehicle->CurrentHanger = this;
-            NewVehicle->HomeHanger = this;
-            NewVehicle->HomeBase = UseBase;
-            NewVehicle->CurrentHealth = VehDef->MaxHealth;
-            NewVehicle->RemainingFuelDays = 30;
-
-            ParkedVehicles.Add(NewVehicle);
-
-            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s added to hanger '%s' (now %d parked)"),
-                *VehDef->VehicleName.ToString(), *FacilityDefinition->FacilityName.ToString(), ParkedVehicles.Num());
-        }
-    }
-    else if (Job.Type == EProductionType::Facility)
-    {
-        bIsOperational = true;
-        UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
+        ProdMgr->CompleteJob(Job, this);
     }
 }
 

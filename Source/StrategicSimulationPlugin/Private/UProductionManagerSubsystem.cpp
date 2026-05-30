@@ -5,7 +5,6 @@
 #include "UStrategyBase.h"
 #include "USoldierClassDefinition.h"
 #include "UVehicleDefinition.h"
-#include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 
 void UProductionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -13,7 +12,7 @@ void UProductionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collectio
     Super::Initialize(Collection);
 }
 
-void UProductionManagerSubsystem::CompleteJob(FProductionJob Job, UStrategyFacility* Facility)
+void UProductionManagerSubsystem::CompleteJob(const FProductionJob& Job, UStrategyFacility* Facility)
 {
     if (!Job.TargetAsset) return;
 
@@ -46,8 +45,7 @@ void UProductionManagerSubsystem::CompleteVehicleJob(const FProductionJob& Job, 
     UVehicleDefinition* VehDef = Cast<UVehicleDefinition>(Job.TargetAsset);
     if (!VehDef || !Facility || Facility->FacilityDefinition->FacilityType != EFacilityType::Hanger) return;
 
-    UGameInstance* GI = GetGameInstance();
-    UObject* Outer = GI ? static_cast<UObject*>(GI) : static_cast<UObject*>(Facility);
+    UObject* Outer = GetGameInstance() ? static_cast<UObject*>(GetGameInstance()) : static_cast<UObject*>(Facility);
 
     UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
     NewVehicle->VehicleDefinition = VehDef;
