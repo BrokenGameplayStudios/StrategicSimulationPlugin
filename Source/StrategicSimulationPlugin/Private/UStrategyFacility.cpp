@@ -166,21 +166,16 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === CLEAN & ROBUST GAME INSTANCE RESOLUTION (no more warnings) ===
+    // === FINAL CLEAN VERSION — NO MORE GetWorldFromContextObject WARNINGS ===
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
-    UWorld* World = nullptr;
-    if (UseBase) World = UseBase->GetWorld();
-    if (!World) World = GetWorld();
-    if (!World && GEngine) World = GEngine->GetWorldFromContextObject(this, EGetWorldErrorMode::ReturnNull);
-    if (!World && GWorld) World = GWorld;
-    if (!GI && World) GI = World->GetGameInstance();
+    if (!GI && UseBase && UseBase->GetWorld())
+        GI = UseBase->GetWorld()->GetGameInstance();
 
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
         USoldierManagerSubsystem* SoldierMgr = GI ? GI->GetSubsystem<USoldierManagerSubsystem>() : nullptr;
-        if (!SoldierMgr && World) SoldierMgr = World->GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
         if (!SoldierMgr) SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
 
         if (SoldierMgr)
@@ -189,7 +184,6 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
             const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(EFactionType::Enemy);
             UStrategyEventDispatcher* Disp = GI ? GI->GetSubsystem<UStrategyEventDispatcher>() : nullptr;
-            if (!Disp && World) Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>();
             if (!Disp) Disp = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UStrategyEventDispatcher>();
 
             if (Disp)
@@ -224,7 +218,6 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
                 *VehDef->VehicleName.ToString(), *FacilityDefinition->FacilityName.ToString(), ParkedVehicles.Num());
 
             UStrategyEventDispatcher* Disp = GI ? GI->GetSubsystem<UStrategyEventDispatcher>() : nullptr;
-            if (!Disp && World) Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>();
             if (!Disp) Disp = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UStrategyEventDispatcher>();
 
             if (Disp)
