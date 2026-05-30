@@ -166,16 +166,19 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === FINAL CLEAN VERSION — NO MORE GetWorldFromContextObject WARNINGS ===
+    // === NEW SAFE METHOD: Always use UGameplayStatics for transient facilities ===
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
     if (!GI && UseBase && UseBase->GetWorld())
+    {
         GI = UseBase->GetWorld()->GetGameInstance();
+    }
 
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
-        USoldierManagerSubsystem* SoldierMgr = GI ? GI->GetSubsystem<USoldierManagerSubsystem>() : nullptr;
+        USoldierManagerSubsystem* SoldierMgr = nullptr;
+        if (GI) SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>();
         if (!SoldierMgr) SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
 
         if (SoldierMgr)
