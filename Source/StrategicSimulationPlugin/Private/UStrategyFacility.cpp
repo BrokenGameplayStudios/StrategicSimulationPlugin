@@ -155,21 +155,11 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         UE_LOG(LogTemp, Display, TEXT("[VEHICLE] Construction complete → Ship ready from %s"), *FacilityDefinition->FacilityName.ToString());
 
         if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // reuse existing event or change to your vehicle one
+            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, nullptr); // UI refresh
     }
     else if (Job.Type == EProductionType::Facility)
     {
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
-    }
-    else if (Job.Type == EProductionType::Research || Job.Type == EProductionType::Item)
-    {
-        if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-        {
-            if (Job.Type == EProductionType::Research)
-                Disp->OnResearchCompleted.Broadcast(EFactionType::Enemy, Cast<UResearchTechDefinition>(Job.TargetAsset));
-            else
-                Disp->OnProductionCompleted.Broadcast(EFactionType::Enemy, Cast<UItemDefinition>(Job.TargetAsset));
-        }
     }
 }
 

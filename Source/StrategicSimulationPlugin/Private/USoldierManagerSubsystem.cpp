@@ -174,7 +174,7 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
 
     UStrategySoldier* NewSoldier = NewObject<UStrategySoldier>();
     NewSoldier->ClassDefinition = ClassDef;
-    NewSoldier->CurrentStats.Health = 10;          // Correct field from GitHub
+    NewSoldier->CurrentStats.Health = 10;
     NewSoldier->HomeBarracks = Base->Facilities.Num() > 0 ? Base->Facilities[0] : nullptr;
 
     EnemyRoster.Add(NewSoldier);
@@ -184,9 +184,11 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
     {
         if (UStrategyEventDispatcher* Disp = World->GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
         {
-            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, NewSoldier);   // Matches your current GitHub dispatcher
+            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, NewSoldier);
+            Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, EnemyRoster);   // full list for UI refresh
+            Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ New soldier added to roster and UI notified"));
+    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] ✅ New soldier added to roster + BOTH UI events fired"));
 }

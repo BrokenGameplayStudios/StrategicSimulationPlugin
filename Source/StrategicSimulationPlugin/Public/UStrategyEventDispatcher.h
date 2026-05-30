@@ -9,14 +9,17 @@
 #include "UStrategyFacility.h"
 #include "UStrategyEventDispatcher.generated.h"
 
-// Ensure the multicast delegate type is declared before use.
+// === ALL EVENTS — perfectly synced with your UPROPERTYs ===
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierRecruited, EFactionType, Faction, UStrategySoldier*, Soldier);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierListChanged, EFactionType, Faction, const TArray<UStrategySoldier*>&, Soldiers);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierLoadoutChanged, EFactionType, Faction, UStrategySoldier*, Soldier);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierDismissed, EFactionType, Faction, UStrategySoldier*, Soldier);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnResearchCompleted, EFactionType, Faction, UResearchTechDefinition*, Tech);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnProductionCompleted, EFactionType, Faction, UItemDefinition*, Item);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnVehicleCompleted, EFactionType, Faction, UStrategyVehicle*, Vehicle);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemProduced, EFactionType, Faction, UItemDefinition*, Item);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnFacilityCompleted, EFactionType, Faction, UStrategyFacility*, Facility);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnProductionCompleted, EFactionType, Faction, UItemDefinition*, Item);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthlyEvent, int32, Month);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierLoadoutChanged, EFactionType, Faction, UStrategySoldier*, Soldier);
 
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UStrategyEventDispatcher : public UGameInstanceSubsystem
@@ -24,10 +27,17 @@ class STRATEGICSIMULATIONPLUGIN_API UStrategyEventDispatcher : public UGameInsta
     GENERATED_BODY()
 
 public:
-    virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+    virtual void Initialize(FSubsystemCollectionBase& Collection) override
+    {
+        Super::Initialize(Collection);
+        UE_LOG(LogTemp, Display, TEXT("UStrategyEventDispatcher initialized — ALL UI events ready"));
+    }
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnSoldierRecruited OnSoldierRecruited;
+
+    UPROPERTY(BlueprintAssignable, Category = "Events")
+    FOnSoldierListChanged OnSoldierListChanged;
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnSoldierDismissed OnSoldierDismissed;
@@ -46,5 +56,4 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnSoldierLoadoutChanged OnSoldierLoadoutChanged;
-
 };
