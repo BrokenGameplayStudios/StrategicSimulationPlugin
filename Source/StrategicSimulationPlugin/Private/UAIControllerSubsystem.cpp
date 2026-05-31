@@ -249,7 +249,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No base with free barracks production slots"));
+    UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] No base with free barracks production slots"));
     return false;
 }
 
