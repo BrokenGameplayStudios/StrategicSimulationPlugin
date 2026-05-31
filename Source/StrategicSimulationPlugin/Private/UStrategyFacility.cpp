@@ -6,14 +6,12 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "UResourceManagerSubsystem.h"
 #include "Engine/World.h"
-#include "Kismet/GameplayStatics.h"
 #include "USoldierClassDatabase.h"
 #include "UVehicleDatabase.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategyEventDispatcher.h"
-#include "UBaseManagerSubsystem.h"
+#include "Kismet/GameplayStatics.h"
 #include "UProductionManagerSubsystem.h"
-
 
 void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
 {
@@ -165,10 +163,51 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     if (!Job.TargetAsset) return;
 
-    // === DELEGATE TO STABLE PRODUCTION MANAGER (no transient context calls) ===
-    if (UProductionManagerSubsystem* ProdMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UProductionManagerSubsystem>())
+    // Determine which base should be used for completion callbacks / ownership.
+    UStrategyBase* UseBase = Job.AssignedBase ? Job.AssignedBase : OwningBase;
+
+    // === MINIMAL SAFE DELEGATION — NO TRANSIENT CONTEXT CALLS ===
+    UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
+
+    if (Job.Type == EProductionType::Soldier)
     {
-        ProdMgr->CompleteJob(Job, this);
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
+
+        if (GI)
+        {
+            if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
+            {
+                SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
+            }
+        }
+    }
+    else if (Job.Type == EProductionType::Vehicle)
+    {
+        UVehicleDefinition* VehDef = Cast<UVehicleDefinition>(Job.TargetAsset);
+        if (VehDef && FacilityDefinition && FacilityDefinition->FacilityType == EFacilityType::Hanger)
+        {
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
+
+            UObject* Outer = GI ? static_cast<UObject*>(GI) : static_cast<UObject*>(this);
+            UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
+
+            NewVehicle->VehicleDefinition = VehDef;
+            NewVehicle->CurrentHanger = this;
+            NewVehicle->HomeHanger = this;
+            NewVehicle->HomeBase = UseBase;
+            NewVehicle->CurrentHealth = VehDef->MaxHealth;
+            NewVehicle->RemainingFuelDays = 30;
+
+            ParkedVehicles.Add(NewVehicle);
+
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s added to hanger '%s' (now %d parked)"),
+                *VehDef->VehicleName.ToString(), *FacilityDefinition->FacilityName.ToString(), ParkedVehicles.Num());
+        }
+    }
+    else if (Job.Type == EProductionType::Facility)
+    {
+        bIsOperational = true;
+        UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
     }
 }
 

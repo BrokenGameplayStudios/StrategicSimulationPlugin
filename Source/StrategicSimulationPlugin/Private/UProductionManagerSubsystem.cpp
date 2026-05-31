@@ -12,7 +12,7 @@ void UProductionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collectio
     Super::Initialize(Collection);
 }
 
-void UProductionManagerSubsystem::CompleteJob(const FProductionJob& Job, UStrategyFacility* Facility)
+void UProductionManagerSubsystem::CompleteJob(FProductionJob Job, UStrategyFacility* Facility)
 {
     if (!Job.TargetAsset) return;
 
