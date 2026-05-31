@@ -162,10 +162,20 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             TryBuildFacility(Faction, EFacilityType::VehicleRepair, Base);
         }
 
+        // === STAGGERED VEHICLE PRODUCTION — every base gets 1 before any gets 2, etc. ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
-            if (TryBuildVehicle(Faction, Base))
-                continue;
+            UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
+            if (TargetBase)
+            {
+                if (TryBuildVehicle(Faction, TargetBase))
+                {
+                    // Optional: log which base we chose for clarity
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued vehicle in base with fewest vehicles ('%s')"),
+                        *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString());
+                    continue;
+                }
+            }
         }
 
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
@@ -283,7 +293,11 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     if (!Campaign) return false;
 
     UVehicleDatabase* VehicleDB = Campaign->VehicleDatabaseAsset.Get();
-    if (!VehicleDB || VehicleDB->AvailableVehicles.Num() == 0) return false;
+    if (!VehicleDB || VehicleDB->AvailableVehicles.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AI] No vehicles available in database for %s"), *UEnum::GetValueAsString(Faction));
+        return false;
+    }
 
     UVehicleDefinition* VehDef = VehicleDB->AvailableVehicles[0].Get();
     if (!VehDef) return false;
@@ -292,8 +306,15 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     if (!ResourceMgr) return false;
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+
     if (Res.Money < VehDef->BuildCost.Money || Res.Supplies < VehDef->BuildCost.Supplies)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s cannot afford vehicle '%s' (needs %d 💰 + %d 📦 | has %d 💰 + %d 📦)"),
+            *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(),
+            VehDef->BuildCost.Money, VehDef->BuildCost.Supplies,
+            Res.Money, Res.Supplies);
         return false;
+    }
 
     for (UStrategyFacility* Hanger : TargetBase->Facilities)
     {
@@ -305,7 +326,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
                 {
                     ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
 
-                    UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s queued vehicle '%s' in hanger (%d days)"),
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued vehicle '%s' in hanger (%d days)"),
                         *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), VehDef->ProductionDays);
                     return true;
                 }
@@ -313,7 +334,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
         }
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[AI] No free hanger production slot"));
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s has operational hanger but no free production slot for vehicle"), *UEnum::GetValueAsString(Faction));
     return false;
 }
 
@@ -556,4 +577,36 @@ void UAIControllerSubsystem::SetAIEnabled(bool bEnable)
 bool UAIControllerSubsystem::IsAIEnabled() const
 {
     return bAIEnabled;
+}
+
+UStrategyBase* UAIControllerSubsystem::GetBaseWithFewestVehicles(EFactionType Faction) const
+{
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return nullptr;
+
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    if (Bases.Num() == 0) return nullptr;
+
+    UStrategyBase* BestBase = nullptr;
+    int32 MinVehicles = INT_MAX;
+
+    for (UStrategyBase* Base : Bases)
+    {
+        int32 ParkedCount = 0;
+        for (UStrategyFacility* Fac : Base->Facilities)
+        {
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+            {
+                ParkedCount += Fac->ParkedVehicles.Num();
+            }
+        }
+
+        if (ParkedCount < MinVehicles)
+        {
+            MinVehicles = ParkedCount;
+            BestBase = Base;
+        }
+    }
+
+    return BestBase;
 }

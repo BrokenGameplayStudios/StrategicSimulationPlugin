@@ -43,4 +43,7 @@ private:
     bool TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase = nullptr);
     bool TryResearch(EFactionType Faction);
     bool TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase);
+
+    /** Returns the base with the fewest parked vehicles (for staggered distribution) */
+    UStrategyBase* GetBaseWithFewestVehicles(EFactionType Faction) const;
 };
