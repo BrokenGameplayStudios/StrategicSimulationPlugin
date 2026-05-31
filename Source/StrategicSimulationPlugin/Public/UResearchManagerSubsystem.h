@@ -35,8 +35,5 @@ public:
     bool HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const;
 
     UFUNCTION(BlueprintCallable, Category = "Research")
-    void AdvanceDay(EFactionType Faction);
-
-    UFUNCTION(BlueprintCallable, Category = "Research")
     void ResetResearch();
 };

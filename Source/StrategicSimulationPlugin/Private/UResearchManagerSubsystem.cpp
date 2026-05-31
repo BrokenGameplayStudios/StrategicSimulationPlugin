@@ -115,12 +115,6 @@ bool UResearchManagerSubsystem::HasCompletedResearch(EFactionType Faction, URese
     return false;
 }
 
-void UResearchManagerSubsystem::AdvanceDay(EFactionType Faction)
-{
-    // No longer needed — daily simulation happens inside UStrategyFacility::SimulateDaily()
-    // Left here for Blueprint compatibility
-}
-
 void UResearchManagerSubsystem::ResetResearch()
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
