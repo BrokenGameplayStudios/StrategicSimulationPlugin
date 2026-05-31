@@ -45,5 +45,8 @@ public:
     USoldierManagerSubsystem* GetSoldierManager() const;
 
 private:
-    void ResolveMissionOutcome(UMissionGroup* Mission);    
+    /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
+    float CalculateFleetEffectiveness(const UMissionGroup* Mission) const;
+
+    void ResolveMissionOutcome(UMissionGroup* Mission);
 };
