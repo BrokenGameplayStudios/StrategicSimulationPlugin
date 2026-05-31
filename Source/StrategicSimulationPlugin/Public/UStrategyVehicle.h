@@ -82,7 +82,4 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void UpdateDamageStateFromHealth();
-
-    UFUNCTION(BlueprintCallable, Category = "Vehicle|Inventory")
-    TArray<UItemDefinition*> GetLoadedWeapons() const;
 };
