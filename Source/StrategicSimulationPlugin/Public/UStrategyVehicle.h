@@ -37,6 +37,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     TArray<class UStrategySoldier*> CurrentPassengers;
 
+    /** Vehicle-specific weapons/gear (rockets, etc.). Populated via research/production later. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Vehicle|Inventory")
+    TArray<TSoftObjectPtr<UItemDefinition>> VehicleInventory;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     int32 RemainingFuelDays;
 
@@ -58,4 +62,7 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void UpdateDamageStateFromHealth();
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Inventory")
+    TArray<UItemDefinition*> GetLoadedWeapons() const;
 };

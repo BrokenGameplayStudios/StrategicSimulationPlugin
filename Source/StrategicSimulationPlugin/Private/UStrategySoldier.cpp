@@ -75,3 +75,25 @@ void UStrategySoldier::PrintInfo() const
         bIsWounded ? TEXT("Yes") : TEXT("No"),
         DaysUntilRecovered);
 }
+
+FSoldierStats UStrategySoldier::GetEffectiveStats() const
+{
+    FSoldierStats Effective = CurrentStats;  // base from class
+    if (!ClassDefinition) return Effective;
+
+    // TODO: later also add class bonuses if any
+
+    for (const TSoftObjectPtr<UItemDefinition>& ItemPtr : CurrentLoadout)
+    {
+        if (UItemDefinition* Item = ItemPtr.Get())
+        {
+            Effective.Aim += Item->AimBonus;      // assuming these fields exist on UItemDefinition
+            Effective.Defense += Item->ArmorBonus;
+            // Add more (Mobility, etc.) as needed
+        }
+    }
+    return Effective;
+}
+
+int32 UStrategySoldier::GetEffectiveAim() const { return GetEffectiveStats().Aim; }
+int32 UStrategySoldier::GetEffectiveDefense() const { return GetEffectiveStats().Defense; }

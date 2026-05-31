@@ -72,4 +72,14 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void PrintInfo() const;
+
+    /** Calculates effective stats incorporating class base + loadout item bonuses (Aim/Armor/etc.). Used by UI + mission sim. */
+    UFUNCTION(BlueprintCallable, Category = "Soldier|Stats")
+    FSoldierStats GetEffectiveStats() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Soldier|Stats")
+    int32 GetEffectiveAim() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Soldier|Stats")
+    int32 GetEffectiveDefense() const;  // Armor bonus primarily
 };

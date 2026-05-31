@@ -3,6 +3,7 @@
 #include "UStrategyFacility.h"
 #include "UMissionGroup.h"
 #include "UFacilityDefinition.h"
+#include "UItemDefinition.h"
 
 UStrategyVehicle::UStrategyVehicle()
 {
@@ -56,4 +57,17 @@ bool UStrategyVehicle::NeedsRepair() const
         return false;
     }
     return bNeeds;
+}
+
+TArray<UItemDefinition*> UStrategyVehicle::GetLoadedWeapons() const
+{
+    TArray<UItemDefinition*> LoadedWeapons;
+    for (const TSoftObjectPtr<UItemDefinition>& ItemPtr : VehicleInventory)
+    {
+        if (UItemDefinition* Item = ItemPtr.Get())
+        {
+            LoadedWeapons.Add(Item);
+        }
+    }
+    return LoadedWeapons;
 }
