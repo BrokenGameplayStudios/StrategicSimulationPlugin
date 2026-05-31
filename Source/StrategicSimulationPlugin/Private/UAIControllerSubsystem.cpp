@@ -50,6 +50,15 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 {
     if (!bAIEnabled || Faction != EFactionType::Enemy) return;
 
+    if (CurrentDay == LastProcessedAIDay)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[AI GUARD] Skipping duplicate AI run for %s on day %d"),
+            *UEnum::GetValueAsString(Faction), CurrentDay);
+        return;
+    }
+
+    LastProcessedAIDay = CurrentDay;
+
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();

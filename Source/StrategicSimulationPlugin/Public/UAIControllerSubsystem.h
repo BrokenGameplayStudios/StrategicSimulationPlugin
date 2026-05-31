@@ -33,6 +33,8 @@ public:
 
 private:
 
+    int32 LastProcessedAIDay = -1;  // Prevents double AI execution on the same day
+
     UPROPERTY(VisibleAnywhere, Category = "AI Control")
     bool bAIEnabled = true;
 

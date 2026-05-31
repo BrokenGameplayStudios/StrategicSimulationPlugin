@@ -49,7 +49,7 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
     {
         if (!TargetBase->IsOperational() || TargetBase->GetNetPower() < 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s cannot recruit — base '%s' is not operational or has no power (%d)"),
+            UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s cannot recruit — base '%s' is not operational or has no power (%d)"),
                 *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString(), TargetBase->GetNetPower());
             return nullptr;
         }
@@ -59,14 +59,14 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
 
         if (CurrentCapacity <= 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s base '%s' has no operational living quarters (0/%d)"),
+            UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s base '%s' has no operational living quarters (0/%d)"),
                 *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString(), CurrentCapacity);
             return nullptr;
         }
 
         if (CurrentSoldiers >= CurrentCapacity)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] %s base '%s' barracks full (%d/%d)"),
+            UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s base '%s' barracks full (%d/%d)"),
                 *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString(), CurrentSoldiers, CurrentCapacity);
             return nullptr;
         }
