@@ -16,13 +16,13 @@ void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMissionManagerSubsystem::OnDayPassed(int32 NewDay)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[MISSION] Day %d — SimulateOneDay() called (ActiveMissions: %d)"), NewDay, ActiveMissions.Num());
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Day %d — SimulateOneDay() called (ActiveMissions: %d)"), NewDay, ActiveMissions.Num());
     SimulateOneDay();
 }
 
 void UMissionManagerSubsystem::SimulateOneDay()
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[MISSION] SimulateOneDay running — %d active missions"), ActiveMissions.Num());
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] SimulateOneDay running — %d active missions"), ActiveMissions.Num());
 
     TArray<UMissionGroup*> ToRemove;
 
@@ -158,7 +158,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
             Vehicle->CurrentHanger = nullptr;
             Vehicle->CurrentMission = nullptr;
             Vehicle->HomeHanger = nullptr;
-            UE_LOG(LogTemp, Warning, TEXT("[MISSION] Vehicle '%s' was DESTROYED — slot freed"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' was DESTROYED — slot freed"), *Vehicle->VehicleDefinition->VehicleName.ToString());
             continue;
         }
 
