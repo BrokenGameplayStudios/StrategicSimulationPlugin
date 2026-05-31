@@ -118,3 +118,20 @@ bool UResourceManagerSubsystem::CanAfford(EFactionType Faction, const FResourceS
     }
     return false; // no resources = can't afford
 }
+
+bool UResourceManagerSubsystem::SubtractResources(EFactionType Faction, const FResourceStockpile& Cost)
+{
+    if (!CanAfford(Faction, Cost))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RESOURCES] %s cannot afford the requested cost!"), *UEnum::GetValueAsString(Faction));
+        return false;
+    }
+
+    FResourceStockpile& Current = FactionResources.FindOrAdd(Faction);
+    Current.Subtract(Cost);
+
+    UE_LOG(LogTemp, Display, TEXT("[RESOURCES] %s spent — Money:%d | Supplies:%d | Metals:%d | Biologicals:%d | Chemicals:%d"),
+        *UEnum::GetValueAsString(Faction), Cost.Money, Cost.Supplies, Cost.Metals, Cost.Biologicals, Cost.Chemicals);
+
+    return true;
+}

@@ -59,15 +59,51 @@ bool UStrategyVehicle::NeedsRepair() const
     return bNeeds;
 }
 
+bool UStrategyVehicle::EquipWeapon(UItemDefinition* Weapon)
+{
+    if (!Weapon || VehicleInventory.Num() >= MaxWeaponSlots)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s cannot equip %s (full or invalid)"),
+            *VehicleDefinition->VehicleName.ToString(), *Weapon->ItemName.ToString());
+        return false;
+    }
+
+    VehicleInventory.Add(Weapon);
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s equipped weapon: %s"),
+        *VehicleDefinition->VehicleName.ToString(), *Weapon->ItemName.ToString());
+    return true;
+}
+
+bool UStrategyVehicle::UnequipWeapon(UItemDefinition* Weapon)
+{
+    if (!Weapon) return false;
+    return VehicleInventory.Remove(Weapon) > 0;
+}
+
 TArray<UItemDefinition*> UStrategyVehicle::GetLoadedWeapons() const
 {
-    TArray<UItemDefinition*> LoadedWeapons;
+    TArray<UItemDefinition*> Loaded;
     for (const TSoftObjectPtr<UItemDefinition>& ItemPtr : VehicleInventory)
     {
         if (UItemDefinition* Item = ItemPtr.Get())
         {
-            LoadedWeapons.Add(Item);
+            Loaded.Add(Item);
         }
     }
-    return LoadedWeapons;
+    return Loaded;
+}
+
+int32 UStrategyVehicle::GetTotalWeaponBonus() const
+{
+    int32 Total = 0;
+    for (const TSoftObjectPtr<UItemDefinition>& ItemPtr : VehicleInventory)
+    {
+        if (UItemDefinition* Item = ItemPtr.Get())
+        {
+            // TODO: later add more fields to UItemDefinition (e.g. VehicleDamageBonus, AccuracyBonus)
+            // For now we just reuse AimBonus as a simple power bonus
+            Total += Item->AimBonus;
+        }
+    }
+    return Total;
 }

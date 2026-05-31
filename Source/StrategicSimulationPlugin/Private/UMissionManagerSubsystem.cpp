@@ -359,6 +359,10 @@ float UMissionManagerSubsystem::CalculateFleetEffectiveness(const UMissionGroup*
             TotalDefense += Stats.Defense;
             SoldierCount++;
         }
+
+        // NEW: Vehicle weapons now boost fleet effectiveness
+        int32 WeaponBonus = Vehicle->GetTotalWeaponBonus();
+        // Add to the final return value later
     }
 
     if (SoldierCount == 0) return 40.0f;
@@ -366,8 +370,8 @@ float UMissionManagerSubsystem::CalculateFleetEffectiveness(const UMissionGroup*
     float AvgAim = (float)TotalAim / SoldierCount;
     float AvgDefense = (float)TotalDefense / SoldierCount;
 
-    // Rough formula — tune as you playtest
-    return FMath::Clamp(AvgAim * 0.6f + AvgDefense * 0.4f + 30.0f, 10.0f, 95.0f);
+    // Final score now includes vehicle weapons
+    return FMath::Clamp(AvgAim * 0.6f + AvgDefense * 0.4f + WeaponBonus * 0.3f + 30.0f, 10.0f, 95.0f);
 }
 
 UResourceManagerSubsystem* UMissionManagerSubsystem::GetResourceManager() const { return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>(); }

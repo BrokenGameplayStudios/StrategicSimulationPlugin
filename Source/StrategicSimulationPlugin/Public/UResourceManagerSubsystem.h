@@ -37,6 +37,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Resources")
     bool CanAfford(EFactionType Faction, const FResourceStockpile& Cost) const;
 
+    /** Subtracts the full cost from the faction (all resource types). Returns false if they couldn't afford it. */
+    UFUNCTION(BlueprintCallable, Category = "Resources")
+    bool SubtractResources(EFactionType Faction, const FResourceStockpile& Cost);
+
     // NEW: Reset to starting resources (used by Campaign ResetSimulation)
     UFUNCTION(BlueprintCallable, Category = "Resources")
     void ResetResources(EFactionType Faction);
