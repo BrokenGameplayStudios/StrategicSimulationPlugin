@@ -14,11 +14,6 @@ void UEngineeringManagerSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 {
     Super::Initialize(Collection);
 
-    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
-    {
-        TimeMgr->OnDayPassed.AddDynamic(this, &UEngineeringManagerSubsystem::OnDayPassed);
-    }
-
     UE_LOG(LogTemp, Display, TEXT("UEngineeringManagerSubsystem initialized — production slots + queuing enabled"));
 }
 
@@ -65,7 +60,7 @@ UActiveProductionJob* UEngineeringManagerSubsystem::StartProduction(EFactionType
     }
     if (!ChosenBase) return nullptr;
 
-    // NEW: Use Workshop Production Slots
+    // Unified system — only facilities control slots now
     for (UStrategyFacility* Workshop : ChosenBase->Facilities)
     {
         if (Workshop && Workshop->FacilityDefinition && Workshop->FacilityDefinition->FacilityType == EFacilityType::Workshop)
@@ -74,106 +69,52 @@ UActiveProductionJob* UEngineeringManagerSubsystem::StartProduction(EFactionType
             {
                 if (Workshop->StartProduction(EProductionType::Item, ItemDef, ItemDef->ProductionDays))
                 {
-                    UActiveProductionJob* NewJob = NewObject<UActiveProductionJob>();
-                    NewJob->ItemToProduce = ItemDef;
-                    NewJob->Quantity = Quantity;
-                    NewJob->RemainingDays = ItemDef->ProductionDays;
-                    NewJob->OwningBase = ChosenBase;
-
-                    if (Faction == EFactionType::Human)
-                        HumanProductionQueue.Add(NewJob);
-                    else
-                        EnemyProductionQueue.Add(NewJob);
-
                     UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] %s started %s x%d in base '%s'"),
                         *UEnum::GetValueAsString(Faction), *ItemDef->ItemName.ToString(), Quantity, *ChosenBase->BaseName.ToString());
-                    return NewJob;
+                    return nullptr;  // UI should call GetActiveProduction() after start
                 }
             }
         }
     }
-
     return nullptr;
 }
 
 TArray<UActiveProductionJob*> UEngineeringManagerSubsystem::GetActiveProduction(EFactionType Faction) const
 {
-    return (Faction == EFactionType::Human) ? HumanProductionQueue : EnemyProductionQueue;
+    TArray<UActiveProductionJob*> Result;
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return Result;
+
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    for (UStrategyBase* Base : Bases)
+    {
+        for (UStrategyFacility* Facility : Base->Facilities)
+        {
+            if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Workshop)
+            {
+                for (const FProductionJob& Job : Facility->ActiveProductionJobs)
+                {
+                    if (Job.Type == EProductionType::Item && Job.TargetAsset)
+                    {
+                        UActiveProductionJob* ActiveJob = NewObject<UActiveProductionJob>(GetTransientPackage());
+                        ActiveJob->ItemToProduce = Cast<UItemDefinition>(Job.TargetAsset);
+                        ActiveJob->Quantity = 1;           // extend FProductionJob later if you need batches
+                        ActiveJob->RemainingDays = Job.RemainingDays;
+                        ActiveJob->bIsCompleted = false;
+                        ActiveJob->bIsQueued = false;
+                        ActiveJob->OwningBase = Base;
+                        Result.Add(ActiveJob);
+                    }
+                }
+            }
+        }
+    }
+    return Result;
 }
 
 bool UEngineeringManagerSubsystem::TryProduce(EFactionType Faction)
 {
     return false; // Now handled by facility queue
-}
-
-void UEngineeringManagerSubsystem::OnDayPassed(int32 NewDay)
-{
-    TArray<UActiveProductionJob*>& HumanQueue = HumanProductionQueue;
-    TArray<UActiveProductionJob*>& EnemyQueue = EnemyProductionQueue;
-
-    // Process Human jobs
-    for (UActiveProductionJob* Job : HumanQueue)
-    {
-        if (Job && !Job->bIsCompleted)
-        {
-            if (Job->bIsQueued)
-            {
-                int32 ActiveCount = 0;
-                for (UActiveProductionJob* J : HumanQueue)
-                {
-                    if (J && J->OwningBase == Job->OwningBase && !J->bIsCompleted && !J->bIsQueued) ActiveCount++;
-                }
-                if (ActiveCount < Job->OwningBase->GetTotalProductionSlots())
-                {
-                    Job->bIsQueued = false;
-                    UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] Queued job started in base '%s'"), *Job->OwningBase->BaseName.ToString());
-                }
-            }
-            else
-            {
-                Job->RemainingDays--;
-                if (Job->RemainingDays <= 0)
-                {
-                    Job->bIsCompleted = true;
-                    UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] Human completed: %s x%d in base '%s'"),
-                        *Job->ItemToProduce->ItemName.ToString(), Job->Quantity,
-                        Job->OwningBase ? *Job->OwningBase->BaseName.ToString() : TEXT("Unknown"));
-                }
-            }
-        }
-    }
-
-    // Process Enemy jobs (identical logic)
-    for (UActiveProductionJob* Job : EnemyQueue)
-    {
-        if (Job && !Job->bIsCompleted)
-        {
-            if (Job->bIsQueued)
-            {
-                int32 ActiveCount = 0;
-                for (UActiveProductionJob* J : EnemyQueue)
-                {
-                    if (J && J->OwningBase == Job->OwningBase && !J->bIsCompleted && !J->bIsQueued) ActiveCount++;
-                }
-                if (ActiveCount < Job->OwningBase->GetTotalProductionSlots())
-                {
-                    Job->bIsQueued = false;
-                    UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] Queued job started in base '%s'"), *Job->OwningBase->BaseName.ToString());
-                }
-            }
-            else
-            {
-                Job->RemainingDays--;
-                if (Job->RemainingDays <= 0)
-                {
-                    Job->bIsCompleted = true;
-                    UE_LOG(LogTemp, Display, TEXT("[PRODUCTION] Enemy completed: %s x%d in base '%s'"),
-                        *Job->ItemToProduce->ItemName.ToString(), Job->Quantity,
-                        Job->OwningBase ? *Job->OwningBase->BaseName.ToString() : TEXT("Unknown"));
-                }
-            }
-        }
-    }
 }
 
 void UEngineeringManagerSubsystem::ResetProduction()

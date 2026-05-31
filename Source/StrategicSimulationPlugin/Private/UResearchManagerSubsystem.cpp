@@ -9,11 +9,6 @@ void UResearchManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
-    {
-        TimeMgr->OnDayPassed.AddDynamic(this, &UResearchManagerSubsystem::OnDayPassed);
-    }
-
     UE_LOG(LogTemp, Display, TEXT("UResearchManagerSubsystem initialized"));
 }
 
@@ -22,30 +17,9 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
     if (!ProjectDef) return nullptr;
 
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return nullptr;
 
-    // IMPROVED: Check ANY base has an operational Laboratory (fixes multi-base issue)
-    bool bHasOperationalLab = false;
-    if (BaseMgr)
-    {
-        const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-        for (UStrategyBase* Base : Bases)
-        {
-            if (Base && Base->HasOperationalFacilityOfType(EFacilityType::Laboratory))
-            {
-                bHasOperationalLab = true;
-                break;
-            }
-        }
-    }
-
-    if (!bHasOperationalLab)
-    {
-        // UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — No operational Research Lab found in any base!"),
-        //     *ProjectDef->ProjectName.ToString());
-        return nullptr;
-    }
-
-    // === NEW UNIFIED QUEUE: Find a Lab and queue it ===
+    // Find any base with an operational Laboratory and free slot
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
         for (UStrategyFacility* Lab : Base->Facilities)
@@ -56,18 +30,16 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
                 {
                     if (Lab->StartProduction(EProductionType::Research, ProjectDef, ProjectDef->ResearchDays))
                     {
+                        // Create dummy object for Blueprint/UI compatibility (no queue)
                         UActiveResearchProject* NewProject = NewObject<UActiveResearchProject>();
                         NewProject->ResearchDefinition = ProjectDef;
                         NewProject->RemainingDays = ProjectDef->ResearchDays;
-
-                        if (Faction == EFactionType::Human)
-                            HumanResearchQueue.Add(NewProject);
-                        else
-                            EnemyResearchQueue.Add(NewProject);
+                        NewProject->bIsCompleted = false;
+                        // NewProject->OwningBase = Base;
 
                         OnResearchListChanged.Broadcast(Faction);
-                        UE_LOG(LogTemp, Display, TEXT("Started research '%s' for %s (%d days)"),
-                            *ProjectDef->ProjectName.ToString(), *UEnum::GetValueAsString(Faction), NewProject->RemainingDays);
+                        UE_LOG(LogTemp, Display, TEXT("[RESEARCH] Started '%s' for %s (%d days) in lab"),
+                            *ProjectDef->ProjectName.ToString(), *UEnum::GetValueAsString(Faction), ProjectDef->ResearchDays);
 
                         return NewProject;
                     }
@@ -76,125 +48,104 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
         }
     }
 
-    // Fallback to old logic if no free slot
-    UActiveResearchProject* NewProject = NewObject<UActiveResearchProject>();
-    NewProject->ResearchDefinition = ProjectDef;
-    NewProject->RemainingDays = ProjectDef->ResearchDays;
-
-    if (Faction == EFactionType::Human)
-        HumanResearchQueue.Add(NewProject);
-    else
-        EnemyResearchQueue.Add(NewProject);
-
-    OnResearchListChanged.Broadcast(Faction);
-    UE_LOG(LogTemp, Display, TEXT("Started research '%s' for %s (%d days)"),
-        *ProjectDef->ProjectName.ToString(), *UEnum::GetValueAsString(Faction), NewProject->RemainingDays);
-
-    return NewProject;
+    UE_LOG(LogTemp, Warning, TEXT("[RESEARCH] Cannot start %s — No free lab slot found!"), *ProjectDef->ProjectName.ToString());
+    return nullptr;
 }
 
 TArray<UActiveResearchProject*> UResearchManagerSubsystem::GetActiveResearch(EFactionType Faction) const
 {
-    return (Faction == EFactionType::Human) ? HumanResearchQueue : EnemyResearchQueue;
-}
+    TArray<UActiveResearchProject*> Result;
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return Result;
 
-void UResearchManagerSubsystem::OnDayPassed(int32 NewDay)
-{
-    for (UActiveResearchProject* Proj : HumanResearchQueue)
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    for (UStrategyBase* Base : Bases)
     {
-        if (Proj && !Proj->bIsCompleted)
+        for (UStrategyFacility* Facility : Base->Facilities)
         {
-            Proj->RemainingDays--;
-            if (Proj->RemainingDays <= 0)
+            if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Laboratory)
             {
-                Proj->bIsCompleted = true;
-                if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-                    EventDisp->OnResearchCompleted.Broadcast(EFactionType::Human, Proj->ResearchDefinition);
-                UE_LOG(LogTemp, Display, TEXT("[RESEARCH] Human completed: %s"), *Proj->ResearchDefinition->ProjectName.ToString());
+                for (const FProductionJob& Job : Facility->ActiveProductionJobs)
+                {
+                    if (Job.Type == EProductionType::Research && Job.TargetAsset)
+                    {
+                        UActiveResearchProject* ActiveProject = NewObject<UActiveResearchProject>(GetTransientPackage());
+                        ActiveProject->ResearchDefinition = Cast<UResearchTechDefinition>(Job.TargetAsset);
+                        ActiveProject->RemainingDays = Job.RemainingDays;
+                        ActiveProject->bIsCompleted = false;
+                        // ActiveProject->OwningBase = Base;
+                        Result.Add(ActiveProject);
+                    }
+                }
             }
         }
     }
-
-    for (UActiveResearchProject* Proj : EnemyResearchQueue)
-    {
-        if (Proj && !Proj->bIsCompleted)
-        {
-            Proj->RemainingDays--;
-            if (Proj->RemainingDays <= 0)
-            {
-                Proj->bIsCompleted = true;
-                if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-                    EventDisp->OnResearchCompleted.Broadcast(EFactionType::Enemy, Proj->ResearchDefinition);
-                UE_LOG(LogTemp, Display, TEXT("[RESEARCH] Enemy completed: %s"), *Proj->ResearchDefinition->ProjectName.ToString());
-            }
-        }
-    }
+    return Result;
 }
 
 bool UResearchManagerSubsystem::IsResearchInProgress(EFactionType Faction, UResearchTechDefinition* Tech) const
 {
     if (!Tech) return false;
 
-    const TArray<UActiveResearchProject*>& Queue = (Faction == EFactionType::Human) ? HumanResearchQueue : EnemyResearchQueue;
-    for (UActiveResearchProject* Proj : Queue)
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return false;
+
+    for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
-        if (Proj && Proj->ResearchDefinition == Tech && !Proj->bIsCompleted)
-            return true;
+        for (UStrategyFacility* Facility : Base->Facilities)
+        {
+            if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Laboratory)
+            {
+                for (const FProductionJob& Job : Facility->ActiveProductionJobs)
+                {
+                    if (Job.Type == EProductionType::Research && Job.TargetAsset == Tech)
+                        return true;
+                }
+            }
+        }
     }
     return false;
 }
 
 bool UResearchManagerSubsystem::HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const
 {
-    if (!Tech) return false;
-
-    const TArray<UActiveResearchProject*>& Queue = (Faction == EFactionType::Human) ? HumanResearchQueue : EnemyResearchQueue;
-    for (UActiveResearchProject* Proj : Queue)
-    {
-        if (Proj && Proj->ResearchDefinition == Tech && Proj->bIsCompleted)
-            return true;
-    }
+    // Note: Since we remove completed jobs immediately, this will almost always be false for in-progress jobs.
+    // If you track completed techs elsewhere (e.g. in a base or player profile), update this function.
+    // For now it returns false — you can extend later if needed.
     return false;
 }
 
 void UResearchManagerSubsystem::AdvanceDay(EFactionType Faction)
 {
-    TArray<UActiveResearchProject*>& Queue = (Faction == EFactionType::Human) ? HumanResearchQueue : EnemyResearchQueue;
-
-    for (UActiveResearchProject* Proj : Queue)
-    {
-        if (Proj && !Proj->bIsCompleted)
-        {
-            Proj->RemainingDays--;
-            UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] %s %s progress: %d days left"),
-                *UEnum::GetValueAsString(Faction), *Proj->ResearchDefinition->ProjectName.ToString(), Proj->RemainingDays);
-
-            if (Proj->RemainingDays <= 0)
-            {
-                Proj->bIsCompleted = true;
-                UE_LOG(LogTemp, Display, TEXT("[RESEARCH] ✅ %s completed research: %s"),
-                    *UEnum::GetValueAsString(Faction), *Proj->ResearchDefinition->ProjectName.ToString());
-            }
-        }
-    }
+    // No longer needed — daily simulation happens inside UStrategyFacility::SimulateDaily()
+    // Left here for Blueprint compatibility
 }
 
 void UResearchManagerSubsystem::ResetResearch()
 {
-    for (UActiveResearchProject* Proj : HumanResearchQueue)
-    {
-        if (Proj) Proj->ConditionalBeginDestroy();
-    }
-    HumanResearchQueue.Empty();
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return;
 
-    for (UActiveResearchProject* Proj : EnemyResearchQueue)
+    // Clear ALL research jobs from every lab
+    for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
     {
-        if (Proj) Proj->ConditionalBeginDestroy();
+        for (UStrategyFacility* Facility : Base->Facilities)
+        {
+            if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Laboratory)
+            {
+                for (int32 i = Facility->ActiveProductionJobs.Num() - 1; i >= 0; --i)
+                {
+                    if (Facility->ActiveProductionJobs[i].Type == EProductionType::Research)
+                    {
+                        Facility->ActiveProductionJobs.RemoveAt(i);
+                    }
+                }
+            }
+        }
     }
-    EnemyResearchQueue.Empty();
 
     OnResearchListChanged.Broadcast(EFactionType::Human);
     OnResearchListChanged.Broadcast(EFactionType::Enemy);
 
-    UE_LOG(LogTemp, Display, TEXT("[RESET] All research cleared for both factions"));
+    UE_LOG(LogTemp, Display, TEXT("[RESET] All research jobs cleared from laboratories"));
 }

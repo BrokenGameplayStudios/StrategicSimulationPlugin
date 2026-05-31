@@ -39,14 +39,4 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Research")
     void ResetResearch();
-
-private:
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Research")
-    TArray<UActiveResearchProject*> HumanResearchQueue;
-
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Research")
-    TArray<UActiveResearchProject*> EnemyResearchQueue;
-
-    UFUNCTION()
-    void OnDayPassed(int32 NewDay);
 };

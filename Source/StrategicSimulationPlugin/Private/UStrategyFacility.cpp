@@ -164,33 +164,21 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     if (!Job.TargetAsset) return;
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
-
-    // === SAFE GAME INSTANCE RETRIEVAL (no more warnings/crash) ===
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
+    if (!GI) return;
 
-    // === SOLDIER ===
+    UE_LOG(LogTemp, Display, TEXT("[COMPLETE] %s production job finishing now!"), *UEnum::GetValueAsString(Job.Type));
+
+    UStrategyEventDispatcher* EventDisp = GI->GetSubsystem<UStrategyEventDispatcher>();
+
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
-
-        USoldierManagerSubsystem* SoldierMgr = GI ? GI->GetSubsystem<USoldierManagerSubsystem>() : nullptr;
-        if (!SoldierMgr)
-        {
-            // One safe fallback (still works after outer fix, but prevents crash)
-            if (UGameInstance* FallbackGI = UGameplayStatics::GetGameInstance(this))
-                SoldierMgr = FallbackGI->GetSubsystem<USoldierManagerSubsystem>();
-        }
-
-        if (SoldierMgr)
+        if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
         {
             SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
         }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[PRODUCTION] SoldierMgr unavailable — soldier not added to roster!"));
-        }
     }
-    // === VEHICLE (already mostly safe — just cleaned up) ===
     else if (Job.Type == EProductionType::Vehicle)
     {
         UVehicleDefinition* VehDef = Cast<UVehicleDefinition>(Job.TargetAsset);
@@ -210,17 +198,38 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
             ParkedVehicles.Add(NewVehicle);
 
-            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s added to hanger '%s' (now %d parked)"),
-                *VehDef->VehicleName.ToString(), *FacilityDefinition->FacilityName.ToString(), ParkedVehicles.Num());
+            if (EventDisp)
+                EventDisp->OnVehicleCompleted.Broadcast(EFactionType::Human, NewVehicle);  // added for consistency
         }
     }
-    // === FACILITY (construction complete) ===
+    else if (Job.Type == EProductionType::Item)
+    {
+        UItemDefinition* ItemDef = Cast<UItemDefinition>(Job.TargetAsset);
+        if (ItemDef)
+        {
+            if (EventDisp)
+                EventDisp->OnProductionCompleted.Broadcast(EFactionType::Human, ItemDef);  // or OnItemProduced if you prefer
+            UE_LOG(LogTemp, Display, TEXT("[ITEM] %s production completed!"), *ItemDef->ItemName.ToString());
+            // TODO: If you have a base inventory system, add the item here
+        }
+    }
+    else if (Job.Type == EProductionType::Research)
+    {
+        UResearchTechDefinition* TechDef = Cast<UResearchTechDefinition>(Job.TargetAsset);
+        if (TechDef)
+        {
+            if (EventDisp)
+                EventDisp->OnResearchCompleted.Broadcast(EFactionType::Human, TechDef);
+            UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s research completed!"), *TechDef->ProjectName.ToString());
+        }
+    }
     else if (Job.Type == EProductionType::Facility)
     {
         bIsOperational = true;
+        if (EventDisp)
+            EventDisp->OnFacilityCompleted.Broadcast(EFactionType::Human, this);
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
     }
-    // TODO: Add Item / Research cases here when you extend StartProduction for them
 }
 
 bool UStrategyFacility::StartConstruction(UFacilityDefinition* Def)

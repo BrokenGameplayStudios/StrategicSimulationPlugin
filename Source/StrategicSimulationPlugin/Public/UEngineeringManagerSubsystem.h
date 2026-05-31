@@ -28,9 +28,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Production")
     bool TryProduce(EFactionType Faction);
 
-    UFUNCTION()
-    void OnDayPassed(int32 NewDay);
-
     UFUNCTION(BlueprintCallable, Category = "Production")
     void ResetProduction();
 
