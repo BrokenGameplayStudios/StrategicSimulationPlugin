@@ -165,28 +165,38 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === MINIMAL SAFE DELEGATION — NO GetWorldFromContextObject, NO GEngine ===
+    // === SAFE GAME INSTANCE RETRIEVAL (no more warnings/crash) ===
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
 
+    // === SOLDIER ===
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
         USoldierManagerSubsystem* SoldierMgr = GI ? GI->GetSubsystem<USoldierManagerSubsystem>() : nullptr;
-        if (!SoldierMgr) SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
+        if (!SoldierMgr)
+        {
+            // One safe fallback (still works after outer fix, but prevents crash)
+            if (UGameInstance* FallbackGI = UGameplayStatics::GetGameInstance(this))
+                SoldierMgr = FallbackGI->GetSubsystem<USoldierManagerSubsystem>();
+        }
 
         if (SoldierMgr)
         {
             SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
-            // All broadcasts happen safely inside the stable manager
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[PRODUCTION] SoldierMgr unavailable — soldier not added to roster!"));
         }
     }
+    // === VEHICLE (already mostly safe — just cleaned up) ===
     else if (Job.Type == EProductionType::Vehicle)
     {
         UVehicleDefinition* VehDef = Cast<UVehicleDefinition>(Job.TargetAsset);
         if (VehDef && FacilityDefinition && FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
-            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] ✅ Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] Vehicle construction complete — building %s"), *VehDef->VehicleName.ToString());
 
             UObject* Outer = GI ? static_cast<UObject*>(GI) : static_cast<UObject*>(this);
             UStrategyVehicle* NewVehicle = NewObject<UStrategyVehicle>(Outer);
@@ -204,11 +214,13 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
                 *VehDef->VehicleName.ToString(), *FacilityDefinition->FacilityName.ToString(), ParkedVehicles.Num());
         }
     }
+    // === FACILITY (construction complete) ===
     else if (Job.Type == EProductionType::Facility)
     {
         bIsOperational = true;
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
     }
+    // TODO: Add Item / Research cases here when you extend StartProduction for them
 }
 
 bool UStrategyFacility::StartConstruction(UFacilityDefinition* Def)

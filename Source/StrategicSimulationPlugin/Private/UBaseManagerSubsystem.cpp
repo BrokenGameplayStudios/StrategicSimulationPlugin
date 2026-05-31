@@ -21,7 +21,7 @@ void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation)
 {
-    UStrategyBase* NewBase = NewObject<UStrategyBase>();
+    UStrategyBase* NewBase = NewObject<UStrategyBase>(this);  // ← CHANGED
     NewBase->BaseName = BaseName.IsEmpty() ? FText::FromString("New Base") : BaseName;
     NewBase->MapLocation = MapLocation;
 
@@ -42,7 +42,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
     if (bIsInitialBase)
     {
-        UStrategyFacility* CommandFacility = NewObject<UStrategyFacility>();
+        UStrategyFacility* CommandFacility = NewObject<UStrategyFacility>(this);  // ← CHANGED
 
         if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
         {
@@ -211,7 +211,7 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
         }
     }
 
-    UStrategyFacility* NewFacility = NewObject<UStrategyFacility>();
+    UStrategyFacility* NewFacility = NewObject<UStrategyFacility>(this);  // ← CHANGED
     NewFacility->FacilityDefinition = FacilityDef;
     NewFacility->BuildProgressDays = FacilityDef->BuildTimeDays;
     NewFacility->bIsOperational = false;
