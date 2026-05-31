@@ -451,6 +451,14 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
         return false;
     }
 
+    TArray<UActiveResearchProject*> Active = ResearchMgr->GetActiveResearch(Faction);
+    if (Active.Num() > 0)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] %s already has %d active research job(s) — skipping new research this day"),
+            *UEnum::GetValueAsString(Faction), Active.Num());
+        return false;
+    }
+
     UResearchDatabase* ResearchDB = Campaign->ResearchDatabaseAsset.Get();
     if (!ResearchDB)
     {
