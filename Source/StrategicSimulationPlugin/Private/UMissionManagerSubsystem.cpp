@@ -220,7 +220,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     OnMissionCompleted.Broadcast(Mission);
 }
 
-UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays)
+UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
 
@@ -231,13 +231,20 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->DurationDays = DurationDays;
     NewMission->Status = EMissionStatus::InProgress;
     NewMission->Outcome = EMissionOutcome::Success;
+    NewMission->MissionType = EMissionType::Offensive;   // default — will be exposed as a parameter in Phase 3
 
     ActiveMissions.Add(NewMission);
 
     USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
     if (SoldierMgr)
     {
-        TArray<UStrategySoldier*> AvailableSoldiers = SoldierMgr->GetRoster(EFactionType::Enemy);
+        // Handle default (empty array) → fallback to old auto-fill behavior
+        TArray<UStrategySoldier*> SoldiersToUse = SoldiersToAssign;
+        if (SoldiersToUse.Num() == 0)
+        {
+            SoldiersToUse = SoldierMgr->GetRoster(EFactionType::Enemy);
+        }
+
         int32 SoldierIndex = 0;
 
         for (UStrategyVehicle* Vehicle : Vehicles)
@@ -246,9 +253,9 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
             Vehicle->CurrentMission = NewMission;
 
             int32 Capacity = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->SoldierCapacity : 4;
-            for (int32 i = 0; i < Capacity && SoldierIndex < AvailableSoldiers.Num(); ++i)
+            for (int32 i = 0; i < Capacity && SoldierIndex < SoldiersToUse.Num(); ++i)
             {
-                UStrategySoldier* Soldier = AvailableSoldiers[SoldierIndex++];
+                UStrategySoldier* Soldier = SoldiersToUse[SoldierIndex++];
                 Vehicle->CurrentPassengers.Add(Soldier);
 
                 // Assign permanent HomeBarracks only if not already set
@@ -303,7 +310,7 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
         return nullptr;
     }
 
-    return StartMission(OriginBase, AvailableVehicles, DurationDays);
+    return StartMission(OriginBase, AvailableVehicles, DurationDays, TArray<UStrategySoldier*>());
 }
 
 UResourceManagerSubsystem* UMissionManagerSubsystem::GetResourceManager() const { return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>(); }

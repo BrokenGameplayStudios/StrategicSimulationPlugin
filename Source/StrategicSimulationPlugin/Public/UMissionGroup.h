@@ -52,6 +52,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
     FText MissionName;
 
+    /** NEW for Phase 2: Mission Type — controls simulation flow (Interception / Defensive / Offensive) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
+    EMissionType MissionType;
+
     // === NEW: Mission Results (Phase 3) ===
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Result")
     EMissionOutcome Outcome;

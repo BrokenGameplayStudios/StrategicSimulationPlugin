@@ -20,8 +20,9 @@ class STRATEGICSIMULATIONPLUGIN_API UMissionManagerSubsystem : public UGameInsta
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
+	// Update: Added SoldiersToAssign parameter to StartMission for better soldier management and assignment during mission launch
     UFUNCTION(BlueprintCallable, Category = "Mission")
-    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays);
+    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign);
 
     UFUNCTION(BlueprintCallable, Category = "Mission")
     void SimulateOneDay();
