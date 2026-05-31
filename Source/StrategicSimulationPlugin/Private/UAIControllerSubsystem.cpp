@@ -212,7 +212,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     if (Res.Money < 500)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 500 Money)"), *UEnum::GetValueAsString(Faction));
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 500 Money)"), *UEnum::GetValueAsString(Faction));
         return false;
     }
 
