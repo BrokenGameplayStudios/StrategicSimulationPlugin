@@ -25,6 +25,9 @@ void UResourceManagerSubsystem::AddResources(EFactionType Faction, const FResour
     Current.Supplies += Amount.Supplies;
     Current.ExoticMaterial += Amount.ExoticMaterial;
     Current.ResearchPoints += Amount.ResearchPoints;
+    Current.Metals += Amount.Metals;
+    Current.Biologicals += Amount.Biologicals;
+    Current.Chemicals += Amount.Chemicals;
 }
 
 void UResourceManagerSubsystem::SetResources(EFactionType Faction, const FResourceStockpile& NewStock)
@@ -96,10 +99,22 @@ void UResourceManagerSubsystem::PrintAllResources() const
 
 void UResourceManagerSubsystem::ResetResources(EFactionType Faction)
 {
-    if (Faction == EFactionType::Human)
-        FactionResources.Add(EFactionType::Human, FResourceStockpile{ 9500, 1800, 100, 50 });
-    else
-        FactionResources.Add(EFactionType::Enemy, FResourceStockpile{ 8500, 1400, 150, 30 });
+    FResourceStockpile& Stock = FactionResources.FindOrAdd(Faction);
+    Stock = FResourceStockpile(); // zeros everything, including new fields
+    // Optional starting bonus for testing
+    if (Faction == EFactionType::Enemy)
+    {
+        Stock.Money = 5000;
+        Stock.Metals = 2000;
+        Stock.Supplies = 1000;
+    }
+}
 
-    UE_LOG(LogTemp, Display, TEXT("[RESET] Resources reset for %s"), *UEnum::GetValueAsString(Faction));
+bool UResourceManagerSubsystem::CanAfford(EFactionType Faction, const FResourceStockpile& Cost) const
+{
+    if (const FResourceStockpile* Current = FactionResources.Find(Faction))
+    {
+        return *Current >= Cost;
+    }
+    return false; // no resources = can't afford
 }

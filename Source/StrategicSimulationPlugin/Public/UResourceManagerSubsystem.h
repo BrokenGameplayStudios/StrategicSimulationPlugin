@@ -33,6 +33,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void PrintAllResources() const;
 
+    /** Returns true if the faction can afford the full cost (all resource types). */
+    UFUNCTION(BlueprintCallable, Category = "Resources")
+    bool CanAfford(EFactionType Faction, const FResourceStockpile& Cost) const;
+
     // NEW: Reset to starting resources (used by Campaign ResetSimulation)
     UFUNCTION(BlueprintCallable, Category = "Resources")
     void ResetResources(EFactionType Faction);
