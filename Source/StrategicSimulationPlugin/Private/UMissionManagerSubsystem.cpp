@@ -224,6 +224,11 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->ResourcesGained = Reward;
 
+    // === Detailed reward logging (restored + new granular resources) ===
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Rewards Gained — Money:%d | Supplies:%d | Metals:%d | Biologicals:%d | Chemicals:%d | Exotic:%d | Research:%d"),
+        Reward.Money, Reward.Supplies, Reward.Metals, Reward.Biologicals, Reward.Chemicals,
+        Reward.ExoticMaterial, Reward.ResearchPoints);
+
     // === 5. Per-vehicle losses (core of your request #1 & #2) ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
