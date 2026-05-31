@@ -170,12 +170,35 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
-            if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
+            // Quick check for parked vehicles (prevents spam + failed launches)
+            bool bHasParkedVehicles = false;
+            for (UStrategyFacility* Fac : Base->Facilities)
             {
-                if (UMissionGroup* Mission = MissionMgr->LaunchMissionFromBase(Base, 15))
+                if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] Launched mission from base '%s'"), *Base->BaseName.ToString());
+                    if (Fac->ParkedVehicles.Num() > 0)
+                    {
+                        bHasParkedVehicles = true;
+                        break;
+                    }
                 }
+            }
+
+            if (bHasParkedVehicles)
+            {
+                if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
+                {
+                    if (UMissionGroup* Mission = MissionMgr->LaunchMissionFromBase(Base, 15))
+                    {
+                        UE_LOG(LogTemp, Display, TEXT("[AI] Launched mission from base '%s' with %d vehicles"),
+                            *Base->BaseName.ToString(), Mission->VehiclesInFleet.Num());
+                    }
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting for production to finish"),
+                    *Base->BaseName.ToString());
             }
         }
 

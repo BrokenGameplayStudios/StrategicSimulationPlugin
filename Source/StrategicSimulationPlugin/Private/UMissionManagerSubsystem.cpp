@@ -299,7 +299,7 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
 
     if (AvailableVehicles.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[MISSION] No vehicles available in base '%s'"), *OriginBase->BaseName.ToString());
+        UE_LOG(LogTemp, Verbose, TEXT("[MISSION] No vehicles available in base '%s'"), *OriginBase->BaseName.ToString());
         return nullptr;
     }
 
