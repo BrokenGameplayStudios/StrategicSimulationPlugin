@@ -22,7 +22,7 @@ public:
 
 	// Update: Added SoldiersToAssign parameter to StartMission for better soldier management and assignment during mission launch
     UFUNCTION(BlueprintCallable, Category = "Mission")
-    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign);
+    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType = EMissionType::Offensive);
 
     UFUNCTION(BlueprintCallable, Category = "Mission")
     void SimulateOneDay();
@@ -32,7 +32,7 @@ public:
 
     /** Launches a simple mission with all parked vehicles in a base (used by AI) */
     UFUNCTION(BlueprintCallable, Category = "Mission")
-    UMissionGroup* LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays = 15);
+    UMissionGroup* LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType = EMissionType::Offensive);
 
     UPROPERTY(VisibleAnywhere, Transient, Category = "Missions")
     TArray<UMissionGroup*> ActiveMissions;

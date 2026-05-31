@@ -48,7 +48,7 @@ void UMissionManagerSubsystem::SimulateOneDay()
     }
 }
 
-UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign)
+UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
 
@@ -59,14 +59,13 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->DurationDays = DurationDays;
     NewMission->Status = EMissionStatus::InProgress;
     NewMission->Outcome = EMissionOutcome::Success;
-    NewMission->MissionType = EMissionType::Offensive;   // default — will be exposed as a parameter in Phase 3
+    NewMission->MissionType = MissionType;   // ← now uses the passed type
 
     ActiveMissions.Add(NewMission);
 
     USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
     if (SoldierMgr)
     {
-        // Handle default (empty array) → fallback to old auto-fill behavior
         TArray<UStrategySoldier*> SoldiersToUse = SoldiersToAssign;
         if (SoldiersToUse.Num() == 0)
         {
@@ -86,7 +85,6 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
                 UStrategySoldier* Soldier = SoldiersToUse[SoldierIndex++];
                 Vehicle->CurrentPassengers.Add(Soldier);
 
-                // Assign permanent HomeBarracks only if not already set
                 if (Soldier->HomeBarracks == nullptr)
                 {
                     for (UStrategyFacility* Barracks : OriginBase->Facilities)
@@ -101,7 +99,6 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
                 }
             }
 
-            // Reserve HomeHanger for vehicle
             if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
                 Vehicle->HomeHanger = Vehicle->CurrentHanger;
 
@@ -113,13 +110,13 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched mission with %d vehicles from base '%s' (duration: %d days) — slots reserved"),
-        Vehicles.Num(), *OriginBase->BaseName.ToString(), DurationDays);
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission with %d vehicles from base '%s' (duration: %d days)"),
+        *UEnum::GetValueAsString(MissionType), Vehicles.Num(), *OriginBase->BaseName.ToString(), DurationDays);
 
     return NewMission;
 }
 
-UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays)
+UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType)
 {
     if (!OriginBase) return nullptr;
 
@@ -138,7 +135,8 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
         return nullptr;
     }
 
-    return StartMission(OriginBase, AvailableVehicles, DurationDays, TArray<UStrategySoldier*>());
+    // Pass the chosen MissionType down
+    return StartMission(OriginBase, AvailableVehicles, DurationDays, TArray<UStrategySoldier*>(), MissionType);
 }
 
 void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)

@@ -198,10 +198,13 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             {
                 if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
                 {
-                    if (UMissionGroup* Mission = MissionMgr->LaunchMissionFromBase(Base, 15))
+                    // AI now picks varied mission types for better simulation testing
+                    EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2)); // 0=Interception, 1=Defensive, 2=Offensive
+
+                    if (UMissionGroup* Mission = MissionMgr->LaunchMissionFromBase(Base, 15, ChosenType))
                     {
-                        UE_LOG(LogTemp, Display, TEXT("[AI] Launched mission from base '%s' with %d vehicles"),
-                            *Base->BaseName.ToString(), Mission->VehiclesInFleet.Num());
+                        UE_LOG(LogTemp, Display, TEXT("[AI] Launched %s mission from base '%s' with %d vehicles"),
+                            *UEnum::GetValueAsString(ChosenType), *Base->BaseName.ToString(), Mission->VehiclesInFleet.Num());
                     }
                 }
             }
