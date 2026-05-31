@@ -105,6 +105,11 @@ void UStrategyFacility::SimulateDaily()
         UE_LOG(LogTemp, Display, TEXT("[HANGER LIVE] %s — %d vehicle jobs active (debug tick confirmed)"),
             *FacilityDefinition->FacilityName.ToString(), ActiveProductionJobs.Num());
     }
+    else if (FacilityDefinition->FacilityType == EFacilityType::Laboratory && ActiveProductionJobs.Num() > 0)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[LAB LIVE] %s — %d research jobs active (ticking confirmed)"),
+            *FacilityDefinition->FacilityName.ToString(), ActiveProductionJobs.Num());
+    }
 }
 
 bool UStrategyFacility::HasFreeProductionSlot() const { return GetAvailableProductionSlots() > 0; }
