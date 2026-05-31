@@ -459,6 +459,15 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
         return false;
     }
 
+    // === FIX: Early-out when no Laboratory exists yet (eliminates all the spam) ===
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (BaseMgr && !BaseMgr->HasFacilityOfType(Faction, EFacilityType::Laboratory))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] %s has no Laboratory yet — skipping research attempts this day"),
+            *UEnum::GetValueAsString(Faction));
+        return false;
+    }
+
     UResearchDatabase* ResearchDB = Campaign->ResearchDatabaseAsset.Get();
     if (!ResearchDB)
     {
