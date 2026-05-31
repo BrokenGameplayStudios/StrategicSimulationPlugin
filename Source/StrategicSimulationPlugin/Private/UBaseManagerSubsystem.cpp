@@ -438,7 +438,7 @@ void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
 
         for (UStrategyFacility* Fac : Base->Facilities)
         {
-            if (Fac && Fac->bIsOperational && Fac->FacilityDefinition)
+            if (Fac->bIsOperational || Fac->ActiveProductionJobs.Num() > 0)
             {
                 Fac->SimulateDaily();
             }
