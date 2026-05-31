@@ -343,13 +343,11 @@ float UMissionManagerSubsystem::CalculateFleetEffectiveness(const UMissionGroup*
     int32 TotalAim = 0;
     int32 TotalDefense = 0;
     int32 SoldierCount = 0;
+    int32 TotalWeaponBonus = 0;   // NEW: accumulate across entire fleet
 
     for (const UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         if (!Vehicle) continue;
-
-        // Vehicle health bonus
-        float VehicleFactor = FMath::Clamp(Vehicle->CurrentHealth / 100.0f, 0.3f, 1.0f);
 
         for (const UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
         {
@@ -360,18 +358,21 @@ float UMissionManagerSubsystem::CalculateFleetEffectiveness(const UMissionGroup*
             SoldierCount++;
         }
 
-        // NEW: Vehicle weapons now boost fleet effectiveness
-        int32 WeaponBonus = Vehicle->GetTotalWeaponBonus();
-        // Add to the final return value later
+        // NEW: Vehicle weapons now boost fleet effectiveness (rockets, cannons, etc.)
+        TotalWeaponBonus += Vehicle->GetTotalWeaponBonus();
     }
 
-    if (SoldierCount == 0) return 40.0f;
+    if (SoldierCount == 0)
+    {
+        // Still give some credit for weapons even if no soldiers
+        return FMath::Clamp(40.0f + TotalWeaponBonus * 0.3f, 10.0f, 95.0f);
+    }
 
     float AvgAim = (float)TotalAim / SoldierCount;
     float AvgDefense = (float)TotalDefense / SoldierCount;
 
-    // Final score now includes vehicle weapons
-    return FMath::Clamp(AvgAim * 0.6f + AvgDefense * 0.4f + WeaponBonus * 0.3f + 30.0f, 10.0f, 95.0f);
+    // Final effectiveness now properly includes soldier loadouts + vehicle weapons
+    return FMath::Clamp(AvgAim * 0.6f + AvgDefense * 0.4f + TotalWeaponBonus * 0.3f + 30.0f, 10.0f, 95.0f);
 }
 
 UResourceManagerSubsystem* UMissionManagerSubsystem::GetResourceManager() const { return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>(); }
