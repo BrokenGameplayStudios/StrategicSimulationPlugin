@@ -163,22 +163,22 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     if (!Job.TargetAsset) return;
 
-    // Determine which base should be used for completion callbacks / ownership.
-    UStrategyBase* UseBase = Job.AssignedBase ? Job.AssignedBase : OwningBase;
+    UStrategyBase* UseBase = OwningBase ? OwningBase : Job.AssignedBase;
 
-    // === MINIMAL SAFE DELEGATION — NO TRANSIENT CONTEXT CALLS ===
+    // === MINIMAL SAFE DELEGATION — NO GetWorldFromContextObject, NO GEngine ===
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
 
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
-        if (GI)
+        USoldierManagerSubsystem* SoldierMgr = GI ? GI->GetSubsystem<USoldierManagerSubsystem>() : nullptr;
+        if (!SoldierMgr) SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
+
+        if (SoldierMgr)
         {
-            if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
-            {
-                SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
-            }
+            SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
+            // All broadcasts happen safely inside the stable manager
         }
     }
     else if (Job.Type == EProductionType::Vehicle)
