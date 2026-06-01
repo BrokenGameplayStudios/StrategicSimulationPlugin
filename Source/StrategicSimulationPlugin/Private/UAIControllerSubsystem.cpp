@@ -196,10 +196,32 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (bHasParkedVehicles)
             {
-                // === NEW Phase 6.3: AI buys & equips vehicle weapons + refills ammo ===
+                // === Phase 6.3: AI auto-buys and equips vehicle weapons from VehicleItemDatabaseAsset ===
                 UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
-                if (EngMgr && ResourceMgr)
+                UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+                if (EngMgr && Campaign && ResourceMgr)
                 {
+                    UItemDatabase* VehicleItemDB = Campaign->GetVehicleItemDatabase();
+                    if (!VehicleItemDB)
+                    {
+                        UE_LOG(LogTemp, Verbose, TEXT("[AI] VehicleItemDatabase not loaded yet"));
+                        return; // skip this frame
+                    }
+
+                    // Find the first available VehicleWeapon in the database
+                    UItemDefinition* AvailableWeapon = nullptr;
+                    for (const TSoftObjectPtr<UItemDefinition>& SoftItem : VehicleItemDB->AvailableItems)
+                    {
+                        if (UItemDefinition* Item = SoftItem.Get())
+                        {
+                            if (Item->Category == EItemCategory::VehicleWeapon)
+                            {
+                                AvailableWeapon = Item;
+                                break;
+                            }
+                        }
+                    }
+
                     for (UStrategyFacility* Fac : Base->Facilities)
                     {
                         if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -208,20 +230,23 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                             {
                                 if (!Vehicle) continue;
 
-                                // 1. Equip weapons if slots are available
-                                if (Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots())
+                                // 1. Equip a weapon if the vehicle has open hardpoints
+                                if (Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots() && AvailableWeapon)
                                 {
-                                    // TODO: Once you create real weapon Data Assets, load them here
-                                    // For testing: UItemDefinition* TestWeapon = ...; EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, TestWeapon);
-                                    UE_LOG(LogTemp, Verbose, TEXT("[AI] Vehicle %s has open weapon slots (%d/%d) — ready for equipping"),
-                                        *Vehicle->VehicleDefinition->VehicleName.ToString(),
-                                        Vehicle->GetEquippedWeapons().Num(), Vehicle->GetMaxWeaponSlots());
+                                    if (EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, AvailableWeapon))
+                                    {
+                                        UE_LOG(LogTemp, Display, TEXT("[AI] %s equipped vehicle weapon '%s' on %s"),
+                                            *UEnum::GetValueAsString(Faction), *AvailableWeapon->ItemName.ToString(),
+                                            *Vehicle->VehicleDefinition->VehicleName.ToString());
+                                    }
                                 }
 
-                                // 2. Refill ammo on existing weapons
+                                // 2. Refill ammo on any equipped weapons that are low
                                 for (int32 i = 0; i < Vehicle->WeaponAmmoCounts.Num(); ++i)
                                 {
-                                    if (Vehicle->WeaponAmmoCounts[i] < Vehicle->EquippedWeapons[i].Get()->MaxAmmo)
+                                    if (Vehicle->WeaponAmmoCounts.IsValidIndex(i) &&
+                                        Vehicle->EquippedWeapons.IsValidIndex(i) &&
+                                        Vehicle->WeaponAmmoCounts[i] < Vehicle->EquippedWeapons[i].Get()->MaxAmmo)
                                     {
                                         EngMgr->PurchaseAmmoForVehicle(Faction, Vehicle, i);
                                     }
