@@ -6,11 +6,36 @@ void UResourceManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    // === TIGHTER STARTING RESOURCES ===
-    FactionResources.Add(EFactionType::Human, FResourceStockpile{ 9500, 1800, 100, 50 });
-    FactionResources.Add(EFactionType::Enemy, FResourceStockpile{ 8500, 1400, 150, 30 });
+    // Default starting values (you can override these from AStrategyGameInitializer)
+    HumanStartingResources = FResourceStockpile{ 28000, 3200, 1200, 1500, 0, 0 };
+    EnemyStartingResources = FResourceStockpile{ 25000, 2800, 1000, 1200, 0, 0 };
 
-    UE_LOG(LogTemp, Display, TEXT("UResourceManagerSubsystem initialized — both factions ready!"));
+    FactionResources.Add(EFactionType::Human, HumanStartingResources);
+    FactionResources.Add(EFactionType::Enemy, EnemyStartingResources);
+
+    UE_LOG(LogTemp, Display, TEXT("[RESOURCES] Human start: %d💰 %d🛠️ %d🧬 %d⚗️ %d🌌 %d📚"),
+        HumanStartingResources.Money, HumanStartingResources.Metals, HumanStartingResources.Biologicals,
+        HumanStartingResources.Chemicals, HumanStartingResources.ExoticMaterial, HumanStartingResources.ResearchPoints);
+
+    UE_LOG(LogTemp, Display, TEXT("[RESOURCES] Enemy start: %d💰 %d🛠️ %d🧬 %d⚗️ %d🌌 %d📚"),
+        EnemyStartingResources.Money, EnemyStartingResources.Metals, EnemyStartingResources.Biologicals,
+        EnemyStartingResources.Chemicals, EnemyStartingResources.ExoticMaterial, EnemyStartingResources.ResearchPoints);
+
+    UE_LOG(LogTemp, Display, TEXT("UResourceManagerSubsystem initialized — configurable starting resources ready"));
+}
+
+void UResourceManagerSubsystem::SetHumanStartingResources(const FResourceStockpile& NewStart)
+{
+    HumanStartingResources = NewStart;
+    if (FactionResources.Contains(EFactionType::Human))
+        FactionResources[EFactionType::Human] = NewStart;
+}
+
+void UResourceManagerSubsystem::SetEnemyStartingResources(const FResourceStockpile& NewStart)
+{
+    EnemyStartingResources = NewStart;
+    if (FactionResources.Contains(EFactionType::Enemy))
+        FactionResources[EFactionType::Enemy] = NewStart;
 }
 
 FResourceStockpile UResourceManagerSubsystem::GetResources(EFactionType Faction) const
@@ -21,12 +46,12 @@ FResourceStockpile UResourceManagerSubsystem::GetResources(EFactionType Faction)
 void UResourceManagerSubsystem::AddResources(EFactionType Faction, const FResourceStockpile& Amount)
 {
     FResourceStockpile& Current = FactionResources.FindOrAdd(Faction);
-    Current.Money += Amount.Money;
-    Current.ExoticMaterial += Amount.ExoticMaterial;
-    Current.ResearchPoints += Amount.ResearchPoints;
+    Current.Money += Amount.Money;    
     Current.Metals += Amount.Metals;
     Current.Biologicals += Amount.Biologicals;
     Current.Chemicals += Amount.Chemicals;
+    Current.ExoticMaterial += Amount.ExoticMaterial;
+    Current.ResearchPoints += Amount.ResearchPoints;
 }
 
 void UResourceManagerSubsystem::SetResources(EFactionType Faction, const FResourceStockpile& NewStock)
@@ -91,9 +116,9 @@ void UResourceManagerSubsystem::PrintAllResources() const
     for (auto& Pair : FactionResources)
     {
         FString FactionName = UEnum::GetValueAsString(Pair.Key);
+        const FResourceStockpile& S = Pair.Value;
         UE_LOG(LogTemp, Display, TEXT("%s -> Money=%d | Metals=%d | Biologicals=%d | Chemicals=%d | Exotic=%d | Research=%d"),
-            *FactionName, Pair.Value.Money, Pair.Value.Metals, Pair.Value.Biologicals,
-            Pair.Value.Chemicals, Pair.Value.ExoticMaterial, Pair.Value.ResearchPoints);
+            *FactionName, S.Money, S.Metals, S.Biologicals, S.Chemicals, S.ExoticMaterial, S.ResearchPoints);
     }
 }
 

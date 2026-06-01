@@ -28,24 +28,23 @@ struct FResourceStockpile
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
     int32 Money = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 ExoticMaterial = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 ResearchPoints = 0;
-
-    // === GRANULAR RESOURCES ===
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
     int32 Metals = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
     int32 Biologicals = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
     int32 Chemicals = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+    int32 ExoticMaterial = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+    int32 ResearchPoints = 0;
 
     // Helper operators (makes code much cleaner later)
     FResourceStockpile operator+(const FResourceStockpile& Other) const;

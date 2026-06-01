@@ -31,6 +31,13 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
     bool bShowFacilityTicks = false;
 
+    // === Starting Resources (editable in editor) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
+    FResourceStockpile HumanStartingStockpile;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
+    FResourceStockpile EnemyStartingStockpile;
+
     // === DATABASES ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UItemDatabase> ItemDatabaseAsset;

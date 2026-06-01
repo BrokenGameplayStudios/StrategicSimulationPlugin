@@ -103,6 +103,14 @@ void AStrategyGameInitializer::BeginPlay()
 
     UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases force-loaded and registered"));
 
+    UResourceManagerSubsystem* ResourceMgr = GetWorld()->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (ResourceMgr)
+    {
+        ResourceMgr->SetHumanStartingResources(HumanStartingStockpile);
+        ResourceMgr->SetEnemyStartingResources(EnemyStartingStockpile);
+        UE_LOG(LogTemp, Display, TEXT("AStrategyGameInitializer: Applied custom starting resources"));
+    }
+
     // === START THE SIMULATION ===
     Campaign->StartSimulation();
     UE_LOG(LogTemp, Display, TEXT("🚀 Simulation STARTED — AI will act every day"));

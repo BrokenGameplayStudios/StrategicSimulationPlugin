@@ -13,40 +13,44 @@ class STRATEGICSIMULATIONPLUGIN_API UResourceManagerSubsystem : public UGameInst
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-    // Get current resources for a faction
     UFUNCTION(BlueprintCallable, Category = "Resources")
     FResourceStockpile GetResources(EFactionType Faction) const;
 
-    // Add or subtract resources (negative values = spend)
     UFUNCTION(BlueprintCallable, Category = "Resources")
     void AddResources(EFactionType Faction, const FResourceStockpile& Amount);
 
-    // Set resources to exact values (used by save/load)
     UFUNCTION(BlueprintCallable, Category = "Resources")
     void SetResources(EFactionType Faction, const FResourceStockpile& NewStock);
 
-    // Calculate and add income from all operational facilities
     UFUNCTION(BlueprintCallable, Category = "Resources")
     void ApplyFacilityIncome(EFactionType Faction);
 
-    // Debug helper
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void PrintAllResources() const;
 
-    /** Returns true if the faction can afford the full cost (all resource types). */
     UFUNCTION(BlueprintCallable, Category = "Resources")
     bool CanAfford(EFactionType Faction, const FResourceStockpile& Cost) const;
 
-    /** Subtracts the full cost from the faction (all resource types). Returns false if they couldn't afford it. */
     UFUNCTION(BlueprintCallable, Category = "Resources")
     bool SubtractResources(EFactionType Faction, const FResourceStockpile& Cost);
 
-    // NEW: Reset to starting resources (used by Campaign ResetSimulation)
     UFUNCTION(BlueprintCallable, Category = "Resources")
     void ResetResources(EFactionType Faction);
 
+    // === NEW: Configurable starting stockpiles ===
+    UFUNCTION(BlueprintCallable, Category = "Resources|Starting")
+    void SetHumanStartingResources(const FResourceStockpile& NewStart);
+
+    UFUNCTION(BlueprintCallable, Category = "Resources|Starting")
+    void SetEnemyStartingResources(const FResourceStockpile& NewStart);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources|Starting")
+    FResourceStockpile HumanStartingResources;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources|Starting")
+    FResourceStockpile EnemyStartingResources;
+
 private:
-    // One stockpile per faction
     UPROPERTY(VisibleAnywhere, Transient, Category = "Resources")
     TMap<EFactionType, FResourceStockpile> FactionResources;
 };
