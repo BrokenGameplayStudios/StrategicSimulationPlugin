@@ -162,6 +162,18 @@ enum class EMissionType : uint8
     Offensive         UMETA(DisplayName = "Offensive")       // Attack/destroy enemy location/base
 };
 
+// === NEW: Item categorization for soldiers vs vehicles ===
+UENUM(BlueprintType)
+enum class EItemCategory : uint8
+{
+    None                UMETA(DisplayName = "None"),
+    SoldierWeapon       UMETA(DisplayName = "Soldier Weapon"),
+    SoldierArmor        UMETA(DisplayName = "Soldier Armor"),
+    VehicleWeapon       UMETA(DisplayName = "Vehicle Weapon"),
+    VehicleDefense      UMETA(DisplayName = "Vehicle Defense System"),
+    Consumable          UMETA(DisplayName = "Consumable / Ammo")
+};
+
 // Vehicle stats (used by UVehicleDefinition and UStrategyVehicle)
 USTRUCT(BlueprintType)
 struct FVehicleStats

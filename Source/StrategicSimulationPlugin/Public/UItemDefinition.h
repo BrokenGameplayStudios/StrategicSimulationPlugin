@@ -31,6 +31,27 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     int32 AimBonus = 0;
 
+    /** NEW: What this item is used for (soldier vs vehicle) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item")
+    EItemCategory Category = EItemCategory::None;
+
+    /** Vehicle-only bonuses */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vehicle Stats")
+    int32 VehicleDamageBonus = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vehicle Stats")
+    int32 VehicleDefenseBonus = 0;
+
+    /** Ammo system stub (0 = infinite for now) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vehicle Stats")
+    int32 MaxAmmo = 0;
+
+    UFUNCTION(BlueprintCallable, Category = "Item")
+    bool IsVehicleWeapon() const { return Category == EItemCategory::VehicleWeapon; }
+
+    UFUNCTION(BlueprintCallable, Category = "Item")
+    bool IsVehicleDefense() const { return Category == EItemCategory::VehicleDefense; }
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     bool bIsConsumable = false;
 
