@@ -444,14 +444,20 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
             UItemDefinition* ItemDef = SoftItem.Get();
             if (!ItemDef) continue;
 
-            if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
+            // === CRITICAL FIX: Strict research gating ===
+            if (!Campaign->IsItemUnlocked(Faction, ItemDef))
+            {
+                UE_LOG(LogTemp, Verbose, TEXT("[PURCHASE] %s is NOT unlocked yet — skipping (research not completed)"), *ItemDef->ItemName.ToString());
+                continue;
+            }
+
             if (TargetSoldier->CurrentLoadout.Contains(ItemDef)) continue;
 
             if (Res.Money >= ItemDef->PurchaseCost.Money)
             {
                 if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Bought %s on soldier (now has %d items)"),
+                    UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier (now has %d items)"),
                         *ItemDef->ItemName.ToString(), TargetSoldier->CurrentLoadout.Num());
 
                     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
