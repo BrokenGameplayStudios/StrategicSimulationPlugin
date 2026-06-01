@@ -4,7 +4,6 @@ FResourceStockpile FResourceStockpile::operator+(const FResourceStockpile& Other
 {
     FResourceStockpile Result = *this;
     Result.Money += Other.Money;
-    Result.Supplies += Other.Supplies;
     Result.ExoticMaterial += Other.ExoticMaterial;
     Result.ResearchPoints += Other.ResearchPoints;
     Result.Metals += Other.Metals;
@@ -17,7 +16,6 @@ FResourceStockpile FResourceStockpile::operator-(const FResourceStockpile& Other
 {
     FResourceStockpile Result = *this;
     Result.Money -= Other.Money;
-    Result.Supplies -= Other.Supplies;
     Result.ExoticMaterial -= Other.ExoticMaterial;
     Result.ResearchPoints -= Other.ResearchPoints;
     Result.Metals -= Other.Metals;
@@ -29,7 +27,6 @@ FResourceStockpile FResourceStockpile::operator-(const FResourceStockpile& Other
 bool FResourceStockpile::operator>=(const FResourceStockpile& Other) const
 {
     return Money >= Other.Money &&
-        Supplies >= Other.Supplies &&
         ExoticMaterial >= Other.ExoticMaterial &&
         ResearchPoints >= Other.ResearchPoints &&
         Metals >= Other.Metals &&

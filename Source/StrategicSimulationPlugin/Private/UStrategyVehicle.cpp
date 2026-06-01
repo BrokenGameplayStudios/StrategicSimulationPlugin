@@ -59,51 +59,80 @@ bool UStrategyVehicle::NeedsRepair() const
     return bNeeds;
 }
 
+int32 UStrategyVehicle::GetMaxWeaponSlots() const
+{
+    return VehicleDefinition ? VehicleDefinition->MaxWeaponSlots : 2;
+}
+
+int32 UStrategyVehicle::GetMaxDefenseSlots() const
+{
+    return VehicleDefinition ? VehicleDefinition->MaxDefenseSlots : 1;
+}
+
+bool UStrategyVehicle::CanEquipWeapon(UItemDefinition* Weapon) const
+{
+    if (!Weapon || !Weapon->IsVehicleWeapon()) return false;
+    return EquippedWeapons.Num() < GetMaxWeaponSlots();
+}
+
 bool UStrategyVehicle::EquipWeapon(UItemDefinition* Weapon)
 {
-    if (!Weapon || VehicleInventory.Num() >= MaxWeaponSlots)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s cannot equip %s (full or invalid)"),
-            *VehicleDefinition->VehicleName.ToString(), *Weapon->ItemName.ToString());
-        return false;
-    }
+    if (!CanEquipWeapon(Weapon)) return false;
 
-    VehicleInventory.Add(Weapon);
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s equipped weapon: %s"),
-        *VehicleDefinition->VehicleName.ToString(), *Weapon->ItemName.ToString());
+    EquippedWeapons.Add(Weapon);
+    // Initialize ammo to MaxAmmo from the launcher definition
+    WeaponAmmoCounts.Add(Weapon->MaxAmmo);
+
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s equipped weapon '%s' (ammo: %d)"),
+        *VehicleDefinition->VehicleName.ToString(), *Weapon->ItemName.ToString(), Weapon->MaxAmmo);
     return true;
 }
 
-bool UStrategyVehicle::UnequipWeapon(UItemDefinition* Weapon)
+bool UStrategyVehicle::EquipDefenseSystem(UItemDefinition* DefenseItem)
 {
-    if (!Weapon) return false;
-    return VehicleInventory.Remove(Weapon) > 0;
+    if (!DefenseItem || !DefenseItem->IsVehicleDefense() || EquippedDefenseSystems.Num() >= GetMaxDefenseSlots())
+        return false;
+
+    EquippedDefenseSystems.Add(DefenseItem);
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s equipped defense system '%s'"),
+        *VehicleDefinition->VehicleName.ToString(), *DefenseItem->ItemName.ToString());
+    return true;
 }
 
-TArray<UItemDefinition*> UStrategyVehicle::GetLoadedWeapons() const
+TArray<UItemDefinition*> UStrategyVehicle::GetEquippedWeapons() const
 {
-    TArray<UItemDefinition*> Loaded;
-    for (const TSoftObjectPtr<UItemDefinition>& ItemPtr : VehicleInventory)
+    TArray<UItemDefinition*> Result;
+    for (const TSoftObjectPtr<UItemDefinition>& Ptr : EquippedWeapons)
     {
-        if (UItemDefinition* Item = ItemPtr.Get())
-        {
-            Loaded.Add(Item);
-        }
+        if (UItemDefinition* Item = Ptr.Get()) Result.Add(Item);
     }
-    return Loaded;
+    return Result;
 }
 
-int32 UStrategyVehicle::GetTotalWeaponBonus() const
+int32 UStrategyVehicle::GetVehicleOffensiveRating() const
 {
-    int32 Total = 0;
-    for (const TSoftObjectPtr<UItemDefinition>& ItemPtr : VehicleInventory)
+    int32 Rating = VehicleDefinition ? VehicleDefinition->AttackPower : 0;
+
+    for (int32 i = 0; i < EquippedWeapons.Num(); ++i)
     {
-        if (UItemDefinition* Item = ItemPtr.Get())
+        if (UItemDefinition* Weapon = EquippedWeapons[i].Get())
         {
-            // TODO: later add more fields to UItemDefinition (e.g. VehicleDamageBonus, AccuracyBonus)
-            // For now we just reuse AimBonus as a simple power bonus
-            Total += Item->AimBonus;
+            Rating += Weapon->VehicleDamageBonus;
+            // Small ammo bonus if partially loaded
+            if (WeaponAmmoCounts.IsValidIndex(i) && Weapon->MaxAmmo > 0)
+                Rating += (WeaponAmmoCounts[i] * 5); // tune later
         }
     }
-    return Total;
+    return Rating;
+}
+
+int32 UStrategyVehicle::GetVehicleDefensiveRating() const
+{
+    int32 Rating = 0;
+    for (const TSoftObjectPtr<UItemDefinition>& Ptr : EquippedDefenseSystems)
+    {
+        if (UItemDefinition* Def = Ptr.Get())
+            Rating += Def->VehicleDefenseBonus;
+    }
+    return Rating;
 }

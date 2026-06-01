@@ -32,15 +32,12 @@ struct FResourceStockpile
     int32 Money = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 Supplies = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 ExoticMaterial = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 ResearchPoints = 0;
 
-    // === NEW GRANULAR RESOURCES (Phase 3.5) ===
+    // === GRANULAR RESOURCES ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 Metals = 0;
 
