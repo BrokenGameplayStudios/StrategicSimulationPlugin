@@ -206,7 +206,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                         {
                             for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
                             {
-                                if (Vehicle && Vehicle->GetLoadedWeapons().Num() == 0)
+                                                        if (Vehicle && Vehicle->GetEquippedWeapons().Num() == 0)
                                 {
                                     // TODO: Replace with real weapon Data Asset once you create one
                                     // For now this will do nothing until you make a test weapon item.
@@ -333,12 +333,11 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
 
-    if (Res.Money < VehDef->BuildCost.Money || Res.Supplies < VehDef->BuildCost.Supplies)
+    if (!ResourceMgr->CanAfford(Faction, VehDef->BuildCost))
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s cannot afford vehicle '%s' (needs %d 💰 + %d 📦 | has %d 💰 + %d 📦)"),
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] %s cannot afford vehicle '%s' (needs %d Money, %d Metals, %d Biologicals, %d Chemicals)"),
             *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(),
-            VehDef->BuildCost.Money, VehDef->BuildCost.Supplies,
-            Res.Money, Res.Supplies);
+            VehDef->BuildCost.Money, VehDef->BuildCost.Metals, VehDef->BuildCost.Biologicals, VehDef->BuildCost.Chemicals);
         return false;
     }
 
@@ -350,7 +349,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
             {
                 if (Hanger->StartProduction(EProductionType::Vehicle, VehDef, VehDef->ProductionDays))
                 {
-                    ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Supplies, 0, 0 });
+                    ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Metals, -VehDef->BuildCost.Biologicals, -VehDef->BuildCost.Chemicals, 0, 0 });
 
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s queued vehicle '%s' in hanger (%d days)"),
                         *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), VehDef->ProductionDays);
@@ -497,11 +496,11 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         }
     }
 
-    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-    if (Res.Money < FacilityDef->BuildCost.Money || Res.Supplies < FacilityDef->BuildCost.Supplies)
+    if (!ResourceMgr->CanAfford(Faction, FacilityDef->BuildCost))
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI] Not enough resources for %s (needs %d Money, %d Supplies)"),
-            *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money, FacilityDef->BuildCost.Supplies);
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] Not enough resources for %s (needs %d Money, %d Metals, %d Biologicals, %d Chemicals)"),
+            *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money,
+            FacilityDef->BuildCost.Metals, FacilityDef->BuildCost.Biologicals, FacilityDef->BuildCost.Chemicals);
         return false;
     }
 

@@ -197,36 +197,32 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         Reward.Metals = FMath::RandRange(800, 1600);
         Reward.Biologicals = FMath::RandRange(300, 700);
         Reward.Chemicals = FMath::RandRange(200, 500);
-        Reward.Supplies = FMath::RandRange(400, 900);
         break;
     case EMissionOutcome::PartialSuccess:
         Reward.Money = FMath::RandRange(600, 1400);
         Reward.Metals = FMath::RandRange(400, 900);
         Reward.Biologicals = FMath::RandRange(150, 400);
         Reward.Chemicals = FMath::RandRange(100, 300);
-        Reward.Supplies = FMath::RandRange(200, 500);
         break;
     case EMissionOutcome::Failure:
         Reward.Money = FMath::RandRange(100, 600);
         Reward.Metals = FMath::RandRange(100, 400);
         Reward.Biologicals = FMath::RandRange(50, 150);
         Reward.Chemicals = FMath::RandRange(30, 100);
-        Reward.Supplies = FMath::RandRange(0, 200);
         break;
     case EMissionOutcome::CatastrophicFailure:
         Reward.Money = FMath::RandRange(-800, -200);
         Reward.Metals = FMath::RandRange(-300, -50);
         Reward.Biologicals = FMath::RandRange(-150, -20);
         Reward.Chemicals = FMath::RandRange(-100, -10);
-        Reward.Supplies = FMath::RandRange(-400, -100);
         break;
     }
 
     Mission->ResourcesGained = Reward;
 
-    // === Detailed reward logging (restored + new granular resources) ===
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Rewards Gained — Money:%d | Supplies:%d | Metals:%d | Biologicals:%d | Chemicals:%d | Exotic:%d | Research:%d"),
-        Reward.Money, Reward.Supplies, Reward.Metals, Reward.Biologicals, Reward.Chemicals,
+    // === Detailed reward logging ===
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Rewards Gained — Money:%d | Metals:%d | Biologicals:%d | Chemicals:%d | Exotic:%d | Research:%d"),
+        Reward.Money, Reward.Metals, Reward.Biologicals, Reward.Chemicals,
         Reward.ExoticMaterial, Reward.ResearchPoints);
 
     // === 5. Per-vehicle losses (core of your request #1 & #2) ===

@@ -169,7 +169,7 @@ void UStrategyCampaignSubsystem::StartSimulation()
                 if (First) UnlocksList += "None";
                 UnlocksList += ")";
 
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Supplies | Build Time: %d days %s"),
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Build Time: %d days %s"),
                     *Def->FacilityName.ToString(),
                     *UEnum::GetValueAsString(Def->FacilityType),
                     Def->Capacity,
@@ -179,7 +179,9 @@ void UStrategyCampaignSubsystem::StartSimulation()
                     Def->PowerProvided,
                     Def->PowerDraw,
                     Def->BuildCost.Money,
-                    Def->BuildCost.Supplies,
+					Def->BuildCost.Metals,
+					Def->BuildCost.Biologicals,
+                    Def->BuildCost.Chemicals,
                     Def->BuildTimeDays,
                     Def->UnlocksResearch.Num() > 0 ? TEXT("(Unlocks Research)") : TEXT("(Unlocks: None)"));
             }
@@ -240,10 +242,12 @@ void UStrategyCampaignSubsystem::StartSimulation()
         {
             if (UItemDefinition* Item = SoftItem.Get())
             {
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Cost: %d Money, %d Supplies | Production Days: %d"),
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Production Days: %d"),
                     *Item->ItemName.ToString(),
                     Item->PurchaseCost.Money,
-                    Item->PurchaseCost.Supplies,
+                    Item->PurchaseCost.Metals,
+                    Item->PurchaseCost.Biologicals,
+                    Item->PurchaseCost.Chemicals,
                     Item->ProductionDays);
             }
         }
@@ -256,14 +260,16 @@ void UStrategyCampaignSubsystem::StartSimulation()
         {
             if (UVehicleDefinition* Veh = SoftVeh.Get())
             {
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d soldiers | Max Mission Days: %d | Attack: %d | Build Cost: %d Money, %d Supplies | Production: %d days"),
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d soldiers | Max Mission Days: %d | Attack: %d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Production: %d days"),
                     *Veh->VehicleName.ToString(),
                     *UEnum::GetValueAsString(Veh->VehicleType),
                     Veh->SoldierCapacity,
                     Veh->MaxMissionDurationDays,
                     Veh->AttackPower,
                     Veh->BuildCost.Money,
-                    Veh->BuildCost.Supplies,
+					Veh->BuildCost.Metals,
+					Veh->BuildCost.Biologicals,
+					Veh->BuildCost.Chemicals,
                     Veh->ProductionDays);
             }
         }
@@ -273,8 +279,8 @@ void UStrategyCampaignSubsystem::StartSimulation()
     {
         FResourceStockpile HumanRes = ResourceMgr->GetResources(EFactionType::Human);
         FResourceStockpile EnemyRes = ResourceMgr->GetResources(EFactionType::Enemy);
-        UE_LOG(LogTemp, Display, TEXT("[RESOURCES] Human start: %d💰 %d📦 %d🛠️ %d🧬 %d⚗️"), HumanRes.Money, HumanRes.Supplies, HumanRes.Metals, HumanRes.Biologicals, HumanRes.Chemicals);
-        UE_LOG(LogTemp, Display, TEXT("[RESOURCES] Enemy start: %d💰 %d📦 %d🛠️ %d🧬 %d⚗️"), EnemyRes.Money, EnemyRes.Supplies, EnemyRes.Metals, EnemyRes.Biologicals, EnemyRes.Chemicals);
+        UE_LOG(LogTemp, Display, TEXT("[RESOURCES] Human start: %d💰 %d🛠️ %d🧬 %d⚗️"), HumanRes.Money, HumanRes.Metals, HumanRes.Biologicals, HumanRes.Chemicals);
+        UE_LOG(LogTemp, Display, TEXT("[RESOURCES] Enemy start: %d💰 %d🛠️ %d🧬 %d⚗️"), EnemyRes.Money, EnemyRes.Metals, EnemyRes.Biologicals, EnemyRes.Chemicals);
     }
 
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));

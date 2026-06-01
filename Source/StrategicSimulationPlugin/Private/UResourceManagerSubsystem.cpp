@@ -22,7 +22,6 @@ void UResourceManagerSubsystem::AddResources(EFactionType Faction, const FResour
 {
     FResourceStockpile& Current = FactionResources.FindOrAdd(Faction);
     Current.Money += Amount.Money;
-    Current.Supplies += Amount.Supplies;
     Current.ExoticMaterial += Amount.ExoticMaterial;
     Current.ResearchPoints += Amount.ResearchPoints;
     Current.Metals += Amount.Metals;
@@ -92,21 +91,23 @@ void UResourceManagerSubsystem::PrintAllResources() const
     for (auto& Pair : FactionResources)
     {
         FString FactionName = UEnum::GetValueAsString(Pair.Key);
-        UE_LOG(LogTemp, Display, TEXT("%s -> Money=%d | Supplies=%d | Exotic=%d | Research=%d"),
-            *FactionName, Pair.Value.Money, Pair.Value.Supplies, Pair.Value.ExoticMaterial, Pair.Value.ResearchPoints);
+        UE_LOG(LogTemp, Display, TEXT("%s -> Money=%d | Metals=%d | Biologicals=%d | Chemicals=%d | Exotic=%d | Research=%d"),
+            *FactionName, Pair.Value.Money, Pair.Value.Metals, Pair.Value.Biologicals,
+            Pair.Value.Chemicals, Pair.Value.ExoticMaterial, Pair.Value.ResearchPoints);
     }
 }
 
 void UResourceManagerSubsystem::ResetResources(EFactionType Faction)
 {
     FResourceStockpile& Stock = FactionResources.FindOrAdd(Faction);
-    Stock = FResourceStockpile(); // zeros everything, including new fields
-    // Optional starting bonus for testing
+    Stock = FResourceStockpile(); // zeros everything
+
     if (Faction == EFactionType::Enemy)
     {
         Stock.Money = 5000;
-        Stock.Metals = 2000;
-        Stock.Supplies = 1000;
+        Stock.Metals = 1000;
+        Stock.Biologicals = 500;
+		Stock.Chemicals = 200;
     }
 }
 
@@ -130,8 +131,8 @@ bool UResourceManagerSubsystem::SubtractResources(EFactionType Faction, const FR
     FResourceStockpile& Current = FactionResources.FindOrAdd(Faction);
     Current.Subtract(Cost);
 
-    UE_LOG(LogTemp, Display, TEXT("[RESOURCES] %s spent — Money:%d | Supplies:%d | Metals:%d | Biologicals:%d | Chemicals:%d"),
-        *UEnum::GetValueAsString(Faction), Cost.Money, Cost.Supplies, Cost.Metals, Cost.Biologicals, Cost.Chemicals);
+    UE_LOG(LogTemp, Display, TEXT("[RESOURCES] %s spent — Money:%d | Metals:%d | Biologicals:%d | Chemicals:%d"),
+        *UEnum::GetValueAsString(Faction), Cost.Money, Cost.Metals, Cost.Biologicals, Cost.Chemicals);
 
     return true;
 }

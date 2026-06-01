@@ -103,10 +103,9 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
     if (ResourceMgr && CommandDef)
     {
-        FResourceStockpile Current = ResourceMgr->GetResources(Faction);
-        if (Current.Money < CommandDef->BuildCost.Money || Current.Supplies < CommandDef->BuildCost.Supplies)
+        if (!ResourceMgr->CanAfford(Faction, CommandDef->BuildCost))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center — ABORTING new base (money already spent elsewhere?)"));
+            UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center — ABORTING new base"));
             if (Faction == EFactionType::Enemy) EnemyBases.Remove(NewBase);
             else HumanBases.Remove(NewBase);
             return nullptr;
@@ -114,7 +113,9 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
         FResourceStockpile NegativeCost = CommandDef->BuildCost;
         NegativeCost.Money = -NegativeCost.Money;
-        NegativeCost.Supplies = -NegativeCost.Supplies;
+        NegativeCost.Metals = -NegativeCost.Metals;
+        NegativeCost.Biologicals = -NegativeCost.Biologicals;
+        NegativeCost.Chemicals = -NegativeCost.Chemicals;
         ResourceMgr->AddResources(Faction, NegativeCost);
 
         UE_LOG(LogTemp, Display, TEXT("[BUILD] Order accepted — deducted cost for Command Center"));
@@ -151,7 +152,7 @@ TArray<UStrategyBase*>& UBaseManagerSubsystem::GetMutableBases(EFactionType Fact
     return (Faction == EFactionType::Human) ? HumanBases : EnemyBases;
 }
 
-UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase /*= nullptr*/)
+UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase)
 {
     if (!FacilityDef) return nullptr;
 
@@ -159,16 +160,19 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
     if (ResourceMgr)
     {
         FResourceStockpile Current = ResourceMgr->GetResources(Faction);
-        if (Current.Money < FacilityDef->BuildCost.Money || Current.Supplies < FacilityDef->BuildCost.Supplies)
+        if (!ResourceMgr->CanAfford(Faction, FacilityDef->BuildCost))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot afford %s (%d Money, %d Supplies needed)"),
-                *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money, FacilityDef->BuildCost.Supplies);
+            UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot afford %s (%d Money, %d Metals, %d Biologicals, %d Chemicals needed)"),
+                *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money,
+                FacilityDef->BuildCost.Metals, FacilityDef->BuildCost.Biologicals, FacilityDef->BuildCost.Chemicals);
             return nullptr;
         }
 
         FResourceStockpile NegativeCost = FacilityDef->BuildCost;
         NegativeCost.Money = -NegativeCost.Money;
-        NegativeCost.Supplies = -NegativeCost.Supplies;
+        NegativeCost.Metals = -NegativeCost.Metals;
+        NegativeCost.Biologicals = -NegativeCost.Biologicals;
+        NegativeCost.Chemicals = -NegativeCost.Chemicals;
         ResourceMgr->AddResources(Faction, NegativeCost);
     }
 
