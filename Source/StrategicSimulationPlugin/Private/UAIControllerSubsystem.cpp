@@ -210,7 +210,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
                     // Find the first available VehicleWeapon in the database
                     UItemDefinition* AvailableWeapon = nullptr;
-                    for (const TSoftObjectPtr<UItemDefinition>& SoftItem : VehicleItemDB->AvailableItems)
+                    for (const TSoftObjectPtr<UItemDefinition>& SoftItem : VehicleItemDB->BuyableItems)
                     {
                         if (UItemDefinition* Item = SoftItem.Get())
                         {
