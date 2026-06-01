@@ -6,6 +6,8 @@
 #include "UResourceManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategySoldier.h"
+#include "UStrategyCampaignSubsystem.h"
+#include "UBaseManagerSubsystem.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -48,7 +50,8 @@ void UMissionManagerSubsystem::SimulateOneDay()
     }
 }
 
-UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType)
+// Updated signature with AttackingFaction (default Enemy for backward compatibility with AI)
+UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction /*= EFactionType::Enemy*/)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
 
@@ -59,7 +62,8 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->DurationDays = DurationDays;
     NewMission->Status = EMissionStatus::InProgress;
     NewMission->Outcome = EMissionOutcome::Success;
-    NewMission->MissionType = MissionType;   // ← now uses the passed type
+    NewMission->MissionType = MissionType;
+    NewMission->AttackingFaction = AttackingFaction;   // ← IMPORTANT
 
     ActiveMissions.Add(NewMission);
 
@@ -69,7 +73,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         TArray<UStrategySoldier*> SoldiersToUse = SoldiersToAssign;
         if (SoldiersToUse.Num() == 0)
         {
-            SoldiersToUse = SoldierMgr->GetRoster(EFactionType::Enemy);
+            SoldiersToUse = SoldierMgr->GetRoster(AttackingFaction);  // respect the correct faction
         }
 
         int32 SoldierIndex = 0;
@@ -110,8 +114,8 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission with %d vehicles from base '%s' (duration: %d days)"),
-        *UEnum::GetValueAsString(MissionType), Vehicles.Num(), *OriginBase->BaseName.ToString(), DurationDays);
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission for faction %s with %d vehicles from base '%s' (duration: %d days)"),
+        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString(), DurationDays);
 
     return NewMission;
 }
@@ -135,13 +139,13 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
         return nullptr;
     }
 
-    // Pass the chosen MissionType down
-    return StartMission(OriginBase, AvailableVehicles, DurationDays, TArray<UStrategySoldier*>(), MissionType);
+    // AI missions default to Enemy faction
+    return StartMission(OriginBase, AvailableVehicles, DurationDays, TArray<UStrategySoldier*>(), MissionType, EFactionType::Enemy);
 }
 
 void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 {
-    if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0) 
+    if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0)
         return;
 
     float FleetEffectiveness = CalculateFleetEffectiveness(Mission);
@@ -166,27 +170,19 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         break;
     }
 
-    // === Outcome ===
+    // === Outcome roll (slightly lowered max success so failures happen for testing) ===
     const int32 Roll = FMath::RandRange(1, 100);
-    float SuccessChance = FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 30.0f, 95.0f);
+    float SuccessChance = FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 40.0f, 85.0f);
 
     EMissionOutcome Outcome;
     if (Roll <= SuccessChance)
-    {
         Outcome = EMissionOutcome::Success;
-    }
     else if (Roll <= SuccessChance + 25.0f)
-    {
         Outcome = EMissionOutcome::PartialSuccess;
-    }
     else if (Roll <= SuccessChance + 45.0f)
-    {
         Outcome = EMissionOutcome::Failure;
-    }
     else
-    {
         Outcome = EMissionOutcome::CatastrophicFailure;
-    }
 
     Mission->Outcome = Outcome;
 
@@ -222,7 +218,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->ResourcesGained = Reward;
 
-    // === Per-vehicle losses + POW capture (symmetric) ===
+    // === Per-vehicle losses + POW capture ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
     TArray<UStrategySoldier*> CapturedSoldiers;
@@ -243,26 +239,21 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                 if (!Soldier) continue;
 
                 bool bCaptured = false;
+                int32 CaptureChance = 10;
 
                 if (Outcome == EMissionOutcome::Failure || Outcome == EMissionOutcome::CatastrophicFailure)
-                {
-                    if (FMath::RandRange(1, 100) <= 60)
-                    {
-                        bCaptured = true;
-                    }
-                }
-                else if (Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess)
-                {
-                    if (FMath::RandRange(1, 100) <= 40)
-                    {
-                        bCaptured = true;
-                    }
-                }
+                    CaptureChance = 70;
+                else if (Outcome == EMissionOutcome::PartialSuccess)
+                    CaptureChance = 40;
+                // Success = low chance (rare defender counter-capture)
+
+                if (FMath::RandRange(1, 100) <= CaptureChance)
+                    bCaptured = true;
 
                 if (bCaptured)
                 {
                     CapturedSoldiers.Add(Soldier);
-                    UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s CAPTURED!"), *Soldier->SoldierName);
+                    UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s CAPTURED by opposing force!"), *Soldier->SoldierName);
                 }
                 else
                 {
@@ -273,7 +264,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
             Vehicle->CurrentPassengers.Empty();
 
-            if (Vehicle->CurrentHanger) 
+            if (Vehicle->CurrentHanger)
                 Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
 
             Vehicle->CurrentHanger = nullptr;
@@ -285,7 +276,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         else
         {
             int32 Damage = (Outcome == EMissionOutcome::CatastrophicFailure) ? 60 :
-                           (Outcome == EMissionOutcome::Failure) ? 35 : 15;
+                (Outcome == EMissionOutcome::Failure) ? 35 : 15;
             Vehicle->ApplyDamage(Damage);
             Vehicle->CurrentMission = nullptr;
         }
@@ -294,24 +285,38 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
-    // === POW Transfer ===
-    if (CapturedSoldiers.Num() > 0 && Mission->OriginBase)
+    // === POW Transfer to DEFENDING faction ===
+    if (CapturedSoldiers.Num() > 0)
     {
-        UStrategyBase* CapturingBase = Mission->OriginBase;
-        CapturingBase->CapturedPrisoners.Append(CapturedSoldiers);
+        EFactionType OpposingFaction = (Mission->AttackingFaction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-        UE_LOG(LogTemp, Display, TEXT("[POW] %d soldiers captured and moved to base '%s'"),
-            CapturedSoldiers.Num(), *CapturingBase->BaseName.ToString());
+        UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+        if (Campaign)
+        {
+            UBaseManagerSubsystem* BaseMgr = Campaign->GetBaseManager();
+            if (BaseMgr)
+            {
+                const TArray<UStrategyBase*>& DefenderBases = BaseMgr->GetBases(OpposingFaction);
+                if (DefenderBases.Num() > 0)
+                {
+                    UStrategyBase* DefenderBase = DefenderBases[0];  // first available base of defender
+                    DefenderBase->CapturedPrisoners.Append(CapturedSoldiers);
+
+                    UE_LOG(LogTemp, Display, TEXT("[POW] %d soldiers captured by %s and moved to base '%s'"),
+                        CapturedSoldiers.Num(), *UEnum::GetValueAsString(OpposingFaction), *DefenderBase->BaseName.ToString());
+                }
+            }
+        }
     }
 
-    // === Apply rewards ===
+    // === Apply rewards to the ATTACKING faction ===
     UResourceManagerSubsystem* ResourceMgr = GetResourceManager();
     if (ResourceMgr)
     {
-        ResourceMgr->AddResources(EFactionType::Enemy, Reward);
+        ResourceMgr->AddResources(Mission->AttackingFaction, Reward);
     }
 
-    // === Return surviving soldiers ===
+    // === Clean up surviving soldiers ===
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         Vehicle->CurrentPassengers.Empty();

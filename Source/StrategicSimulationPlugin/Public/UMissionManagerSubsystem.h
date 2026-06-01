@@ -22,7 +22,7 @@ public:
 
 	// Update: Added SoldiersToAssign parameter to StartMission for better soldier management and assignment during mission launch
     UFUNCTION(BlueprintCallable, Category = "Mission")
-    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType = EMissionType::Offensive);
+    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType = EMissionType::Offensive, EFactionType AttackingFaction = EFactionType::Enemy);
 
     UFUNCTION(BlueprintCallable, Category = "Mission")
     void SimulateOneDay();
