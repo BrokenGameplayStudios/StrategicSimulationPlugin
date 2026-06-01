@@ -17,30 +17,33 @@ void UEngineeringManagerSubsystem::Initialize(FSubsystemCollectionBase& Collecti
     UE_LOG(LogTemp, Display, TEXT("UEngineeringManagerSubsystem initialized — production slots + queuing enabled"));
 }
 
-bool UEngineeringManagerSubsystem::PurchaseItem(EFactionType Faction, UItemDefinition* ItemDef, UStrategySoldier* TargetSoldier)
+bool UEngineeringManagerSubsystem::PurchaseItem(EFactionType Faction, UItemDefinition* ItemDef, UStrategySoldier* TargetSoldier /*= nullptr*/)
 {
     if (!ItemDef) return false;
 
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (!ResourceMgr) return false;
 
-    FResourceStockpile Cost = ItemDef->PurchaseCost;
-    FResourceStockpile Current = ResourceMgr->GetResources(Faction);
+    // Use the full PurchaseCost from the ItemDefinition (now supports Metals, Biologicals, Chemicals, etc.)
+    const FResourceStockpile& Cost = ItemDef->PurchaseCost;
 
-    if (Current.Money < Cost.Money || Current.Supplies < Cost.Supplies || Current.ExoticMaterial < Cost.ExoticMaterial)
+    if (!ResourceMgr->SubtractResources(Faction, Cost))
     {
-        return false;
+        return false; // logging already happens inside SubtractResources
     }
 
-    ResourceMgr->AddResources(Faction, { -Cost.Money, -Cost.Supplies, -Cost.ExoticMaterial, -Cost.ResearchPoints });
-
+    // Equip to soldier (unchanged behavior)
     if (TargetSoldier)
     {
         TargetSoldier->CurrentLoadout.Add(ItemDef);
+        UE_LOG(LogTemp, Display, TEXT("[PURCHASE] %s bought %s for soldier %s"),
+            *UEnum::GetValueAsString(Faction), *ItemDef->ItemName.ToString(), *TargetSoldier->SoldierName);
     }
 
     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
         EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, TargetSoldier);
+    }
 
     return true;
 }
@@ -132,4 +135,25 @@ void UEngineeringManagerSubsystem::ResetProduction()
     EnemyProductionQueue.Empty();
 
     UE_LOG(LogTemp, Display, TEXT("[RESET] All production jobs cleared for both factions"));
+}
+
+bool UEngineeringManagerSubsystem::PurchaseAndEquipVehicleWeapon(EFactionType Faction, UStrategyVehicle* TargetVehicle, UItemDefinition* WeaponDef)
+{
+    if (!TargetVehicle || !WeaponDef) return false;
+
+    // Purchase first (uses full resource cost)
+    if (!PurchaseItem(Faction, WeaponDef, nullptr))
+    {
+        return false;
+    }
+
+    // Then equip to the vehicle
+    if (TargetVehicle->EquipWeapon(WeaponDef))
+    {
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s equipped weapon '%s' (fleet effectiveness now higher)"),
+            *TargetVehicle->VehicleDefinition->VehicleName.ToString(), *WeaponDef->ItemName.ToString());
+        return true;
+    }
+
+    return false;
 }

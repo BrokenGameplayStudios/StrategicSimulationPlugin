@@ -19,6 +19,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Procurement")
     bool PurchaseItem(EFactionType Faction, UItemDefinition* ItemDef, UStrategySoldier* TargetSoldier = nullptr);
 
+    /** Purchases a weapon using full resource costs and equips it to a vehicle. Returns true on success. */
+    UFUNCTION(BlueprintCallable, Category = "Procurement")
+    bool PurchaseAndEquipVehicleWeapon(EFactionType Faction, UStrategyVehicle* TargetVehicle, UItemDefinition* WeaponDef);
+
     UFUNCTION(BlueprintCallable, Category = "Production")
     UActiveProductionJob* StartProduction(EFactionType Faction, UItemDefinition* ItemDef, int32 Quantity = 1, UStrategyBase* TargetBase = nullptr);
 

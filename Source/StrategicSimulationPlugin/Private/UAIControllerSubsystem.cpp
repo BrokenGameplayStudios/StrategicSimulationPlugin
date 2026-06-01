@@ -196,6 +196,29 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (bHasParkedVehicles)
             {
+                // === NEW: AI buys & equips vehicle weapons when possible ===
+                UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
+                if (EngMgr && ResourceMgr)
+                {
+                    for (UStrategyFacility* Fac : Base->Facilities)
+                    {
+                        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+                        {
+                            for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
+                            {
+                                if (Vehicle && Vehicle->GetLoadedWeapons().Num() == 0)
+                                {
+                                    // TODO: Replace with real weapon Data Asset once you create one
+                                    // For now this will do nothing until you make a test weapon item.
+                                    // Example: UItemDefinition* TestWeapon = ...; EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, TestWeapon);
+                                    UE_LOG(LogTemp, Verbose, TEXT("[AI] Vehicle %s ready for weapon equipping (create a weapon Data Asset to test)"),
+                                        *Vehicle->VehicleDefinition->VehicleName.ToString());
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
                 {
                     // AI now picks varied mission types for better simulation testing
