@@ -196,7 +196,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (bHasParkedVehicles)
             {
-                // === NEW: AI buys & equips vehicle weapons when possible ===
+                // === NEW Phase 6.3: AI buys & equips vehicle weapons + refills ammo ===
                 UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
                 if (EngMgr && ResourceMgr)
                 {
@@ -206,13 +206,25 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                         {
                             for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
                             {
-                                                        if (Vehicle && Vehicle->GetEquippedWeapons().Num() == 0)
+                                if (!Vehicle) continue;
+
+                                // 1. Equip weapons if slots are available
+                                if (Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots())
                                 {
-                                    // TODO: Replace with real weapon Data Asset once you create one
-                                    // For now this will do nothing until you make a test weapon item.
-                                    // Example: UItemDefinition* TestWeapon = ...; EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, TestWeapon);
-                                    UE_LOG(LogTemp, Verbose, TEXT("[AI] Vehicle %s ready for weapon equipping (create a weapon Data Asset to test)"),
-                                        *Vehicle->VehicleDefinition->VehicleName.ToString());
+                                    // TODO: Once you create real weapon Data Assets, load them here
+                                    // For testing: UItemDefinition* TestWeapon = ...; EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, TestWeapon);
+                                    UE_LOG(LogTemp, Verbose, TEXT("[AI] Vehicle %s has open weapon slots (%d/%d) — ready for equipping"),
+                                        *Vehicle->VehicleDefinition->VehicleName.ToString(),
+                                        Vehicle->GetEquippedWeapons().Num(), Vehicle->GetMaxWeaponSlots());
+                                }
+
+                                // 2. Refill ammo on existing weapons
+                                for (int32 i = 0; i < Vehicle->WeaponAmmoCounts.Num(); ++i)
+                                {
+                                    if (Vehicle->WeaponAmmoCounts[i] < Vehicle->EquippedWeapons[i].Get()->MaxAmmo)
+                                    {
+                                        EngMgr->PurchaseAmmoForVehicle(Faction, Vehicle, i);
+                                    }
                                 }
                             }
                         }

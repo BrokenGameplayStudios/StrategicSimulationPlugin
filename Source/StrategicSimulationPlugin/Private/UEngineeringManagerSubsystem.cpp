@@ -157,3 +157,37 @@ bool UEngineeringManagerSubsystem::PurchaseAndEquipVehicleWeapon(EFactionType Fa
 
     return false;
 }
+
+bool UEngineeringManagerSubsystem::PurchaseAmmoForVehicle(EFactionType Faction, UStrategyVehicle* TargetVehicle, int32 WeaponIndex)
+{
+    if (!TargetVehicle || !TargetVehicle->EquippedWeapons.IsValidIndex(WeaponIndex))
+        return false;
+
+    UItemDefinition* Weapon = TargetVehicle->EquippedWeapons[WeaponIndex].Get();
+    if (!Weapon || Weapon->MaxAmmo <= 0)
+        return false;
+
+    // Simple ammo cost: 20% of the weapon's purchase cost, biased toward Metals + Chemicals
+    FResourceStockpile AmmoCost;
+    AmmoCost.Money = Weapon->PurchaseCost.Money / 5;
+    AmmoCost.Metals = Weapon->PurchaseCost.Metals / 2;
+    AmmoCost.Chemicals = Weapon->PurchaseCost.Chemicals / 2;
+
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (!ResourceMgr || !ResourceMgr->CanAfford(Faction, AmmoCost))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] Cannot afford ammo refill for %s"), *Weapon->ItemName.ToString());
+        return false;
+    }
+
+    if (ResourceMgr->SubtractResources(Faction, AmmoCost))
+    {
+        TargetVehicle->WeaponAmmoCounts[WeaponIndex] = Weapon->MaxAmmo; // full refill
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s refilled ammo for weapon '%s' (cost: %d Money, %d Metals, %d Chemicals)"),
+            *UEnum::GetValueAsString(Faction), *Weapon->ItemName.ToString(),
+            AmmoCost.Money, AmmoCost.Metals, AmmoCost.Chemicals);
+        return true;
+    }
+
+    return false;
+}

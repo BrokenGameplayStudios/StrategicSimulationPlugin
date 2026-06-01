@@ -23,6 +23,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Procurement")
     bool PurchaseAndEquipVehicleWeapon(EFactionType Faction, UStrategyVehicle* TargetVehicle, UItemDefinition* WeaponDef);
 
+    /** Buys ammo for a specific equipped weapon on a vehicle and refills it (cheap refill using Metals + Chemicals). */
+    UFUNCTION(BlueprintCallable, Category = "Procurement")
+    bool PurchaseAmmoForVehicle(EFactionType Faction, UStrategyVehicle* TargetVehicle, int32 WeaponIndex);
+
     UFUNCTION(BlueprintCallable, Category = "Production")
     UActiveProductionJob* StartProduction(EFactionType Faction, UItemDefinition* ItemDef, int32 Quantity = 1, UStrategyBase* TargetBase = nullptr);
 
