@@ -141,7 +141,7 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
 
 void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 {
-    if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0)
+    if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0) 
         return;
 
     float FleetEffectiveness = CalculateFleetEffectiveness(Mission);
@@ -161,7 +161,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
         else
         {
-            UE_LOG(LogTemp, Display, TEXT("[MISSION] %s mission — reached target location"));
+            UE_LOG(LogTemp, Display, TEXT("[MISSION] %s mission — reached target location"), *UEnum::GetValueAsString(Mission->MissionType));
         }
         break;
     }
@@ -273,7 +273,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
             Vehicle->CurrentPassengers.Empty();
 
-            if (Vehicle->CurrentHanger)
+            if (Vehicle->CurrentHanger) 
                 Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
 
             Vehicle->CurrentHanger = nullptr;
@@ -285,7 +285,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         else
         {
             int32 Damage = (Outcome == EMissionOutcome::CatastrophicFailure) ? 60 :
-                (Outcome == EMissionOutcome::Failure) ? 35 : 15;
+                           (Outcome == EMissionOutcome::Failure) ? 35 : 15;
             Vehicle->ApplyDamage(Damage);
             Vehicle->CurrentMission = nullptr;
         }
