@@ -52,9 +52,13 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
     FText MissionName;
 
-    /** NEW for Phase 2: Mission Type — controls simulation flow (Interception / Defensive / Offensive) */
+    /** NEW for Phase 2: Mission Type — controls simulation flow */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
     EMissionType MissionType;
+
+    /** NEW: Attacking faction (required for symmetric POW + resource handling) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")
+    EFactionType AttackingFaction = EFactionType::Enemy;
 
     // === NEW: Mission Results (Phase 3) ===
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Result")
