@@ -64,11 +64,29 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Managers")
     class UMissionManagerSubsystem* GetMissionManager() const;
 
-    // Configurable Item Database
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
-    TSoftObjectPtr<class UItemDatabase> ItemDatabaseAsset;
+    UFUNCTION(BlueprintCallable, Category = "Databases")
+    class UItemDatabase* GetItemDatabase() const { return ItemDatabaseAsset.Get(); }
+
+    UFUNCTION(BlueprintCallable, Category = "Databases")
+    class UFacilityDatabase* GetFacilityDatabase() const { return FacilityDatabaseAsset.Get(); }
+
+    UFUNCTION(BlueprintCallable, Category = "Databases")
+    class USoldierClassDatabase* GetSoldierClassDatabase() const { return SoldierClassDatabaseAsset.Get(); }
+
+    UFUNCTION(BlueprintCallable, Category = "Databases")
+    class UResearchDatabase* GetResearchDatabase() const { return ResearchDatabaseAsset.Get(); }
+
+    UFUNCTION(BlueprintCallable, Category = "Databases")
+    class UVehicleDatabase* GetVehicleDatabase() const { return VehicleDatabaseAsset.Get(); }
+
+    UFUNCTION(BlueprintCallable, Category = "Databases")
+    class UItemDatabase* GetVehicleItemDatabase() const { return VehicleItemDatabaseAsset.Get(); }
 
     // === DATABASES ===
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Configuration")
+    TSoftObjectPtr<class UItemDatabase> ItemDatabaseAsset;
+        
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<class UFacilityDatabase> FacilityDatabaseAsset;
 
@@ -80,6 +98,10 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<class UVehicleDatabase> VehicleDatabaseAsset;
+
+    /** NEW: Dedicated database for all vehicle weapons, defense systems, and ammo items */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
+    TSoftObjectPtr<class UItemDatabase> VehicleItemDatabaseAsset;
 
     // Simulation control
     UFUNCTION(BlueprintCallable, Category = "Campaign")

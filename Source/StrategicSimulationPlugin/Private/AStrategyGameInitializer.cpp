@@ -80,6 +80,27 @@ void AStrategyGameInitializer::BeginPlay()
         UE_LOG(LogTemp, Warning, TEXT("[VEHICLE DATABASE] VehicleDatabaseAsset is NULL!"));
     }
 
+    // === NEW: Load Vehicle Item Database (weapons, defense systems, ammo) ===
+    if (VehicleItemDatabaseAsset.IsValid())
+    {
+        Campaign->VehicleItemDatabaseAsset = VehicleItemDatabaseAsset;
+        UE_LOG(LogTemp, Display, TEXT("GameInitializer: VehicleItemDatabaseAsset set"));
+    }
+    else if (!VehicleItemDatabaseAsset.IsNull())
+    {
+        UItemDatabase* LoadedDB = VehicleItemDatabaseAsset.LoadSynchronous();
+        if (LoadedDB)
+        {
+            Campaign->VehicleItemDatabaseAsset = VehicleItemDatabaseAsset;
+            UE_LOG(LogTemp, Display, TEXT("GameInitializer: VehicleItemDatabaseAsset loaded synchronously"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE ITEMS] VehicleItemDatabaseAsset is NULL!"));
+    }
+
+
     UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases force-loaded and registered"));
 
     // === START THE SIMULATION ===
