@@ -141,7 +141,8 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
 
 void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 {
-    if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0) return;
+    if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0)
+        return;
 
     float FleetEffectiveness = CalculateFleetEffectiveness(Mission);
 
@@ -151,6 +152,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     case EMissionType::Interception:
         UE_LOG(LogTemp, Display, TEXT("[MISSION] Interception mission — direct air battle"));
         break;
+
     case EMissionType::Defensive:
     case EMissionType::Offensive:
         if (FMath::RandRange(1, 100) <= 30)
@@ -169,10 +171,22 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     float SuccessChance = FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 30.0f, 95.0f);
 
     EMissionOutcome Outcome;
-    if (Roll <= SuccessChance)                  Outcome = EMissionOutcome::Success;
-    else if (Roll <= SuccessChance + 25.0f)    Outcome = EMissionOutcome::PartialSuccess;
-    else if (Roll <= SuccessChance + 45.0f)    Outcome = EMissionOutcome::Failure;
-    else                                        Outcome = EMissionOutcome::CatastrophicFailure;
+    if (Roll <= SuccessChance)
+    {
+        Outcome = EMissionOutcome::Success;
+    }
+    else if (Roll <= SuccessChance + 25.0f)
+    {
+        Outcome = EMissionOutcome::PartialSuccess;
+    }
+    else if (Roll <= SuccessChance + 45.0f)
+    {
+        Outcome = EMissionOutcome::Failure;
+    }
+    else
+    {
+        Outcome = EMissionOutcome::CatastrophicFailure;
+    }
 
     Mission->Outcome = Outcome;
 
@@ -180,15 +194,35 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     FResourceStockpile Reward;
     switch (Outcome)
     {
-    case EMissionOutcome::Success:        Reward.Money = FMath::RandRange(1200, 2500); Reward.Metals = FMath::RandRange(800, 1600); Reward.Biologicals = FMath::RandRange(300, 700); Reward.Chemicals = FMath::RandRange(200, 500); break;
-    case EMissionOutcome::PartialSuccess: Reward.Money = FMath::RandRange(600, 1400); Reward.Metals = FMath::RandRange(400, 900); Reward.Biologicals = FMath::RandRange(150, 400); Reward.Chemicals = FMath::RandRange(100, 300); break;
-    case EMissionOutcome::Failure:        Reward.Money = FMath::RandRange(100, 600); Reward.Metals = FMath::RandRange(100, 400); Reward.Biologicals = FMath::RandRange(50, 150); Reward.Chemicals = FMath::RandRange(30, 100); break;
-    case EMissionOutcome::CatastrophicFailure: Reward.Money = FMath::RandRange(-800, -200); Reward.Metals = FMath::RandRange(-300, -50); Reward.Biologicals = FMath::RandRange(-150, -20); Reward.Chemicals = FMath::RandRange(-100, -10); break;
+    case EMissionOutcome::Success:
+        Reward.Money = FMath::RandRange(1200, 2500);
+        Reward.Metals = FMath::RandRange(800, 1600);
+        Reward.Biologicals = FMath::RandRange(300, 700);
+        Reward.Chemicals = FMath::RandRange(200, 500);
+        break;
+    case EMissionOutcome::PartialSuccess:
+        Reward.Money = FMath::RandRange(600, 1400);
+        Reward.Metals = FMath::RandRange(400, 900);
+        Reward.Biologicals = FMath::RandRange(150, 400);
+        Reward.Chemicals = FMath::RandRange(100, 300);
+        break;
+    case EMissionOutcome::Failure:
+        Reward.Money = FMath::RandRange(100, 600);
+        Reward.Metals = FMath::RandRange(100, 400);
+        Reward.Biologicals = FMath::RandRange(50, 150);
+        Reward.Chemicals = FMath::RandRange(30, 100);
+        break;
+    case EMissionOutcome::CatastrophicFailure:
+        Reward.Money = FMath::RandRange(-800, -200);
+        Reward.Metals = FMath::RandRange(-300, -50);
+        Reward.Biologicals = FMath::RandRange(-150, -20);
+        Reward.Chemicals = FMath::RandRange(-100, -10);
+        break;
     }
 
     Mission->ResourcesGained = Reward;
 
-    // === Per-vehicle losses + POW capture (symmetric for both sides) ===
+    // === Per-vehicle losses + POW capture (symmetric) ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
     TArray<UStrategySoldier*> CapturedSoldiers;
@@ -212,13 +246,17 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
                 if (Outcome == EMissionOutcome::Failure || Outcome == EMissionOutcome::CatastrophicFailure)
                 {
-                    // Defender captures attacker’s soldiers
-                    if (FMath::RandRange(1, 100) <= 60) bCaptured = true;
+                    if (FMath::RandRange(1, 100) <= 60)
+                    {
+                        bCaptured = true;
+                    }
                 }
                 else if (Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess)
                 {
-                    // Attacker captures defender’s soldiers (smaller chance)
-                    if (FMath::RandRange(1, 100) <= 40) bCaptured = true;
+                    if (FMath::RandRange(1, 100) <= 40)
+                    {
+                        bCaptured = true;
+                    }
                 }
 
                 if (bCaptured)
@@ -235,7 +273,9 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
             Vehicle->CurrentPassengers.Empty();
 
-            if (Vehicle->CurrentHanger) Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
+            if (Vehicle->CurrentHanger)
+                Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
+
             Vehicle->CurrentHanger = nullptr;
             Vehicle->HomeHanger = nullptr;
             Vehicle->CurrentMission = nullptr;
@@ -254,7 +294,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
-    // === POW Transfer to the winning side's base ===
+    // === POW Transfer ===
     if (CapturedSoldiers.Num() > 0 && Mission->OriginBase)
     {
         UStrategyBase* CapturingBase = Mission->OriginBase;
@@ -271,7 +311,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         ResourceMgr->AddResources(EFactionType::Enemy, Reward);
     }
 
-    // === Return survivors ===
+    // === Return surviving soldiers ===
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         Vehicle->CurrentPassengers.Empty();
