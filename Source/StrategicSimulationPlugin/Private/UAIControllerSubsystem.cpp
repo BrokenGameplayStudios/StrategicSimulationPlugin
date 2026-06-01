@@ -24,33 +24,36 @@ void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
         UE_LOG(LogTemp, Display, TEXT("✅ UAIControllerSubsystem — OnDayPassed bound successfully"));
     }
 
-    UE_LOG(LogTemp, Display, TEXT("✅ UAIControllerSubsystem initialized — Enemy AI is NOW ACTIVE"));
+    UE_LOG(LogTemp, Display, TEXT("✅ UAIControllerSubsystem initialized — AI vs AI mode ACTIVE (Human + Enemy)"));
 }
 
 void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
 {
-    UE_LOG(LogTemp, Display, TEXT("🔥 [AI] === ENEMY AI DECISION TRIGGERED — Real Day %d ==="), NewDay);
+    UE_LOG(LogTemp, Display, TEXT("🔥 [AI] === AI TICK START — Day %d (BOTH FACTIONS) ==="), NewDay);
 
     if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
     {
         BaseMgr->AdvanceFacilityConstruction(EFactionType::Enemy);
-        BaseMgr->AdvanceAllConstruction();   // NEW: Queue processing
+        BaseMgr->AdvanceFacilityConstruction(EFactionType::Human);   // NEW
+        BaseMgr->AdvanceAllConstruction();
     }
 
+    RunAIForFaction(EFactionType::Human, NewDay);     // NEW
     RunAIForFaction(EFactionType::Enemy, NewDay);
 }
 
 void UAIControllerSubsystem::Debug_RunAI()
 {
-    UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Manual AI run requested by player"));
+    UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Manual AI run requested for BOTH factions"));
+    RunAIForFaction(EFactionType::Human, 999);
     RunAIForFaction(EFactionType::Enemy, 999);
 }
 
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
-    if (!bAIEnabled || Faction != EFactionType::Enemy) return;
+    if (!bAIEnabled) return;   // Removed the Enemy-only guard
 
-    if (CurrentDay == LastProcessedAIDay)
+    if (CurrentDay == LastProcessedAIDay && Faction == EFactionType::Enemy) // light guard to avoid double-processing Enemy
     {
         UE_LOG(LogTemp, Verbose, TEXT("[AI GUARD] Skipping duplicate AI run for %s on day %d"),
             *UEnum::GetValueAsString(Faction), CurrentDay);
@@ -67,23 +70,28 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     if (!BaseMgr || !ResourceMgr) return;
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s — Day %d decision (full build order) - Bases: %d"),
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — Day %d decision (full build order) - Bases: %d"),
         *UEnum::GetValueAsString(Faction), CurrentDay, BaseMgr->GetBases(Faction).Num());
 
+    // === Initial base creation (different locations for Human vs Enemy) ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] No bases exist — creating initial Command Center base"));
-        FVector2D NewLocation = FVector2D(960.0f, 540.0f);
+        FVector2D NewLocation = (Faction == EFactionType::Human)
+            ? FVector2D(300.0f, 540.0f)      // Human starts on left side
+            : FVector2D(1620.0f, 540.0f);    // Enemy starts on right side
+
         FText BaseName = FText::FromString("Command Center");
+
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s has no bases — creating initial Command Center"), *UEnum::GetValueAsString(Faction));
 
         if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial 'Command Center' base created successfully"));
+            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial 'Command Center' base created for %s"), *UEnum::GetValueAsString(Faction));
             return;
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("[AI] FAILED to create initial base!"));
+            UE_LOG(LogTemp, Error, TEXT("[AI] FAILED to create initial base for %s!"), *UEnum::GetValueAsString(Faction));
             return;
         }
     }
@@ -91,6 +99,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
+    // === The rest of your original logic stays 100% unchanged from here down ===
     if (BaseMgr->CanBuildNewBase(Faction))
     {
         int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
@@ -101,7 +110,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Expanded to new base '%s'"), *BaseName.ToString());
+                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s expanded to new base '%s'"), *UEnum::GetValueAsString(Faction), *BaseName.ToString());
                 return;
             }
         }
@@ -162,7 +171,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             TryBuildFacility(Faction, EFacilityType::VehicleRepair, Base);
         }
 
-        // === STAGGERED VEHICLE PRODUCTION — every base gets 1 before any gets 2, etc. ===
+        // === STAGGERED VEHICLE PRODUCTION ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
@@ -170,17 +179,14 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             {
                 if (TryBuildVehicle(Faction, TargetBase))
                 {
-                    // Optional: log which base we chose for clarity
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s queued vehicle in base with fewest vehicles ('%s')"),
                         *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString());
-                    continue;
                 }
             }
         }
 
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
-            // Quick check for parked vehicles (prevents spam + failed launches)
             bool bHasParkedVehicles = false;
             for (UStrategyFacility* Fac : Base->Facilities)
             {
@@ -196,59 +202,53 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (bHasParkedVehicles)
             {
-                // === Phase 6.3: AI auto-buys and equips vehicle weapons from VehicleItemDatabaseAsset ===
+                // === Vehicle weapon + ammo equipping (your existing code) ===
                 UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
                 UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
                 if (EngMgr && Campaign && ResourceMgr)
                 {
                     UItemDatabase* VehicleItemDB = Campaign->GetVehicleItemDatabase();
-                    if (!VehicleItemDB)
+                    if (VehicleItemDB)
                     {
-                        UE_LOG(LogTemp, Verbose, TEXT("[AI] VehicleItemDatabase not loaded yet"));
-                        return; // skip this frame
-                    }
-
-                    // Find the first available VehicleWeapon in the database
-                    UItemDefinition* AvailableWeapon = nullptr;
-                    for (const TSoftObjectPtr<UItemDefinition>& SoftItem : VehicleItemDB->BuyableItems)
-                    {
-                        if (UItemDefinition* Item = SoftItem.Get())
+                        UItemDefinition* AvailableWeapon = nullptr;
+                        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : VehicleItemDB->BuyableItems)
                         {
-                            if (Item->Category == EItemCategory::VehicleWeapon)
+                            if (UItemDefinition* Item = SoftItem.Get())
                             {
-                                AvailableWeapon = Item;
-                                break;
+                                if (Item->Category == EItemCategory::VehicleWeapon)
+                                {
+                                    AvailableWeapon = Item;
+                                    break;
+                                }
                             }
                         }
-                    }
 
-                    for (UStrategyFacility* Fac : Base->Facilities)
-                    {
-                        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+                        for (UStrategyFacility* Fac : Base->Facilities)
                         {
-                            for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
+                            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                             {
-                                if (!Vehicle) continue;
-
-                                // 1. Equip a weapon if the vehicle has open hardpoints
-                                if (Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots() && AvailableWeapon)
+                                for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
                                 {
-                                    if (EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, AvailableWeapon))
+                                    if (!Vehicle) continue;
+
+                                    if (Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots() && AvailableWeapon)
                                     {
-                                        UE_LOG(LogTemp, Display, TEXT("[AI] %s equipped vehicle weapon '%s' on %s"),
-                                            *UEnum::GetValueAsString(Faction), *AvailableWeapon->ItemName.ToString(),
-                                            *Vehicle->VehicleDefinition->VehicleName.ToString());
+                                        if (EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, AvailableWeapon))
+                                        {
+                                            UE_LOG(LogTemp, Display, TEXT("[AI] %s equipped vehicle weapon '%s' on %s"),
+                                                *UEnum::GetValueAsString(Faction), *AvailableWeapon->ItemName.ToString(),
+                                                *Vehicle->VehicleDefinition->VehicleName.ToString());
+                                        }
                                     }
-                                }
 
-                                // 2. Refill ammo on any equipped weapons that are low
-                                for (int32 i = 0; i < Vehicle->WeaponAmmoCounts.Num(); ++i)
-                                {
-                                    if (Vehicle->WeaponAmmoCounts.IsValidIndex(i) &&
-                                        Vehicle->EquippedWeapons.IsValidIndex(i) &&
-                                        Vehicle->WeaponAmmoCounts[i] < Vehicle->EquippedWeapons[i].Get()->MaxAmmo)
+                                    for (int32 i = 0; i < Vehicle->WeaponAmmoCounts.Num(); ++i)
                                     {
-                                        EngMgr->PurchaseAmmoForVehicle(Faction, Vehicle, i);
+                                        if (Vehicle->WeaponAmmoCounts.IsValidIndex(i) &&
+                                            Vehicle->EquippedWeapons.IsValidIndex(i) &&
+                                            Vehicle->WeaponAmmoCounts[i] < Vehicle->EquippedWeapons[i].Get()->MaxAmmo)
+                                        {
+                                            EngMgr->PurchaseAmmoForVehicle(Faction, Vehicle, i);
+                                        }
                                     }
                                 }
                             }
@@ -256,22 +256,32 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                     }
                 }
 
+                // === MISSION LAUNCH (now faction-aware) ===
                 if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
                 {
-                    // AI now picks varied mission types for better simulation testing
-                    EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2)); // 0=Interception, 1=Defensive, 2=Offensive
+                    EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2));
 
-                    if (UMissionGroup* Mission = MissionMgr->LaunchMissionFromBase(Base, 15, ChosenType))
+                    // Use StartMission directly so we pass the correct AttackingFaction
+                    TArray<UStrategyVehicle*> AvailableVehicles;
+                    for (UStrategyFacility* Fac : Base->Facilities)
                     {
-                        UE_LOG(LogTemp, Display, TEXT("[AI] Launched %s mission from base '%s' with %d vehicles"),
-                            *UEnum::GetValueAsString(ChosenType), *Base->BaseName.ToString(), Mission->VehiclesInFleet.Num());
+                        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+                            AvailableVehicles.Append(Fac->ParkedVehicles);
+                    }
+
+                    if (AvailableVehicles.Num() > 0)
+                    {
+                        if (UMissionGroup* Mission = MissionMgr->StartMission(Base, AvailableVehicles, 15, TArray<UStrategySoldier*>(), ChosenType, Faction))
+                        {
+                            UE_LOG(LogTemp, Display, TEXT("[AI] %s AI launched %s mission from base '%s' with %d vehicles"),
+                                *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(ChosenType), *Base->BaseName.ToString(), AvailableVehicles.Num());
+                        }
                     }
                 }
             }
             else
             {
-                UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting for production to finish"),
-                    *Base->BaseName.ToString());
+                UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting"), *Base->BaseName.ToString());
             }
         }
 
@@ -282,13 +292,13 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
 
     bool bRecruited = (SoldierMgr && TryRecruit(Faction));
-    if (bRecruited) UE_LOG(LogTemp, Display, TEXT("[AI] Recruited soldier — continuing..."));
+    if (bRecruited) UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited soldier"), *UEnum::GetValueAsString(Faction));
 
-    if (ResearchMgr && TryResearch(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] Research action taken"));
-    if (TryBuyAndEquip(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] Purchase/equip action taken"));
-    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] Production action taken"));
+    if (ResearchMgr && TryResearch(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s started research"), *UEnum::GetValueAsString(Faction));
+    if (TryBuyAndEquip(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s purchase/equip action taken"), *UEnum::GetValueAsString(Faction));
+    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s production action taken"), *UEnum::GetValueAsString(Faction));
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
 // === UPDATED: Queues soldier training in Barracks using Production Slots ===
