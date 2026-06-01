@@ -24,6 +24,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Facilities")
     TArray<UStrategyFacility*> Facilities;
 
+    /** NEW: POW / Prisoners System — captured enemy soldiers held at this base */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Base|Prisoners")
+    TArray<UStrategySoldier*> CapturedPrisoners;
+
     /** Per-base power tracking */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Power")
     int32 PowerProvided = 0;

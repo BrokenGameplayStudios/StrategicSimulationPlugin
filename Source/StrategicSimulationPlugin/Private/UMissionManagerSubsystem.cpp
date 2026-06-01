@@ -153,14 +153,12 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     switch (Mission->MissionType)
     {
     case EMissionType::Interception:
-        // Pure vehicle-to-vehicle encounter — always air battle
         bAirBattleOccurred = true;
         UE_LOG(LogTemp, Display, TEXT("[MISSION] Interception mission — direct air battle"));
         break;
 
     case EMissionType::Defensive:
     case EMissionType::Offensive:
-        // 30% chance of being intercepted in transit
         if (FMath::RandRange(1, 100) <= 30)
         {
             bHadTransitIntercept = true;
@@ -176,9 +174,9 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         break;
     }
 
-    // === 3. Simulate combat & determine outcome probabilities (weighted by effectiveness) ===
+    // === 3. Simulate combat & determine outcome probabilities ===
     const int32 Roll = FMath::RandRange(1, 100);
-    float SuccessChance = FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 30.0f, 95.0f); // base 20% + effectiveness boost
+    float SuccessChance = FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 30.0f, 95.0f);
 
     EMissionOutcome Outcome;
     if (Roll <= SuccessChance)                  Outcome = EMissionOutcome::Success;
@@ -188,7 +186,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->Outcome = Outcome;
 
-    // === 4. Generate rewards with requested resource bias ===
+    // === 4. Generate rewards ===
     FResourceStockpile Reward;
     switch (Outcome)
     {
@@ -220,52 +218,53 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->ResourcesGained = Reward;
 
-    // === Detailed reward logging ===
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Rewards Gained — Money:%d | Metals:%d | Biologicals:%d | Chemicals:%d | Exotic:%d | Research:%d"),
-        Reward.Money, Reward.Metals, Reward.Biologicals, Reward.Chemicals,
-        Reward.ExoticMaterial, Reward.ResearchPoints);
-
-    // === 5. Per-vehicle losses (core of your request #1 & #2) ===
+    // === 5. Per-vehicle losses + POW capture ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
+    TArray<UStrategySoldier*> CapturedSoldiers;
 
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         if (!Vehicle) continue;
 
-        float VehicleSurvivalChance = FleetEffectiveness * 0.7f + (Vehicle->CurrentHealth / 2.0f); // health helps
+        float VehicleSurvivalChance = FleetEffectiveness * 0.7f + (Vehicle->CurrentHealth / 2.0f);
 
         if (FMath::RandRange(1, 100) > VehicleSurvivalChance)
         {
-            // === VEHICLE LOST ===
             TotalVehiclesLost++;
             UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' DESTROYED — all passengers and equipment lost!"),
                 *Vehicle->VehicleDefinition->VehicleName.ToString());
 
-            // All soldiers on this ship are lost
             for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
             {
                 if (Soldier)
                 {
-                    AllLostSoldiers.Add(Soldier);
-                    UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s KIA with full loadout"), *Soldier->SoldierName);
+                    // 60% chance to capture instead of kill on Failure or CatastrophicFailure
+                    if ((Outcome == EMissionOutcome::Failure || Outcome == EMissionOutcome::CatastrophicFailure) &&
+                        FMath::RandRange(1, 100) <= 60)
+                    {
+                        CapturedSoldiers.Add(Soldier);
+                        UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s CAPTURED!"), *Soldier->SoldierName);
+                    }
+                    else
+                    {
+                        AllLostSoldiers.Add(Soldier);
+                        UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s KIA with full loadout"), *Soldier->SoldierName);
+                    }
                 }
             }
 
-            // Clear passengers (they're dead)
             Vehicle->CurrentPassengers.Empty();
 
-            // Destroy vehicle
             if (Vehicle->CurrentHanger) Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
             Vehicle->CurrentHanger = nullptr;
             Vehicle->HomeHanger = nullptr;
             Vehicle->CurrentMission = nullptr;
             Vehicle->CurrentHealth = 0;
-            Vehicle->UpdateDamageStateFromHealth(); // assumes this exists
+            Vehicle->UpdateDamageStateFromHealth();
         }
         else
         {
-            // Vehicle survived — apply light damage
             int32 Damage = (Outcome == EMissionOutcome::CatastrophicFailure) ? 60 :
                 (Outcome == EMissionOutcome::Failure) ? 35 : 15;
             Vehicle->ApplyDamage(Damage);
@@ -276,14 +275,24 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
+    // === POW Transfer: Move captured soldiers to the enemy base ===
+    if (CapturedSoldiers.Num() > 0 && Mission->OriginBase)
+    {
+        UStrategyBase* EnemyBase = Mission->OriginBase; // the base that launched the mission is the "defender" for capture purposes
+        EnemyBase->CapturedPrisoners.Append(CapturedSoldiers);
+
+        UE_LOG(LogTemp, Display, TEXT("[POW] %d soldiers captured and moved to base '%s'"),
+            CapturedSoldiers.Num(), *EnemyBase->BaseName.ToString());
+    }
+
     // === 6. Apply rewards ===
     UResourceManagerSubsystem* ResourceMgr = GetResourceManager();
     if (ResourceMgr)
     {
-        ResourceMgr->AddResources(EFactionType::Enemy, Reward); // or Human if you expose player faction later
+        ResourceMgr->AddResources(EFactionType::Enemy, Reward);
     }
 
-    // === 7. Return surviving soldiers (keeps your excellent existing logic) ===
+    // === 7. Return surviving soldiers ===
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
@@ -293,7 +302,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
             Soldier->StationedBase = Mission->OriginBase;
             Soldier->CurrentMission = nullptr;
 
-            // (Your original HomeBarracks / ParkedSoldiers logic continues here — unchanged)
             if (Soldier->HomeBarracks == nullptr)
             {
                 for (UStrategyFacility* Barracks : Mission->OriginBase->Facilities)
@@ -322,13 +330,17 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                 }
             }
         }
-        Vehicle->CurrentPassengers.Empty(); // prevent double-processing
+        Vehicle->CurrentPassengers.Empty();
     }
+
+    // === Detailed reward logging ===
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Rewards Gained — Money:%d | Metals:%d | Biologicals:%d | Chemicals:%d | Exotic:%d | Research:%d"),
+        Reward.Money, Reward.Metals, Reward.Biologicals, Reward.Chemicals,
+        Reward.ExoticMaterial, Reward.ResearchPoints);
 
     UE_LOG(LogTemp, Display, TEXT("[MISSION] %s resolved as %s — Effectiveness: %.1f%% | Vehicles lost: %d | Soldiers KIA: %d"),
         *UEnum::GetValueAsString(Mission->MissionType), *UEnum::GetValueAsString(Outcome), FleetEffectiveness, TotalVehiclesLost, Mission->SoldiersKilled);
 
-    // Broadcast completion
     OnMissionCompleted.Broadcast(Mission);
 }
 

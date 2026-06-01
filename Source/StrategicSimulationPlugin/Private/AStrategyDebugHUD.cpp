@@ -36,18 +36,19 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
         Campaign->GetSoldierManager()->GetRoster(EFactionType::Human).Num(),
         Campaign->GetSoldierManager()->GetRoster(EFactionType::Enemy).Num());
 
-    // === NEW: Vehicle Weapon System Debug ===
+    // === Vehicle Weapon System Debug + POWs ===
     UBaseManagerSubsystem* BaseMgr = Campaign->GetBaseManager();
     if (BaseMgr)
     {
-        DebugText += FString::Printf(TEXT("=== VEHICLE HARDPOINTS & LOADOUT ===\n"));
+        DebugText += FString::Printf(TEXT("=== VEHICLE HARDPOINTS & LOADOUT + PRISONERS ===\n"));
 
         // Human bases
-        // Use the generic GetBases(...) method (takes EFactionType) instead of GetHumanBases/GetEnemyBases
         for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
         {
             if (!Base) continue;
             DebugText += FString::Printf(TEXT("HUMAN BASE '%s':\n"), *Base->BaseName.ToString());
+
+            // Vehicles
             for (UStrategyFacility* Fac : Base->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -74,6 +75,17 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
                     }
                 }
             }
+
+            // === POW / Prisoners Debug ===
+            if (Base->CapturedPrisoners.Num() > 0)
+            {
+                DebugText += FString::Printf(TEXT("  [PRISONERS] %d captured soldiers held here!\n"), Base->CapturedPrisoners.Num());
+                for (UStrategySoldier* Prisoner : Base->CapturedPrisoners)
+                {
+                    if (Prisoner)
+                        DebugText += FString::Printf(TEXT("    → %s (%s)\n"), *Prisoner->SoldierName, *Prisoner->ClassDefinition->ClassName.ToString());
+                }
+            }
         }
 
         // Enemy bases (same info)
@@ -81,6 +93,8 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
         {
             if (!Base) continue;
             DebugText += FString::Printf(TEXT("ENEMY BASE '%s':\n"), *Base->BaseName.ToString());
+
+            // Vehicles
             for (UStrategyFacility* Fac : Base->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -105,6 +119,17 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
                             }
                         }
                     }
+                }
+            }
+
+            // === POW / Prisoners Debug ===
+            if (Base->CapturedPrisoners.Num() > 0)
+            {
+                DebugText += FString::Printf(TEXT("  [PRISONERS] %d captured soldiers held here!\n"), Base->CapturedPrisoners.Num());
+                for (UStrategySoldier* Prisoner : Base->CapturedPrisoners)
+                {
+                    if (Prisoner)
+                        DebugText += FString::Printf(TEXT("    → %s (%s)\n"), *Prisoner->SoldierName, *Prisoner->ClassDefinition->ClassName.ToString());
                 }
             }
         }
