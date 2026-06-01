@@ -15,9 +15,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
     FText ItemName;
 
-    // NEW: This is what you asked for — will power better AI loadout logic later
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
-    ETechCategory ItemCategory = ETechCategory::Ballistic;
+    /** Primary category of this item — determines usage (soldier vs vehicle), simulation bonuses, and research grouping */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item")
+    EItemCategory Category = EItemCategory::None;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cost")
     FResourceStockpile PurchaseCost;
@@ -30,10 +30,6 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     int32 AimBonus = 0;
-
-    /** NEW: What this item is used for (soldier vs vehicle) */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item")
-    EItemCategory Category = EItemCategory::None;
 
     /** Vehicle-only bonuses */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vehicle Stats")

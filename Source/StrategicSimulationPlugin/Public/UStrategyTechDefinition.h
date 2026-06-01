@@ -18,7 +18,7 @@ public:
     FText TechName;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tech")
-    ETechCategory Category;
+    EItemCategory Category;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tech")
     ETechTier Tier = ETechTier::Tier1;

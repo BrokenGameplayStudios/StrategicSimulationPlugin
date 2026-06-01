@@ -58,19 +58,33 @@ struct FResourceStockpile
     void Subtract(const FResourceStockpile& Other);
 };
 
-// Tech categories (melee, ballistic, etc. — same for both sides)
+// === CLEAN: Unified Item Category (used by soldiers, vehicles, research, production) ===
 UENUM(BlueprintType)
-enum class ETechCategory : uint8
+enum class EItemCategory : uint8
 {
-    Melee,
-    Ballistic,
-    Explosive,
-    Energy,
-    Bio,
-    Gas,
-    Psychic,
-    Medical,
-    Utility
+    None                    UMETA(DisplayName = "None"),
+
+    // Soldier Equipment
+    SoldierWeapon           UMETA(DisplayName = "Soldier Weapon"),
+    SoldierArmor            UMETA(DisplayName = "Soldier Armor"),
+
+    // Vehicle Equipment
+    VehicleWeapon           UMETA(DisplayName = "Vehicle Weapon"),
+    VehicleDefense          UMETA(DisplayName = "Vehicle Defense System"),
+
+    // Shared / Consumables
+    Consumable              UMETA(DisplayName = "Consumable / Ammo"),
+
+    // Research / Tech Flavor (kept for research tree filtering)
+    Melee                   UMETA(DisplayName = "Melee"),
+    Ballistic               UMETA(DisplayName = "Ballistic"),
+    Explosive               UMETA(DisplayName = "Explosive"),
+    Energy                  UMETA(DisplayName = "Energy"),
+    Bio                     UMETA(DisplayName = "Bio"),
+    Gas                     UMETA(DisplayName = "Gas"),
+    Psychic                 UMETA(DisplayName = "Psychic"),
+    Medical                 UMETA(DisplayName = "Medical"),
+    Utility                 UMETA(DisplayName = "Utility")
 };
 
 // Tech tiers
@@ -160,18 +174,6 @@ enum class EMissionType : uint8
     Interception      UMETA(DisplayName = "Interception"),   // Vehicle-to-vehicle encounter in transit
     Defensive         UMETA(DisplayName = "Defensive"),      // Defend a location from attackers
     Offensive         UMETA(DisplayName = "Offensive")       // Attack/destroy enemy location/base
-};
-
-// === NEW: Item categorization for soldiers vs vehicles ===
-UENUM(BlueprintType)
-enum class EItemCategory : uint8
-{
-    None                UMETA(DisplayName = "None"),
-    SoldierWeapon       UMETA(DisplayName = "Soldier Weapon"),
-    SoldierArmor        UMETA(DisplayName = "Soldier Armor"),
-    VehicleWeapon       UMETA(DisplayName = "Vehicle Weapon"),
-    VehicleDefense      UMETA(DisplayName = "Vehicle Defense System"),
-    Consumable          UMETA(DisplayName = "Consumable / Ammo")
 };
 
 // Vehicle stats (used by UVehicleDefinition and UStrategyVehicle)
