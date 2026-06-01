@@ -12,6 +12,9 @@ class STRATEGICSIMULATIONPLUGIN_API AStrategyDebugHUD : public AActor
 public:
     AStrategyDebugHUD();
 
+    UFUNCTION(BlueprintCallable, Category = "Debug")
+    void DrawVehicleDebugInfo() const;
+
 protected:
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaTime) override;
