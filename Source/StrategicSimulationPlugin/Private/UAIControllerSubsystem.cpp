@@ -429,7 +429,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     return false;
 }
 
-// === FIXED: Deterministic purchase - exactly one item per faction per day, same order for both ===
+// === FIXED PURCHASE — 100% deterministic, same for both factions ===
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -440,23 +440,26 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
     if (!SoldierMgr || !EngineeringMgr || !ResourceMgr || !ItemDB) return false;
 
-    const TArray<UStrategySoldier*>& Roster = SoldierMgr->GetRoster(Faction);
+    TArray<UStrategySoldier*> Roster = SoldierMgr->GetRoster(Faction);
     if (Roster.Num() == 0) return false;
+
+    // === FORCE SAME ROSTER ORDER EVERY TIME ===
+    Roster.Sort([](const UStrategySoldier& A, const UStrategySoldier& B) {
+        return A.SoldierName.ToString() < B.SoldierName.ToString();
+    });
 
     UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (smart priority) ==="), *UEnum::GetValueAsString(Faction));
 
-    // Strict global priority - both factions will always attempt items in this exact order
     TArray<FString> ItemPriority = { "Knife", "Pistol", "Basic Armor", "Healthpack", "M-16 Rifle", "Grenade", "Proximity Bomb" };
 
     bool bBoughtAnything = false;
     int32 PurchasesThisDay = 0;
-    const int32 MaxPurchasesPerDay = 1;   // One item total per faction per day
+    const int32 MaxPurchasesPerDay = 1;
 
     for (const FString& DesiredName : ItemPriority)
     {
         if (PurchasesThisDay >= MaxPurchasesPerDay) break;
 
-        // Find soldier with fewest items
         UStrategySoldier* TargetSoldier = nullptr;
         int32 MinItems = INT_MAX;
         for (UStrategySoldier* Soldier : Roster)
@@ -483,8 +486,8 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
             {
                 if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier (now has %d items)"),
-                        *ItemDef->ItemName.ToString(), TargetSoldier->CurrentLoadout.Num());
+                    UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier %s (now has %d items)"),
+                        *ItemDef->ItemName.ToString(), *TargetSoldier->SoldierName.ToString(), TargetSoldier->CurrentLoadout.Num());
 
                     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                     {
@@ -628,7 +631,6 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
 
-    // Fixed research priority so both factions research the same tech on the same day
     TArray<FString> TechPriority = {
         "Basic Melee Weapons Research",
         "Basic Ballistics Research",
