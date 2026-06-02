@@ -429,7 +429,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     return false;
 }
 
-// === FIXED PURCHASE FUNCTION — deterministic and identical for both factions ===
+// === FIXED: Deterministic purchase - exactly one item per faction per day, same order for both ===
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -445,7 +445,7 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
     UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (smart priority) ==="), *UEnum::GetValueAsString(Faction));
 
-    // Fixed priority order — both factions will always try items in this exact sequence
+    // Strict global priority - both factions will always attempt items in this exact order
     TArray<FString> ItemPriority = { "Knife", "Pistol", "Basic Armor", "Healthpack", "M-16 Rifle", "Grenade", "Proximity Bomb" };
 
     bool bBoughtAnything = false;
@@ -628,29 +628,36 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
 
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
 
-    for (const TSoftObjectPtr<UResearchTechDefinition>& SoftResearch : ResearchDB->AvailableTechs)
+    // Fixed research priority so both factions research the same tech on the same day
+    TArray<FString> TechPriority = {
+        "Basic Melee Weapons Research",
+        "Basic Ballistics Research",
+        "Basic Armor Research",
+        "Explosives T0 Research",
+        "Basic Medical Supplies Research",
+        "Rifle Mk1 Research"
+    };
+
+    for (const FString& DesiredName : TechPriority)
     {
-        UResearchTechDefinition* ResearchDef = SoftResearch.Get();
-        if (!ResearchDef) continue;
-
-        if (ResearchMgr->IsResearchInProgress(Faction, ResearchDef) || ResearchMgr->HasCompletedResearch(Faction, ResearchDef))
+        for (const TSoftObjectPtr<UResearchTechDefinition>& SoftResearch : ResearchDB->AvailableTechs)
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] Skipping %s — already in progress or completed"), *ResearchDef->ProjectName.ToString());
-            continue;
-        }
+            UResearchTechDefinition* ResearchDef = SoftResearch.Get();
+            if (!ResearchDef) continue;
+            if (ResearchDef->ProjectName.ToString() != DesiredName) continue;
 
-        if (Res.Money < ResearchDef->ResearchCost.Money)
-        {
-            UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] Skipping %s — not enough money (%d needed)"),
-                *ResearchDef->ProjectName.ToString(), ResearchDef->ResearchCost.Money);
-            continue;
-        }
+            if (ResearchMgr->IsResearchInProgress(Faction, ResearchDef) || ResearchMgr->HasCompletedResearch(Faction, ResearchDef))
+                continue;
 
-        if (ResearchMgr->StartResearch(Faction, ResearchDef))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] %s started research: %s (%d days)"),
-                *UEnum::GetValueAsString(Faction), *ResearchDef->ProjectName.ToString(), ResearchDef->ResearchDays);
-            return true;
+            if (Res.Money < ResearchDef->ResearchCost.Money)
+                continue;
+
+            if (ResearchMgr->StartResearch(Faction, ResearchDef))
+            {
+                UE_LOG(LogTemp, Display, TEXT("[AI] %s started research: %s (%d days)"),
+                    *UEnum::GetValueAsString(Faction), *ResearchDef->ProjectName.ToString(), ResearchDef->ResearchDays);
+                return true;
+            }
         }
     }
 
