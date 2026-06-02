@@ -66,6 +66,12 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("[AI TICK] === DAY %d COMPLETE ==="), NewDay);
 }
 
+void UAIControllerSubsystem::PerformDailyBuildOrder(EFactionType Faction)
+{
+    UE_LOG(LogTemp, Display, TEXT("[PLAYER-CALLABLE] Performing daily build order for %s"), *UEnum::GetValueAsString(Faction));
+    RunAIForFaction(Faction, GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay());
+}
+
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[AI] >>> ENTERING RunAIForFaction for %s (Day %d)"),
@@ -73,11 +79,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     if (!bAIEnabled)
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — GLOBAL bAIEnabled is OFF, aborting"), *UEnum::GetValueAsString(Faction));
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s — GLOBAL bAIEnabled is OFF"), *UEnum::GetValueAsString(Faction));
         return;
     }
-
-    // === FIXED: Proper per-faction day guard (no more Enemy-only logic) ===
+        
     if (CurrentDay == LastProcessedAIDay)
     {
         UE_LOG(LogTemp, Verbose, TEXT("[AI GUARD] %s — Already processed today, skipping duplicate run"), *UEnum::GetValueAsString(Faction));

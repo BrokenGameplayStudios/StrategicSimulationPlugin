@@ -51,6 +51,10 @@ public:
     // Public so Campaign can call it if needed
     void RunAIForFaction(EFactionType Faction, int32 CurrentDay);
 
+    // === NEW: Player-callable version (so UI/PlayerController can trigger the same logic later) ===
+    UFUNCTION(BlueprintCallable, Category = "AI Control|Player Ready")
+    void PerformDailyBuildOrder(EFactionType Faction);
+
 private:
 
     int32 LastProcessedAIDay = -1;  // Prevents double AI execution on the same day

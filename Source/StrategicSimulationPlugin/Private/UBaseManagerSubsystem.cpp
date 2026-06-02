@@ -452,7 +452,11 @@ void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
 
 void UBaseManagerSubsystem::AdvanceAllConstruction()
 {
-    for (UStrategyBase* Base : EnemyBases)
+    UE_LOG(LogTemp, Verbose, TEXT("[BASE] AdvanceAllConstruction — Processing BOTH factions"));
+
+    // Enemy
+    UE_LOG(LogTemp, Display, TEXT("[BASE] Advancing Human bases (%d bases)"), HumanBases.Num());
+    for (UStrategyBase* Base : HumanBases)
     {
         for (UStrategyFacility* Fac : Base->Facilities)
         {
@@ -460,5 +464,15 @@ void UBaseManagerSubsystem::AdvanceAllConstruction()
                 Fac->AdvanceConstructionDay();
         }
     }
-    // Add HumanBases when you enable player side
+
+    // Enemy
+    UE_LOG(LogTemp, Display, TEXT("[BASE] Advancing Enemy bases (%d bases)"), EnemyBases.Num());
+    for (UStrategyBase* Base : EnemyBases)
+    {
+        for (UStrategyFacility* Fac : Base->Facilities)
+        {
+            if (Fac)
+                Fac->AdvanceConstructionDay();
+        }
+    }    
 }
