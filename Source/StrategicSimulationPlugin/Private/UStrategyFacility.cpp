@@ -177,23 +177,23 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 
     UStrategyEventDispatcher* EventDisp = GI->GetSubsystem<UStrategyEventDispatcher>();
 
+    // Determine correct faction (same pattern used for Soldier)
+    EFactionType JobFaction = EFactionType::Human;
+    UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>();
+    if (BaseMgr && UseBase)
+    {
+        if (BaseMgr->GetBases(EFactionType::Enemy).Contains(UseBase))
+            JobFaction = EFactionType::Enemy;
+        else if (BaseMgr->GetBases(EFactionType::Human).Contains(UseBase))
+            JobFaction = EFactionType::Human;
+    }
+
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
 
         if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
         {
-            // Determine which faction owns this base (so Human gets their own soldiers)
-            EFactionType JobFaction = EFactionType::Human;
-            UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>();
-            if (BaseMgr && UseBase)
-            {
-                if (BaseMgr->GetBases(EFactionType::Enemy).Contains(UseBase))
-                    JobFaction = EFactionType::Enemy;
-                else if (BaseMgr->GetBases(EFactionType::Human).Contains(UseBase))
-                    JobFaction = EFactionType::Human;
-            }
-
             SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset, JobFaction);
         }
     }
@@ -217,7 +217,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
             ParkedVehicles.Add(NewVehicle);
 
             if (EventDisp)
-                EventDisp->OnVehicleCompleted.Broadcast(EFactionType::Human, NewVehicle);  // added for consistency
+                EventDisp->OnVehicleCompleted.Broadcast(JobFaction, NewVehicle);
         }
     }
     else if (Job.Type == EProductionType::Item)
@@ -226,9 +226,8 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         if (ItemDef)
         {
             if (EventDisp)
-                EventDisp->OnProductionCompleted.Broadcast(EFactionType::Human, ItemDef);  // or OnItemProduced if you prefer
+                EventDisp->OnProductionCompleted.Broadcast(JobFaction, ItemDef);
             UE_LOG(LogTemp, Display, TEXT("[ITEM] %s production completed!"), *ItemDef->ItemName.ToString());
-            // TODO: If you have a base inventory system, add the item here
         }
     }
     else if (Job.Type == EProductionType::Research)
@@ -236,16 +235,24 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
         UResearchTechDefinition* TechDef = Cast<UResearchTechDefinition>(Job.TargetAsset);
         if (TechDef)
         {
+            UResearchManagerSubsystem* ResearchMgr = GI->GetSubsystem<UResearchManagerSubsystem>();
+            if (ResearchMgr)
+            {
+                ResearchMgr->OnResearchListChanged.Broadcast(JobFaction);
+            }
+
             if (EventDisp)
-                EventDisp->OnResearchCompleted.Broadcast(EFactionType::Human, TechDef);
-            UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s research completed!"), *TechDef->ProjectName.ToString());
+                EventDisp->OnResearchCompleted.Broadcast(JobFaction, TechDef);
+
+            UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s research completed: %s"),
+                *UEnum::GetValueAsString(JobFaction), *TechDef->ProjectName.ToString());
         }
     }
     else if (Job.Type == EProductionType::Facility)
     {
         bIsOperational = true;
         if (EventDisp)
-            EventDisp->OnFacilityCompleted.Broadcast(EFactionType::Human, this);
+            EventDisp->OnFacilityCompleted.Broadcast(JobFaction, this);
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());
     }
 }

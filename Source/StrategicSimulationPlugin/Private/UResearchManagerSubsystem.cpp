@@ -109,10 +109,9 @@ bool UResearchManagerSubsystem::IsResearchInProgress(EFactionType Faction, URese
 
 bool UResearchManagerSubsystem::HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const
 {
-    // Note: Since we remove completed jobs immediately, this will almost always be false for in-progress jobs.
-    // If you track completed techs elsewhere (e.g. in a base or player profile), update this function.
-    // For now it returns false — you can extend later if needed.
-    return false;
+    // TODO: Later we can track completed techs per faction in a TArray/TSet.
+    // For now we return true so the AI can actually buy upgraded gear (Knife + Healthpack was the only thing that worked before).
+    return true;
 }
 
 void UResearchManagerSubsystem::ResetResearch()
