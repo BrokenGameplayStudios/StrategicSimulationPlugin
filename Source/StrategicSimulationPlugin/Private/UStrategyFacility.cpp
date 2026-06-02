@@ -12,6 +12,7 @@
 #include "UStrategyEventDispatcher.h"
 #include "Kismet/GameplayStatics.h"
 #include "UProductionManagerSubsystem.h"
+#include "UBaseManagerSubsystem.h"
 
 void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
 {
@@ -179,9 +180,21 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     if (Job.Type == EProductionType::Soldier)
     {
         UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
+
         if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
         {
-            SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
+            // Determine which faction owns this base (so Human gets their own soldiers)
+            EFactionType JobFaction = EFactionType::Human;
+            UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>();
+            if (BaseMgr && UseBase)
+            {
+                if (BaseMgr->GetBases(EFactionType::Enemy).Contains(UseBase))
+                    JobFaction = EFactionType::Enemy;
+                else if (BaseMgr->GetBases(EFactionType::Human).Contains(UseBase))
+                    JobFaction = EFactionType::Human;
+            }
+
+            SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset, JobFaction);
         }
     }
     else if (Job.Type == EProductionType::Vehicle)

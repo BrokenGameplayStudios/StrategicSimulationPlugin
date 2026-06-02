@@ -101,7 +101,7 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
     return NewSoldier;
 }
 
-void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset)
+void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset, EFactionType Faction)
 {
     if (!SoldierClassAsset) return;
 
@@ -122,19 +122,18 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
         return;
     }
 
-    UStrategySoldier* NewSoldier = RecruitSoldier(EFactionType::Enemy, ClassDef, Base);
+    UStrategySoldier* NewSoldier = RecruitSoldier(Faction, ClassDef, Base);   // ← NOW USES CORRECT FACTION
 
     if (NewSoldier)
     {
         if (UStrategyEventDispatcher* Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
         {
-            Disp->OnSoldierListChanged.Broadcast(EFactionType::Enemy, EnemyRoster);
-            Disp->OnSoldierRecruited.Broadcast(EFactionType::Enemy, NewSoldier);
-            Disp->OnSoldierLoadoutChanged.Broadcast(EFactionType::Enemy, NewSoldier);
+            Disp->OnSoldierListChanged.Broadcast(Faction, (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster);
+            Disp->OnSoldierRecruited.Broadcast(Faction, NewSoldier);
+            Disp->OnSoldierLoadoutChanged.Broadcast(Faction, NewSoldier);
         }
 
-        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained + FULL LIST broadcast to UI"));
-        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] Soldier trained..."));
+        UE_LOG(LogTemp, Display, TEXT("[SOLDIER] %s soldier trained and added to roster"), *UEnum::GetValueAsString(Faction));
     }
 }
 
