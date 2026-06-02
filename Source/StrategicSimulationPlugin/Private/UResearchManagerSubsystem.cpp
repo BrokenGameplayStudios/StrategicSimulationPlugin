@@ -142,3 +142,37 @@ void UResearchManagerSubsystem::ResetResearch()
 
     UE_LOG(LogTemp, Display, TEXT("[RESET] All research jobs cleared from laboratories"));
 }
+
+bool UResearchManagerSubsystem::TryResearch(EFactionType Faction)
+{
+    // 1. Guard: never start multiple researches at once (uses your existing function)
+    if (IsResearchInProgress(Faction))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] %s already has active research — skipping"), *UEnum::GetValueAsString(Faction));
+        return false;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return false;
+
+    // 2. Find the next unlocked research that is not yet started
+    for (UResearchTechDefinition* Tech : ResearchDatabase)
+    {
+        if (!Tech) continue;
+
+        // Skip if already completed or in progress
+        if (HasCompletedResearch(Faction, Tech) || IsResearchInProgress(Faction))
+            continue;
+
+        // 3. Try to start it (this uses your existing StartResearch logic)
+        if (StartResearch(Faction, Tech))
+        {
+            UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s started research: %s"),
+                *UEnum::GetValueAsString(Faction), *Tech->ProjectName.ToString());
+            return true;
+        }
+    }
+
+    UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] %s — No new research available or no free lab slots"), *UEnum::GetValueAsString(Faction));
+    return false;
+}

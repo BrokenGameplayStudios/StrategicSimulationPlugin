@@ -25,6 +25,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Research")
     TArray<UActiveResearchProject*> GetActiveResearch(EFactionType Faction) const;
 
+    /** Starts the next available research for this faction if a lab slot is free */
+    UFUNCTION(BlueprintCallable, Category = "Research")
+    bool TryResearch(EFactionType Faction);
+
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnResearchListChanged OnResearchListChanged;
 
