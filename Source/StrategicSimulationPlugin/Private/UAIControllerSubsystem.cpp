@@ -83,7 +83,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         return;
     }
 
-    // === FIXED: Per-faction day guard (both factions run every day) ===
     int32& LastDay = LastProcessedDayPerFaction.FindOrAdd(Faction, -1);
     if (CurrentDay == LastDay)
     {
@@ -110,7 +109,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         ResourceMgr->GetResources(Faction).Money,
         ResourceMgr->GetResources(Faction).Metals);
 
-    // === Initial base creation (no early return) ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
     {
         FVector2D NewLocation = (Faction == EFactionType::Human) ? FVector2D(300.0f, 540.0f) : FVector2D(1620.0f, 540.0f);
@@ -132,7 +130,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // === STRICT PRIORITY BUILD LIST (eliminates drift) ===
     TArray<EFacilityType> BuildPriority = {
         EFacilityType::PowerPlant,
         EFacilityType::LivingQuarters,
@@ -151,7 +148,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
 
-        // One build attempt per priority item per day
         for (EFacilityType FacType : BuildPriority)
         {
             bool bShouldBuild = false;
@@ -178,14 +174,15 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 int32 RepairUnderConstruction = 0;
                 for (UStrategyFacility* Fac : Base->Facilities)
                 {
-                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger && Fac->bIsOperational)
-                        OperationalHangers++;
-                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
+                    if (Fac && Fac->FacilityDefinition)
                     {
-                        if (Fac->bIsOperational)
-                            CurrentRepairBays++;
-                        else
-                            RepairUnderConstruction++;
+                        if (Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger && Fac->bIsOperational)
+                            OperationalHangers++;
+                        if (Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
+                        {
+                            if (Fac->bIsOperational) CurrentRepairBays++;
+                            else RepairUnderConstruction++;
+                        }
                     }
                 }
                 bShouldBuild = (CurrentRepairBays + RepairUnderConstruction < OperationalHangers);
@@ -197,12 +194,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s built priority facility %s in '%s'"),
                         *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
-                    break; // only one build per base per day
+                    break;
                 }
             }
         }
 
-        // === STAGGERED VEHICLE PRODUCTION (kept exactly as you had it) ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
@@ -233,7 +229,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (bHasParkedVehicles)
             {
-                // === Vehicle weapon + ammo equipping (your exact original code) ===
                 UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
                 UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
                 if (EngMgr && Campaign && ResourceMgr)
@@ -287,7 +282,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                     }
                 }
 
-                // === MISSION LAUNCH (your exact original code) ===
                 if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
                 {
                     EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2));
@@ -316,7 +310,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === End-of-day actions (recruit, research, buy, produce) ===
     bool bRecruited = (SoldierMgr && TryRecruit(Faction));
     if (bRecruited) UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited soldier"), *UEnum::GetValueAsString(Faction));
 
@@ -367,7 +360,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
                                 ClassDef = DB->AvailableSoldierClasses[0].Get();
                     }
 
-                    if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, 4)) // 4 day training
+                    if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, 4))
                     {
                         Res.Money -= 500;
                         ResourceMgr->SetResources(Faction, Res);
@@ -453,63 +446,49 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
     bool bBoughtAnything = false;
     int32 PurchasesThisDay = 0;
-    const int32 MaxPurchasesPerDay = 4;
+    const int32 MaxPurchasesPerDay = 1;   // ← CHANGED: one item total per day per faction (prevents drift)
 
-    while (PurchasesThisDay < MaxPurchasesPerDay)
+    // Fixed priority order so both factions buy the exact same items
+    TArray<FString> ItemPriority = { "Knife", "Pistol", "Basic Armor", "Healthpack", "M-16 Rifle", "Grenade", "Proximity Bomb" };
+
+    for (const FString& DesiredName : ItemPriority)
     {
-        UStrategySoldier* TargetSoldier = nullptr;
-        int32 MinItems = INT_MAX;
+        if (PurchasesThisDay >= MaxPurchasesPerDay) break;
+
         for (UStrategySoldier* Soldier : Roster)
         {
-            if (Soldier && Soldier->CurrentLoadout.Num() < MinItems)
+            if (!Soldier) continue;
+
+            for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
             {
-                MinItems = Soldier->CurrentLoadout.Num();
-                TargetSoldier = Soldier;
-            }
-        }
-        if (!TargetSoldier) break;
+                UItemDefinition* ItemDef = SoftItem.Get();
+                if (!ItemDef) continue;
+                if (ItemDef->ItemName.ToString() != DesiredName) continue;
 
-        if (MinItems >= 10) break;
+                if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
+                if (Soldier->CurrentLoadout.Contains(ItemDef)) continue;
 
-        FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-
-        bool bPurchasedThisLoop = false;
-
-        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
-        {
-            UItemDefinition* ItemDef = SoftItem.Get();
-            if (!ItemDef) continue;
-
-            // === CRITICAL FIX: Strict research gating ===
-            if (!Campaign->IsItemUnlocked(Faction, ItemDef))
-            {
-                UE_LOG(LogTemp, Verbose, TEXT("[PURCHASE] %s is NOT unlocked yet — skipping (research not completed)"), *ItemDef->ItemName.ToString());
-                continue;
-            }
-
-            if (TargetSoldier->CurrentLoadout.Contains(ItemDef)) continue;
-
-            if (Res.Money >= ItemDef->PurchaseCost.Money)
-            {
-                if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
+                FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+                if (Res.Money >= ItemDef->PurchaseCost.Money)
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier (now has %d items)"),
-                        *ItemDef->ItemName.ToString(), TargetSoldier->CurrentLoadout.Num());
-
-                    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                    if (EngineeringMgr->PurchaseItem(Faction, ItemDef, Soldier))
                     {
-                        EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, TargetSoldier);
-                    }
+                        UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier (now has %d items)"),
+                            *ItemDef->ItemName.ToString(), Soldier->CurrentLoadout.Num());
 
-                    bPurchasedThisLoop = true;
-                    bBoughtAnything = true;
-                    PurchasesThisDay++;
-                    break;
+                        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                        {
+                            EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, Soldier);
+                        }
+
+                        bBoughtAnything = true;
+                        PurchasesThisDay++;
+                        break;
+                    }
                 }
             }
+            if (PurchasesThisDay >= MaxPurchasesPerDay) break;
         }
-
-        if (!bPurchasedThisLoop) break;
     }
 
     return bBoughtAnything;
@@ -616,7 +595,6 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
         return false;
     }
 
-    // === FIX: Early-out when no Laboratory exists yet (eliminates all the spam) ===
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (BaseMgr && !BaseMgr->HasFacilityOfType(Faction, EFacilityType::Laboratory))
     {
@@ -675,7 +653,7 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
 void UAIControllerSubsystem::SetAIEnabled(bool bEnable)
 {
     bAIEnabled = bEnable;
-    UE_LOG(LogTemp, Display, TEXT("AI Controller %s for Enemy faction"), bAIEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
+    UE_LOG(LogTemp, Display, TEXT("AI Controller %s for both factions"), bAIEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
 bool UAIControllerSubsystem::IsAIEnabled() const
