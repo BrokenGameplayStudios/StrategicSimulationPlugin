@@ -131,11 +131,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     ResourceMgr->ApplyFacilityIncome(Faction);
 
     TArray<EFacilityType> BuildPriority = {
-        EFacilityType::PowerPlant,
-        EFacilityType::LivingQuarters,
+        EFacilityType::PowerPlant,      // power first (unchanged)
+        EFacilityType::LivingQuarters,  // barracks second (unchanged)
+        EFacilityType::Laboratory,      // ← MOVED UP — research lab now 3rd
         EFacilityType::Storage,
         EFacilityType::Workshop,
-        EFacilityType::Laboratory,
         EFacilityType::Medical,
         EFacilityType::Hanger,
         EFacilityType::VehicleRepair
