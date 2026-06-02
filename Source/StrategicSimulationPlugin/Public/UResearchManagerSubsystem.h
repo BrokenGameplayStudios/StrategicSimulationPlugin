@@ -25,9 +25,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Research")
     TArray<UActiveResearchProject*> GetActiveResearch(EFactionType Faction) const;
 
-    /** Starts the next available research for this faction if a lab slot is free */
+    /** Starts the next available research for this faction if a lab slot is free.
+           Uses the ResearchDatabase below to iterate the tech tree in order. */
     UFUNCTION(BlueprintCallable, Category = "Research")
     bool TryResearch(EFactionType Faction);
+
+    /** Master list of ALL research tech definitions (loaded once at game start).
+        This is the same data you see in the "[RESEARCH DATABASE] Loaded 6 research techs" log.
+        It lets TryResearch know what the next project should be. */
+    UPROPERTY(BlueprintReadOnly, Category = "Research")
+    TArray<UResearchTechDefinition*> ResearchDatabase;
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnResearchListChanged OnResearchListChanged;

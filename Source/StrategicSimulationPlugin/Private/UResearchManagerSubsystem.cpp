@@ -145,26 +145,23 @@ void UResearchManagerSubsystem::ResetResearch()
 
 bool UResearchManagerSubsystem::TryResearch(EFactionType Faction)
 {
-    // 1. Guard: never start multiple researches at once (uses your existing function)
-    if (IsResearchInProgress(Faction))
+    // Guard: never start a second research while one is already running
+    if (GetActiveResearch(Faction).Num() > 0)
     {
         UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] %s already has active research — skipping"), *UEnum::GetValueAsString(Faction));
         return false;
     }
 
-    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-    if (!BaseMgr) return false;
-
-    // 2. Find the next unlocked research that is not yet started
+    // Use the database we just added to the header
     for (UResearchTechDefinition* Tech : ResearchDatabase)
     {
         if (!Tech) continue;
 
-        // Skip if already completed or in progress
-        if (HasCompletedResearch(Faction, Tech) || IsResearchInProgress(Faction))
+        // Skip if already completed
+        if (HasCompletedResearch(Faction, Tech))
             continue;
 
-        // 3. Try to start it (this uses your existing StartResearch logic)
+        // Try to start it (this calls your existing StartResearch logic)
         if (StartResearch(Faction, Tech))
         {
             UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s started research: %s"),
