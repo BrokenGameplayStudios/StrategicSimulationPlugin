@@ -82,14 +82,15 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         UE_LOG(LogTemp, Display, TEXT("[AI] %s — GLOBAL bAIEnabled is OFF"), *UEnum::GetValueAsString(Faction));
         return;
     }
-        
-    if (CurrentDay == LastProcessedAIDay)
+
+    // === FIXED: Per-faction day guard ===
+    int32& LastDay = LastProcessedDayPerFaction.FindOrAdd(Faction, -1);
+    if (CurrentDay == LastDay)
     {
         UE_LOG(LogTemp, Verbose, TEXT("[AI GUARD] %s — Already processed today, skipping duplicate run"), *UEnum::GetValueAsString(Faction));
         return;
     }
-
-    LastProcessedAIDay = CurrentDay;
+    LastDay = CurrentDay;
 
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
@@ -103,16 +104,16 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         return;
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — Day %d decision (full build order) - Bases: %d"),
-        *UEnum::GetValueAsString(Faction), CurrentDay, BaseMgr->GetBases(Faction).Num());
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — Day %d decision (full build order) - Bases: %d | Money: %d | Metals: %d"),
+        *UEnum::GetValueAsString(Faction), CurrentDay,
+        BaseMgr->GetBases(Faction).Num(),
+        ResourceMgr->GetResources(Faction).Money,
+        ResourceMgr->GetResources(Faction).Metals);
 
-    // === Initial base creation (different locations for Human vs Enemy) ===
+    // === Initial base creation (still symmetric) ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
     {
-        FVector2D NewLocation = (Faction == EFactionType::Human)
-            ? FVector2D(300.0f, 540.0f)      // Human starts on left side
-            : FVector2D(1620.0f, 540.0f);    // Enemy starts on right side
-
+        FVector2D NewLocation = (Faction == EFactionType::Human) ? FVector2D(300.0f, 540.0f) : FVector2D(1620.0f, 540.0f);
         FText BaseName = FText::FromString("Command Center");
 
         UE_LOG(LogTemp, Display, TEXT("[AI] %s has no bases — creating initial Command Center"), *UEnum::GetValueAsString(Faction));
@@ -120,7 +121,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial 'Command Center' base created for %s"), *UEnum::GetValueAsString(Faction));
-            return;
+            // Removed early return — let the rest of the day run (power, income, etc.)
         }
         else
         {

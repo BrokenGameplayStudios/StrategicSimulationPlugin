@@ -57,7 +57,9 @@ public:
 
 private:
 
-    int32 LastProcessedAIDay = -1;  // Prevents double AI execution on the same day
+    // Per-faction day guard (fixes the skip bug)
+    UPROPERTY(VisibleAnywhere, Category = "AI Control")
+    TMap<EFactionType, int32> LastProcessedDayPerFaction;
 
     UPROPERTY(VisibleAnywhere, Category = "AI Control")
     bool bAIEnabled = true;
