@@ -429,6 +429,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     return false;
 }
 
+// === FIXED PURCHASE FUNCTION — deterministic and identical for both factions ===
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -444,50 +445,57 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
     UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (smart priority) ==="), *UEnum::GetValueAsString(Faction));
 
+    // Fixed priority order — both factions will always try items in this exact sequence
+    TArray<FString> ItemPriority = { "Knife", "Pistol", "Basic Armor", "Healthpack", "M-16 Rifle", "Grenade", "Proximity Bomb" };
+
     bool bBoughtAnything = false;
     int32 PurchasesThisDay = 0;
-    const int32 MaxPurchasesPerDay = 1;   // ← CHANGED: one item total per day per faction (prevents drift)
-
-    // Fixed priority order so both factions buy the exact same items
-    TArray<FString> ItemPriority = { "Knife", "Pistol", "Basic Armor", "Healthpack", "M-16 Rifle", "Grenade", "Proximity Bomb" };
+    const int32 MaxPurchasesPerDay = 1;   // One item total per faction per day
 
     for (const FString& DesiredName : ItemPriority)
     {
         if (PurchasesThisDay >= MaxPurchasesPerDay) break;
 
+        // Find soldier with fewest items
+        UStrategySoldier* TargetSoldier = nullptr;
+        int32 MinItems = INT_MAX;
         for (UStrategySoldier* Soldier : Roster)
         {
-            if (!Soldier) continue;
-
-            for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
+            if (Soldier && Soldier->CurrentLoadout.Num() < MinItems)
             {
-                UItemDefinition* ItemDef = SoftItem.Get();
-                if (!ItemDef) continue;
-                if (ItemDef->ItemName.ToString() != DesiredName) continue;
+                MinItems = Soldier->CurrentLoadout.Num();
+                TargetSoldier = Soldier;
+            }
+        }
+        if (!TargetSoldier || MinItems >= 10) break;
 
-                if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
-                if (Soldier->CurrentLoadout.Contains(ItemDef)) continue;
+        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
+        {
+            UItemDefinition* ItemDef = SoftItem.Get();
+            if (!ItemDef) continue;
+            if (ItemDef->ItemName.ToString() != DesiredName) continue;
 
-                FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-                if (Res.Money >= ItemDef->PurchaseCost.Money)
+            if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
+            if (TargetSoldier->CurrentLoadout.Contains(ItemDef)) continue;
+
+            FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+            if (Res.Money >= ItemDef->PurchaseCost.Money)
+            {
+                if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
                 {
-                    if (EngineeringMgr->PurchaseItem(Faction, ItemDef, Soldier))
+                    UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier (now has %d items)"),
+                        *ItemDef->ItemName.ToString(), TargetSoldier->CurrentLoadout.Num());
+
+                    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                     {
-                        UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier (now has %d items)"),
-                            *ItemDef->ItemName.ToString(), Soldier->CurrentLoadout.Num());
-
-                        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-                        {
-                            EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, Soldier);
-                        }
-
-                        bBoughtAnything = true;
-                        PurchasesThisDay++;
-                        break;
+                        EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, TargetSoldier);
                     }
+
+                    bBoughtAnything = true;
+                    PurchasesThisDay++;
+                    break;
                 }
             }
-            if (PurchasesThisDay >= MaxPurchasesPerDay) break;
         }
     }
 
