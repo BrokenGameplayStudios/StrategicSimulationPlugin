@@ -59,4 +59,4 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Repair")
     int32 RepairHealthPerDay = 0;
-}
+};

@@ -1,9 +1,10 @@
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
 #include "UStrategySoldier.h"
+#include "UStrategyCampaignSubsystem.h"
 #include "USoldierManagerSubsystem.h"
-#include "AStrategyGameInitializer.h"
 #include "UFacilityDatabase.h"
+#include "UFacilityDefinition.h"
 #include "Engine/Engine.h"          // ← Added for GEngine
 #include "Kismet/GameplayStatics.h" // ← Added for safety
 
@@ -135,17 +136,25 @@ void UStrategyBase::UpdatePowerFromFacilities()
 
 bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
 {
-    // Lookup the facility definition using the same database your GameInitializer already loads
+    // Lookup the facility definition using the CampaignSubsystem (exactly where your databases live)
     UFacilityDefinition* Def = nullptr;
 
     if (UWorld* World = GetWorld())
     {
-        if (AStrategyGameInitializer* Initializer = Cast<AStrategyGameInitializer>(World->GetAuthGameMode()))
+        if (UStrategyCampaignSubsystem* Campaign = World->GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
         {
-            if (UFacilityDatabase* FacilityDB = Initializer->FacilityDatabaseAsset.Get())
+            if (UFacilityDatabase* FacilityDB = Campaign->GetFacilityDatabase())
             {
-                for (UFacilityDefinition* Candidate : FacilityDB->Facilities)
+                // FacilityDB->AvailableFacilities is an array of TSoftObjectPtr<UFacilityDefinition>.
+                // Use Get() (or LoadSynchronous() if not loaded) to obtain a UFacilityDefinition*.
+                for (const TSoftObjectPtr<UFacilityDefinition>& CandidateSoft : FacilityDB->AvailableFacilities)
                 {
+                    UFacilityDefinition* Candidate = CandidateSoft.Get();
+                    if (!Candidate)
+                    {
+                        Candidate = CandidateSoft.LoadSynchronous();
+                    }
+
                     if (Candidate && Candidate->FacilityType == FacilityType)
                     {
                         Def = Candidate;
@@ -159,10 +168,10 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
     if (!Def)
     {
         UE_LOG(LogTemp, Warning, TEXT("[FACILITY] CanBuildFacilityType: No definition found for %s"), *UEnum::GetValueAsString(FacilityType));
-        return true; // safe fallback so game doesn't break
+        return true; // safe fallback so the game doesn't break
     }
 
-    // Check every prerequisite listed in the data asset
+    // Check every prerequisite listed in the data asset (this is your new data-driven system)
     for (EFacilityType Req : Def->PrerequisiteFacilities)
     {
         if (!HasOperationalFacilityOfType(Req))
