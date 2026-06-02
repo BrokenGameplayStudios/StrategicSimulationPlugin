@@ -159,7 +159,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // Simple priority list — the real order is now controlled by PrerequisiteFacilities in your data assets
     TArray<EFacilityType> BuildPriority = {
         EFacilityType::PowerPlant,
         EFacilityType::LivingQuarters,
@@ -179,9 +178,13 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         for (EFacilityType FacType : BuildPriority)
         {
-            // NEW: Data-driven prerequisite check (this is the key fix)
+            // NEW: Prerequisite check is now the first gate
             if (!Base->CanBuildFacilityType(FacType))
+            {
+                UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped in '%s' — prerequisites not met"),
+                    *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
                 continue;
+            }
 
             bool bShouldBuild = false;
 
