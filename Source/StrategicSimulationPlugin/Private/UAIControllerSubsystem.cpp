@@ -25,6 +25,9 @@ void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     }
 
     UE_LOG(LogTemp, Display, TEXT("✅ UAIControllerSubsystem initialized — AI vs AI mode ACTIVE (Human + Enemy)"));
+    UE_LOG(LogTemp, Display, TEXT("   Human AI: %s | Enemy AI: %s"),
+        bSimulateHumanAI ? TEXT("ENABLED") : TEXT("DISABLED"),
+        bSimulateEnemyAI ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
 void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
@@ -34,32 +37,36 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
     if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
     {
         BaseMgr->AdvanceFacilityConstruction(EFactionType::Enemy);
-        BaseMgr->AdvanceFacilityConstruction(EFactionType::Human);   // NEW
+        BaseMgr->AdvanceFacilityConstruction(EFactionType::Human);
         BaseMgr->AdvanceAllConstruction();
     }
 
-    RunAIForFaction(EFactionType::Human, NewDay);     // NEW
-    RunAIForFaction(EFactionType::Enemy, NewDay);
+    // === NEW: Respect per-faction simulation flags ===
+    if (bSimulateHumanAI)
+        RunAIForFaction(EFactionType::Human, NewDay);
+
+    if (bSimulateEnemyAI)
+        RunAIForFaction(EFactionType::Enemy, NewDay);
 }
 
 void UAIControllerSubsystem::Debug_RunAI()
 {
-    UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Manual AI run requested for BOTH factions"));
-    RunAIForFaction(EFactionType::Human, 999);
-    RunAIForFaction(EFactionType::Enemy, 999);
+    UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Manual AI run requested for BOTH factions (if enabled)"));
+    if (bSimulateHumanAI) RunAIForFaction(EFactionType::Human, 999);
+    if (bSimulateEnemyAI) RunAIForFaction(EFactionType::Enemy, 999);
 }
 
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
-    if (!bAIEnabled) return;   // Removed the Enemy-only guard
+    if (!bAIEnabled) return;   // global master switch still respected
 
-    if (CurrentDay == LastProcessedAIDay && Faction == EFactionType::Enemy) // light guard to avoid double-processing Enemy
+    if (CurrentDay == LastProcessedAIDay && Faction == EFactionType::Enemy)
     {
         UE_LOG(LogTemp, Verbose, TEXT("[AI GUARD] Skipping duplicate AI run for %s on day %d"),
             *UEnum::GetValueAsString(Faction), CurrentDay);
         return;
     }
-
+    
     LastProcessedAIDay = CurrentDay;
 
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -655,6 +662,28 @@ void UAIControllerSubsystem::SetAIEnabled(bool bEnable)
 bool UAIControllerSubsystem::IsAIEnabled() const
 {
     return bAIEnabled;
+}
+
+void UAIControllerSubsystem::SetSimulateHumanAI(bool bEnable)
+{
+    bSimulateHumanAI = bEnable;
+    UE_LOG(LogTemp, Display, TEXT("Human AI simulation %s"), bEnable ? TEXT("ENABLED") : TEXT("DISABLED"));
+}
+
+void UAIControllerSubsystem::SetSimulateEnemyAI(bool bEnable)
+{
+    bSimulateEnemyAI = bEnable;
+    UE_LOG(LogTemp, Display, TEXT("Enemy AI simulation %s"), bEnable ? TEXT("ENABLED") : TEXT("DISABLED"));
+}
+
+bool UAIControllerSubsystem::IsSimulatingHumanAI() const
+{
+    return bSimulateHumanAI;
+}
+
+bool UAIControllerSubsystem::IsSimulatingEnemyAI() const
+{
+    return bSimulateEnemyAI;
 }
 
 UStrategyBase* UAIControllerSubsystem::GetBaseWithFewestVehicles(EFactionType Faction) const

@@ -100,6 +100,16 @@ void AStrategyGameInitializer::BeginPlay()
         UE_LOG(LogTemp, Warning, TEXT("[VEHICLE ITEMS] VehicleItemDatabaseAsset is NULL!"));
     }
 
+    UAIControllerSubsystem* AIController = GetWorld()->GetGameInstance()->GetSubsystem<UAIControllerSubsystem>();
+    if (AIController)
+    {
+        AIController->SetSimulateHumanAI(bStartWithHumanAI);
+        AIController->SetSimulateEnemyAI(bStartWithEnemyAI);
+        UE_LOG(LogTemp, Display, TEXT("AStrategyGameInitializer: Applied AI simulation settings - Human: %s | Enemy: %s"),
+            bStartWithHumanAI ? TEXT("ON") : TEXT("OFF"),
+            bStartWithEnemyAI ? TEXT("ON") : TEXT("OFF"));
+    }
+
 
     UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases force-loaded and registered"));
 

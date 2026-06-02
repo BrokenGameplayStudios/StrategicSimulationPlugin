@@ -19,6 +19,12 @@ public:
 
     virtual void BeginPlay() override;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Simulation")
+    bool bStartWithHumanAI = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Simulation")
+    bool bStartWithEnemyAI = true;
+
     /** Master toggle for extra debug logging (Facility Ticks, etc.) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
     bool bVerboseLogging = false;

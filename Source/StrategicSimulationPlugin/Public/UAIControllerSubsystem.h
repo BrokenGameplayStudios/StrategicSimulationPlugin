@@ -22,6 +22,26 @@ public:
     UFUNCTION(BlueprintCallable, Category = "AI Control")
     bool IsAIEnabled() const;
 
+    // === NEW: Per-faction flags (default ON) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Control")
+    bool bSimulateHumanAI = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Control")
+    bool bSimulateEnemyAI = true;
+
+    // === NEW: Per-faction simulation toggles ===
+    UFUNCTION(BlueprintCallable, Category = "AI Control")
+    void SetSimulateHumanAI(bool bEnable);
+
+    UFUNCTION(BlueprintCallable, Category = "AI Control")
+    void SetSimulateEnemyAI(bool bEnable);
+
+    UFUNCTION(BlueprintCallable, Category = "AI Control")
+    bool IsSimulatingHumanAI() const;
+
+    UFUNCTION(BlueprintCallable, Category = "AI Control")
+    bool IsSimulatingEnemyAI() const;
+
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 
