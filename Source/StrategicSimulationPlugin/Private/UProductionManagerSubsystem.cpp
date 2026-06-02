@@ -6,6 +6,7 @@
 #include "UStrategyBase.h"
 #include "USoldierClassDefinition.h"
 #include "UVehicleDefinition.h"
+#include "UResearchManagerSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 
 void UProductionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -37,26 +38,34 @@ void UProductionManagerSubsystem::CompleteJob(FProductionJob Job, UStrategyFacil
 
 void UProductionManagerSubsystem::CompleteResearchJob(const FProductionJob& Job, UStrategyFacility* Facility)
 {
-    UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
-    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    UStrategyBase* UseBase = Facility ? Facility->OwningBase : Job.AssignedBase;
 
-    if (!ResearchMgr || !Campaign) return;
+    UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
+    if (!ResearchMgr) return;
 
     UResearchTechDefinition* TechDef = Cast<UResearchTechDefinition>(Job.TargetAsset);
     if (!TechDef) return;
 
-    // Mark as completed so unlocks work
+    // Determine faction the same way we do for soldiers (this is the working pattern)
+    EFactionType JobFaction = EFactionType::Human;
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (BaseMgr && UseBase)
+    {
+        if (BaseMgr->GetBases(EFactionType::Enemy).Contains(UseBase))
+            JobFaction = EFactionType::Enemy;
+        else if (BaseMgr->GetBases(EFactionType::Human).Contains(UseBase))
+            JobFaction = EFactionType::Human;
+    }
+
     UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s research completed: %s"),
-        *UEnum::GetValueAsString(Facility ? Facility->OwningBase->OwningFaction : EFactionType::Human),
-        *TechDef->ProjectName.ToString());
+        *UEnum::GetValueAsString(JobFaction), *TechDef->ProjectName.ToString());
 
-    // Broadcast so UI / AI knows
-    ResearchMgr->OnResearchListChanged.Broadcast(Facility ? Facility->OwningBase->OwningFaction : EFactionType::Human);
+    // Tell the research system + event dispatcher
+    ResearchMgr->OnResearchListChanged.Broadcast(JobFaction);
 
-    // The placeholder in Campaign::HasCompletedResearch will now let IsItemUnlocked succeed for everything this tech unlocks
     if (UStrategyEventDispatcher* Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
     {
-        Disp->OnResearchCompleted.Broadcast(Facility ? Facility->OwningBase->OwningFaction : EFactionType::Human, TechDef);
+        Disp->OnResearchCompleted.Broadcast(JobFaction, TechDef);
     }
 }
 
