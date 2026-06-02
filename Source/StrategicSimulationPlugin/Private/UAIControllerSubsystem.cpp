@@ -160,8 +160,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             {
                 int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
                 int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-                // FIXED: Only build more barracks if we have almost no capacity OR soldiers are overflowing the current capacity
-                bShouldBuild = (CurrentCapacity < 12 || CurrentSoldiers >= CurrentCapacity * 0.8f);
+
+                // STRICT FIX: Only build more barracks if we have almost ZERO capacity OR soldiers are actually overflowing
+                // This stops the AI from spamming barracks forever and finally lets Laboratory be reached
+                bShouldBuild = (CurrentCapacity < 6 || CurrentSoldiers >= CurrentCapacity);
             }
             else if (FacType == EFacilityType::Storage || FacType == EFacilityType::Workshop ||
                 FacType == EFacilityType::Laboratory || FacType == EFacilityType::Medical)
