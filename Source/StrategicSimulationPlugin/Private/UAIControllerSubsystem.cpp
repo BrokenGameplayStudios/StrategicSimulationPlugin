@@ -153,12 +153,15 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             bool bShouldBuild = false;
 
             if (FacType == EFacilityType::PowerPlant)
+            {
                 bShouldBuild = (Base->GetNetPower() < 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant));
+            }
             else if (FacType == EFacilityType::LivingQuarters)
             {
                 int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
                 int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-                bShouldBuild = (CurrentCapacity < 36 || CurrentSoldiers >= CurrentCapacity - 4);
+                // FIXED: Only build more barracks if we have almost no capacity OR soldiers are overflowing the current capacity
+                bShouldBuild = (CurrentCapacity < 12 || CurrentSoldiers >= CurrentCapacity * 0.8f);
             }
             else if (FacType == EFacilityType::Storage || FacType == EFacilityType::Workshop ||
                 FacType == EFacilityType::Laboratory || FacType == EFacilityType::Medical)
@@ -166,7 +169,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 bShouldBuild = !Base->HasFacilityOfType(FacType);
             }
             else if (FacType == EFacilityType::Hanger)
+            {
                 bShouldBuild = !Base->HasOperationalFacilityOfType(EFacilityType::Hanger);
+            }
             else if (FacType == EFacilityType::VehicleRepair)
             {
                 int32 OperationalHangers = 0;
@@ -194,7 +199,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s built priority facility %s in '%s'"),
                         *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
-                    break;
+                    break;   // stop after building one per base per day
                 }
             }
         }
