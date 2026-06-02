@@ -16,6 +16,10 @@ class STRATEGICSIMULATIONPLUGIN_API UAIControllerSubsystem : public UGameInstanc
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
+    /** Maximum number of bases the AI is allowed to build (you said 10) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI | Expansion")
+    int32 MaxBases = 10;
+
     UFUNCTION(BlueprintCallable, Category = "AI Control")
     void SetAIEnabled(bool bEnable);
 
