@@ -443,9 +443,9 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
     TArray<UStrategySoldier*> Roster = SoldierMgr->GetRoster(Faction);
     if (Roster.Num() == 0) return false;
 
-    // === FORCE SAME ROSTER ORDER EVERY TIME ===
+    // === FORCE SAME ROSTER ORDER EVERY TIME (alphabetical by name) ===
     Roster.Sort([](const UStrategySoldier& A, const UStrategySoldier& B) {
-        return A.SoldierName.ToString() < B.SoldierName.ToString();
+        return A.SoldierName < B.SoldierName;   // FString comparison, no .ToString()
     });
 
     UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (smart priority) ==="), *UEnum::GetValueAsString(Faction));
@@ -487,7 +487,7 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
                 if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier %s (now has %d items)"),
-                        *ItemDef->ItemName.ToString(), *TargetSoldier->SoldierName.ToString(), TargetSoldier->CurrentLoadout.Num());
+                        *ItemDef->ItemName.ToString(), *TargetSoldier->SoldierName, TargetSoldier->CurrentLoadout.Num());
 
                     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                     {
