@@ -712,6 +712,23 @@ bool UAIControllerSubsystem::IsSimulatingEnemyAI() const
     return bSimulateEnemyAI;
 }
 
+void UAIControllerSubsystem::Debug_RunAI()
+{
+    UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Manual AI run requested for BOTH factions (if enabled)"));
+
+    if (bSimulateHumanAI)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] → Running Human AI"));
+        RunAIForFaction(EFactionType::Human, 999);
+    }
+
+    if (bSimulateEnemyAI)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] → Running Enemy AI"));
+        RunAIForFaction(EFactionType::Enemy, 999);
+    }
+}
+
 UStrategyBase* UAIControllerSubsystem::GetBaseWithFewestVehicles(EFactionType Faction) const
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
