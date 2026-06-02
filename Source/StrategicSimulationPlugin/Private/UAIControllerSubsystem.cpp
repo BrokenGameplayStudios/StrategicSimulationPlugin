@@ -32,7 +32,9 @@ void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
 {
-    UE_LOG(LogTemp, Display, TEXT("🔥 [AI] === AI TICK START — Day %d (BOTH FACTIONS) ==="), NewDay);
+    UE_LOG(LogTemp, Display, TEXT("🔥 [AI TICK] === DAY %d START — Checking simulation flags ==="), NewDay);
+    UE_LOG(LogTemp, Display, TEXT("   → Human AI enabled: %s"), bSimulateHumanAI ? TEXT("YES") : TEXT("NO"));
+    UE_LOG(LogTemp, Display, TEXT("   → Enemy AI enabled: %s"), bSimulateEnemyAI ? TEXT("YES") : TEXT("NO"));
 
     if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
     {
@@ -41,32 +43,47 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
         BaseMgr->AdvanceAllConstruction();
     }
 
-    // === NEW: Respect per-faction simulation flags ===
     if (bSimulateHumanAI)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] Human AI — Calling RunAIForFaction..."));
         RunAIForFaction(EFactionType::Human, NewDay);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] Human AI — SKIPPED (toggle is OFF)"));
+    }
 
     if (bSimulateEnemyAI)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] Enemy AI — Calling RunAIForFaction..."));
         RunAIForFaction(EFactionType::Enemy, NewDay);
-}
+    }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] Enemy AI — SKIPPED (toggle is OFF)"));
+    }
 
-void UAIControllerSubsystem::Debug_RunAI()
-{
-    UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Manual AI run requested for BOTH factions (if enabled)"));
-    if (bSimulateHumanAI) RunAIForFaction(EFactionType::Human, 999);
-    if (bSimulateEnemyAI) RunAIForFaction(EFactionType::Enemy, 999);
+    UE_LOG(LogTemp, Display, TEXT("[AI TICK] === DAY %d COMPLETE ==="), NewDay);
 }
 
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
-    if (!bAIEnabled) return;   // global master switch still respected
+    UE_LOG(LogTemp, Display, TEXT("[AI] >>> ENTERING RunAIForFaction for %s (Day %d)"),
+        *UEnum::GetValueAsString(Faction), CurrentDay);
 
-    if (CurrentDay == LastProcessedAIDay && Faction == EFactionType::Enemy)
+    if (!bAIEnabled)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI GUARD] Skipping duplicate AI run for %s on day %d"),
-            *UEnum::GetValueAsString(Faction), CurrentDay);
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s — GLOBAL bAIEnabled is OFF, aborting"), *UEnum::GetValueAsString(Faction));
         return;
     }
-    
+
+    // === FIXED: Proper per-faction day guard (no more Enemy-only logic) ===
+    if (CurrentDay == LastProcessedAIDay)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[AI GUARD] %s — Already processed today, skipping duplicate run"), *UEnum::GetValueAsString(Faction));
+        return;
+    }
+
     LastProcessedAIDay = CurrentDay;
 
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -75,7 +92,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
     UEngineeringManagerSubsystem* EngineeringMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
 
-    if (!BaseMgr || !ResourceMgr) return;
+    if (!BaseMgr || !ResourceMgr)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AI] %s — Missing BaseMgr or ResourceMgr, aborting"), *UEnum::GetValueAsString(Faction));
+        return;
+    }
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — Day %d decision (full build order) - Bases: %d"),
         *UEnum::GetValueAsString(Faction), CurrentDay, BaseMgr->GetBases(Faction).Num());
