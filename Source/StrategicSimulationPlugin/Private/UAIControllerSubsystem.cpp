@@ -133,7 +133,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     // Once ANY base has an operational Hangar, and we are under the max base limit,
     // the AI immediately starts a brand-new base instead of developing old ones.
     // This creates the classic "snowball" expansion loop you wanted.
-    const int32 MaxBases = 10; // ← change this number any time
+    // const int32 MaxBases = 10; // ← change this number any time
 
     bool bHasOperationalHangarAnywhere = false;
     for (UStrategyBase* AnyBase : BaseMgr->GetBases(Faction))
