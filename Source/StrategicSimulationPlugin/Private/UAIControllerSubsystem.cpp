@@ -128,8 +128,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === GLOBAL EXPANSION PHASE (exactly what you asked for) ===
-    // Count operational Hangars across ALL bases. Each Hangar unlocks one additional base.
+    // === GLOBAL EXPANSION PHASE ===
     int32 NumOperationalHangars = 0;
     for (UStrategyBase* AnyBase : BaseMgr->GetBases(Faction))
     {
@@ -138,9 +137,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
 
     if (NumOperationalHangars > 0 &&
-        BaseMgr->GetBases(Faction).Num() < NumOperationalHangars + 1 &&   // each Hangar unlocks one new base
+        BaseMgr->GetBases(Faction).Num() < NumOperationalHangars + 1 &&
         BaseMgr->GetBases(Faction).Num() < MaxBases &&
-        ResourceMgr->GetResources(Faction).Money > 9000)                  // prevent spam when broke
+        ResourceMgr->GetResources(Faction).Money > 9000)
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Building NEW base #%d (Hangar unlocked)"),
             *UEnum::GetValueAsString(Faction), BaseMgr->GetBases(Faction).Num() + 1);
@@ -152,18 +151,19 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s successfully created new base '%s'"),
                 *UEnum::GetValueAsString(Faction), *NewBase->BaseName.ToString());
-            return; // success — next frame the new base will start developing
+            return;
         }
     }
 
-    // === PER-BASE DEVELOPMENT PHASE ===
+    // === PER-BASE DEVELOPMENT PHASE (data-driven prerequisites) ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
+    // Simple priority list — the real order is now controlled by PrerequisiteFacilities in your data assets
     TArray<EFacilityType> BuildPriority = {
         EFacilityType::PowerPlant,
         EFacilityType::LivingQuarters,
-        EFacilityType::Laboratory,      // research early
+        EFacilityType::Laboratory,
         EFacilityType::Workshop,
         EFacilityType::Hanger,
         EFacilityType::Medical,
@@ -179,6 +179,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         for (EFacilityType FacType : BuildPriority)
         {
+            // NEW: Data-driven prerequisite check (this is the key fix)
+            if (!Base->CanBuildFacilityType(FacType))
+                continue;
+
             bool bShouldBuild = false;
 
             if (FacType == EFacilityType::PowerPlant)
@@ -191,34 +195,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
                 bShouldBuild = (CurrentCapacity < 6 || CurrentSoldiers >= CurrentCapacity);
             }
-            else if (FacType == EFacilityType::Storage || FacType == EFacilityType::Workshop ||
-                FacType == EFacilityType::Laboratory || FacType == EFacilityType::Medical)
+            else
             {
                 bShouldBuild = !Base->HasFacilityOfType(FacType);
-            }
-            else if (FacType == EFacilityType::Hanger)
-            {
-                bShouldBuild = !Base->HasOperationalFacilityOfType(EFacilityType::Hanger);
-            }
-            else if (FacType == EFacilityType::VehicleRepair)
-            {
-                int32 OperationalHangers = 0;
-                int32 CurrentRepairBays = 0;
-                int32 RepairUnderConstruction = 0;
-                for (UStrategyFacility* Fac : Base->Facilities)
-                {
-                    if (Fac && Fac->FacilityDefinition)
-                    {
-                        if (Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger && Fac->bIsOperational)
-                            OperationalHangers++;
-                        if (Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
-                        {
-                            if (Fac->bIsOperational) CurrentRepairBays++;
-                            else RepairUnderConstruction++;
-                        }
-                    }
-                }
-                bShouldBuild = (CurrentRepairBays + RepairUnderConstruction < OperationalHangers);
             }
 
             if (bShouldBuild)
@@ -246,7 +225,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             }
         }
 
-        // (the rest of your hanger / vehicle equipping / mission launching code is unchanged — I kept it exactly as you had it)
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             bool bHasParkedVehicles = false;
@@ -345,7 +323,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DAILY ROUTINES (recruit, research, buy, production) ===
+    // === DAILY ROUTINES ===
     bool bRecruited = (SoldierMgr && TryRecruit(Faction));
     if (bRecruited) UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited soldier"), *UEnum::GetValueAsString(Faction));
 

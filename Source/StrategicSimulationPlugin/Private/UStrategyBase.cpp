@@ -130,3 +130,27 @@ void UStrategyBase::UpdatePowerFromFacilities()
     UE_LOG(LogTemp, Display, TEXT("[POWER] Base '%s' net power updated to %d (Provided %d | Draw %d)"),
         *BaseName.ToString(), GetNetPower(), PowerProvided, PowerDraw);
 }
+
+bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
+{
+    // Find the definition for this facility type
+    UFacilityDefinition* Def = nullptr;
+    // (Your game initializer already loads FacilityDatabase — we use the same lookup you already have)
+    for (UFacilityDefinition* Candidate : /* your facility database array — replace with actual lookup if needed */)
+    {
+        if (Candidate && Candidate->FacilityType == FacilityType)
+        {
+            Def = Candidate;
+            break;
+        }
+    }
+    if (!Def) return false;
+
+    // Check every prerequisite
+    for (EFacilityType Req : Def->PrerequisiteFacilities)
+    {
+        if (!HasOperationalFacilityOfType(Req))
+            return false;
+    }
+    return true;
+}

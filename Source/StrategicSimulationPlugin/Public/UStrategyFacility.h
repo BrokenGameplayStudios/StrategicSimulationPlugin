@@ -54,6 +54,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Facility")
     UFacilityDefinition* FacilityDefinition;
 
+    // === NEW: Data-driven prerequisites (your requested feature) ===
+    // List of facility types that must already be operational in the same base
+    // before this facility can be built. Example:
+    //   Research Lab → { LivingQuarters }
+    //   Hanger      → { Laboratory }
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Build")
+    TArray<EFacilityType> PrerequisiteFacilities;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Status")
     bool bIsOperational = false;
 

@@ -66,6 +66,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     bool IsOperational() const;
 
+    /** Returns true if this base meets all prerequisites for building the given facility type */
+    UFUNCTION(BlueprintCallable, Category = "Facility")
+    bool CanBuildFacilityType(EFacilityType FacilityType) const;
+
     UFUNCTION(BlueprintCallable, Category = "Base")
     void AddFacility(UStrategyFacility* NewFacility);
 
