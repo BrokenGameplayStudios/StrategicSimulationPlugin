@@ -83,7 +83,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         return;
     }
 
-    // === FIXED: Per-faction day guard ===
+    // === FIXED: Per-faction day guard (both factions run every day) ===
     int32& LastDay = LastProcessedDayPerFaction.FindOrAdd(Faction, -1);
     if (CurrentDay == LastDay)
     {
@@ -110,7 +110,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         ResourceMgr->GetResources(Faction).Money,
         ResourceMgr->GetResources(Faction).Metals);
 
-    // === Initial base creation (still symmetric) ===
+    // === Initial base creation (no early return) ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
     {
         FVector2D NewLocation = (Faction == EFactionType::Human) ? FVector2D(300.0f, 540.0f) : FVector2D(1620.0f, 540.0f);
@@ -121,7 +121,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial 'Command Center' base created for %s"), *UEnum::GetValueAsString(Faction));
-            // Removed early return — let the rest of the day run (power, income, etc.)
         }
         else
         {
@@ -133,22 +132,17 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // === The rest of your original logic stays 100% unchanged from here down ===
-    if (BaseMgr->CanBuildNewBase(Faction))
-    {
-        int32 OperationalHangers = BaseMgr->GetNumberOfOperationalHangers(Faction);
-        if (OperationalHangers >= 1)
-        {
-            FVector2D NewLocation = FVector2D(FMath::RandRange(100.0f, 1820.0f), FMath::RandRange(100.0f, 980.0f));
-            FText BaseName = FText::FromString(FString::Printf(TEXT("Forward Base %d"), BaseMgr->GetBases(Faction).Num() + 1));
-
-            if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
-            {
-                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s expanded to new base '%s'"), *UEnum::GetValueAsString(Faction), *BaseName.ToString());
-                return;
-            }
-        }
-    }
+    // === STRICT PRIORITY BUILD LIST (eliminates drift) ===
+    TArray<EFacilityType> BuildPriority = {
+        EFacilityType::PowerPlant,
+        EFacilityType::LivingQuarters,
+        EFacilityType::Storage,
+        EFacilityType::Workshop,
+        EFacilityType::Laboratory,
+        EFacilityType::Medical,
+        EFacilityType::Hanger,
+        EFacilityType::VehicleRepair
+    };
 
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
@@ -157,55 +151,58 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
 
-        if (Base->GetNetPower() < 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant))
+        // One build attempt per priority item per day
+        for (EFacilityType FacType : BuildPriority)
         {
-            TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
-        }
+            bool bShouldBuild = false;
 
-        int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
-        int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-
-        if (CurrentCapacity < 36 || CurrentSoldiers >= CurrentCapacity - 4)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → BARRACKS NEAR FULL (%d/%d) — Trying extra LivingQuarters in '%s'"),
-                CurrentSoldiers, CurrentCapacity, *Base->BaseName.ToString());
-            TryBuildFacility(Faction, EFacilityType::LivingQuarters, Base);
-        }
-
-        if (!Base->HasFacilityOfType(EFacilityType::Storage)) TryBuildFacility(Faction, EFacilityType::Storage, Base);
-        if (!Base->HasFacilityOfType(EFacilityType::Workshop)) TryBuildFacility(Faction, EFacilityType::Workshop, Base);
-        if (!Base->HasFacilityOfType(EFacilityType::Laboratory)) TryBuildFacility(Faction, EFacilityType::Laboratory, Base);
-        if (!Base->HasFacilityOfType(EFacilityType::Medical)) TryBuildFacility(Faction, EFacilityType::Medical, Base);
-
-        if (!Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) TryBuildFacility(Faction, EFacilityType::Hanger, Base);
-
-        int32 OperationalHangers = 0;
-        for (UStrategyFacility* Fac : Base->Facilities)
-        {
-            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger && Fac->bIsOperational)
-                OperationalHangers++;
-        }
-
-        int32 CurrentRepairBays = 0;
-        int32 RepairUnderConstruction = 0;
-        for (UStrategyFacility* Fac : Base->Facilities)
-        {
-            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
+            if (FacType == EFacilityType::PowerPlant)
+                bShouldBuild = (Base->GetNetPower() < 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant));
+            else if (FacType == EFacilityType::LivingQuarters)
             {
-                if (Fac->bIsOperational)
-                    CurrentRepairBays++;
-                else
-                    RepairUnderConstruction++;
+                int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
+                int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
+                bShouldBuild = (CurrentCapacity < 36 || CurrentSoldiers >= CurrentCapacity - 4);
+            }
+            else if (FacType == EFacilityType::Storage || FacType == EFacilityType::Workshop ||
+                FacType == EFacilityType::Laboratory || FacType == EFacilityType::Medical)
+            {
+                bShouldBuild = !Base->HasFacilityOfType(FacType);
+            }
+            else if (FacType == EFacilityType::Hanger)
+                bShouldBuild = !Base->HasOperationalFacilityOfType(EFacilityType::Hanger);
+            else if (FacType == EFacilityType::VehicleRepair)
+            {
+                int32 OperationalHangers = 0;
+                int32 CurrentRepairBays = 0;
+                int32 RepairUnderConstruction = 0;
+                for (UStrategyFacility* Fac : Base->Facilities)
+                {
+                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger && Fac->bIsOperational)
+                        OperationalHangers++;
+                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::VehicleRepair)
+                    {
+                        if (Fac->bIsOperational)
+                            CurrentRepairBays++;
+                        else
+                            RepairUnderConstruction++;
+                    }
+                }
+                bShouldBuild = (CurrentRepairBays + RepairUnderConstruction < OperationalHangers);
+            }
+
+            if (bShouldBuild)
+            {
+                if (TryBuildFacility(Faction, FacType, Base))
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built priority facility %s in '%s'"),
+                        *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
+                    break; // only one build per base per day
+                }
             }
         }
 
-        if (CurrentRepairBays + RepairUnderConstruction < OperationalHangers)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] → Building VehicleRepair bay for hanger in '%s'"), *Base->BaseName.ToString());
-            TryBuildFacility(Faction, EFacilityType::VehicleRepair, Base);
-        }
-
-        // === STAGGERED VEHICLE PRODUCTION ===
+        // === STAGGERED VEHICLE PRODUCTION (kept exactly as you had it) ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
@@ -236,7 +233,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (bHasParkedVehicles)
             {
-                // === Vehicle weapon + ammo equipping (your existing code) ===
+                // === Vehicle weapon + ammo equipping (your exact original code) ===
                 UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
                 UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
                 if (EngMgr && Campaign && ResourceMgr)
@@ -290,12 +287,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                     }
                 }
 
-                // === MISSION LAUNCH (now faction-aware) ===
+                // === MISSION LAUNCH (your exact original code) ===
                 if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
                 {
                     EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2));
 
-                    // Use StartMission directly so we pass the correct AttackingFaction
                     TArray<UStrategyVehicle*> AvailableVehicles;
                     for (UStrategyFacility* Fac : Base->Facilities)
                     {
@@ -318,13 +314,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting"), *Base->BaseName.ToString());
             }
         }
-
-        UE_LOG(LogTemp, Display, TEXT("[AI] → Trying extra Storage/Hanger/Power in '%s'"), *Base->BaseName.ToString());
-        TryBuildFacility(Faction, EFacilityType::Storage, Base);
-        TryBuildFacility(Faction, EFacilityType::Hanger, Base);
-        if (Base->GetNetPower() < 100) TryBuildFacility(Faction, EFacilityType::PowerPlant, Base);
     }
 
+    // === End-of-day actions (recruit, research, buy, produce) ===
     bool bRecruited = (SoldierMgr && TryRecruit(Faction));
     if (bRecruited) UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited soldier"), *UEnum::GetValueAsString(Faction));
 
