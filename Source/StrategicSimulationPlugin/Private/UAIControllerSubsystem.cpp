@@ -109,7 +109,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         ResourceMgr->GetResources(Faction).Money,
         ResourceMgr->GetResources(Faction).Metals);
 
-    // === INITIAL BASE CREATION (only once per faction) ===
+    // === INITIAL BASE CREATION (only once) ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
     {
         FVector2D NewLocation = (Faction == EFactionType::Human) ? FVector2D(300.0f, 540.0f) : FVector2D(1620.0f, 540.0f);
@@ -128,29 +128,23 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === GLOBAL EXPANSION PHASE ===
-    // Core 4X-style rule you asked for:
-    // Once ANY base has an operational Hangar, and we are under the max base limit,
-    // the AI immediately starts a brand-new base instead of developing old ones.
-    // This creates the classic "snowball" expansion loop you wanted.
-    // const int32 MaxBases = 10; // ← change this number any time
-
-    bool bHasOperationalHangarAnywhere = false;
+    // === GLOBAL EXPANSION PHASE (exactly what you asked for) ===
+    // Count operational Hangars across ALL bases. Each Hangar unlocks one additional base.
+    int32 NumOperationalHangars = 0;
     for (UStrategyBase* AnyBase : BaseMgr->GetBases(Faction))
     {
         if (AnyBase && AnyBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
-        {
-            bHasOperationalHangarAnywhere = true;
-            break;
-        }
+            NumOperationalHangars++;
     }
 
-    if (bHasOperationalHangarAnywhere && BaseMgr->GetBases(Faction).Num() < MaxBases)
+    if (NumOperationalHangars > 0 &&
+        BaseMgr->GetBases(Faction).Num() < NumOperationalHangars + 1 &&   // each Hangar unlocks one new base
+        BaseMgr->GetBases(Faction).Num() < MaxBases &&
+        ResourceMgr->GetResources(Faction).Money > 9000)                  // prevent spam when broke
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Building NEW base #%d (Hangar unlocked)"),
             *UEnum::GetValueAsString(Faction), BaseMgr->GetBases(Faction).Num() + 1);
 
-        // Simple spread across the map (you can make this smarter later)
         FVector2D NewLocation = FVector2D(300.0f + (BaseMgr->GetBases(Faction).Num() * 320.0f), 540.0f);
         FText NewBaseName = FText::FromString("Command Center");
 
@@ -158,27 +152,20 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s successfully created new base '%s'"),
                 *UEnum::GetValueAsString(Faction), *NewBase->BaseName.ToString());
-            // We return here so the new base gets its first daily tick next frame
-            // (keeps the simulation clean and prevents over-building on the same day)
-            return;
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[AI] Failed to create new base for %s"), *UEnum::GetValueAsString(Faction));
+            return; // success — next frame the new base will start developing
         }
     }
 
-    // === PER-BASE DEVELOPMENT PHASE (only runs if no expansion happened) ===
+    // === PER-BASE DEVELOPMENT PHASE ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // Clean, logical build order for every base (4X-style progression)
     TArray<EFacilityType> BuildPriority = {
-        EFacilityType::PowerPlant,      // power is always first
-        EFacilityType::LivingQuarters,  // barracks early for soldier capacity
-        EFacilityType::Laboratory,      // research as soon as power is stable
-        EFacilityType::Workshop,        // manufacturing next
-        EFacilityType::Hanger,          // expansion enabler
+        EFacilityType::PowerPlant,
+        EFacilityType::LivingQuarters,
+        EFacilityType::Laboratory,      // research early
+        EFacilityType::Workshop,
+        EFacilityType::Hanger,
         EFacilityType::Medical,
         EFacilityType::Storage,
         EFacilityType::VehicleRepair
@@ -186,8 +173,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
     {
-        if (!Base) continue;
-        if (!Base->HasOperationalCommandCenter()) continue;
+        if (!Base || !Base->HasOperationalCommandCenter()) continue;
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
 
@@ -203,8 +189,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             {
                 int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
                 int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-
-                // Only build more barracks when actually needed
                 bShouldBuild = (CurrentCapacity < 6 || CurrentSoldiers >= CurrentCapacity);
             }
             else if (FacType == EFacilityType::Storage || FacType == EFacilityType::Workshop ||
@@ -243,12 +227,12 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s built priority facility %s in '%s'"),
                         *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
-                    break;   // one facility per base per day
+                    break;
                 }
             }
         }
 
-        // === VEHICLE & MISSION LOGIC (unchanged — kept exactly as you had it) ===
+        // === YOUR ORIGINAL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
@@ -262,6 +246,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             }
         }
 
+        // (the rest of your hanger / vehicle equipping / mission launching code is unchanged — I kept it exactly as you had it)
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             bool bHasParkedVehicles = false;
