@@ -29,6 +29,35 @@ void UProductionManagerSubsystem::CompleteJob(FProductionJob Job, UStrategyFacil
     {
         CompleteFacilityJob(Job, Facility);
     }
+    else if (Job.Type == EProductionType::Research)
+    {
+        CompleteResearchJob(Job, Facility);
+    }
+}
+
+void UProductionManagerSubsystem::CompleteResearchJob(const FProductionJob& Job, UStrategyFacility* Facility)
+{
+    UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+
+    if (!ResearchMgr || !Campaign) return;
+
+    UResearchTechDefinition* TechDef = Cast<UResearchTechDefinition>(Job.TargetAsset);
+    if (!TechDef) return;
+
+    // Mark as completed so unlocks work
+    UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s research completed: %s"),
+        *UEnum::GetValueAsString(Facility ? Facility->OwningBase->OwningFaction : EFactionType::Human),
+        *TechDef->ProjectName.ToString());
+
+    // Broadcast so UI / AI knows
+    ResearchMgr->OnResearchListChanged.Broadcast(Facility ? Facility->OwningBase->OwningFaction : EFactionType::Human);
+
+    // The placeholder in Campaign::HasCompletedResearch will now let IsItemUnlocked succeed for everything this tech unlocks
+    if (UStrategyEventDispatcher* Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
+        Disp->OnResearchCompleted.Broadcast(Facility ? Facility->OwningBase->OwningFaction : EFactionType::Human, TechDef);
+    }
 }
 
 void UProductionManagerSubsystem::CompleteSoldierJob(const FProductionJob& Job, UStrategyFacility* Facility)

@@ -20,4 +20,5 @@ private:
     void CompleteSoldierJob(const FProductionJob& Job, UStrategyFacility* Facility);
     void CompleteVehicleJob(const FProductionJob& Job, UStrategyFacility* Facility);
     void CompleteFacilityJob(const FProductionJob& Job, UStrategyFacility* Facility);
+    void CompleteResearchJob(const FProductionJob& Job, UStrategyFacility* Facility);
 };
