@@ -1,6 +1,7 @@
 #include "UProductionManagerSubsystem.h"
 #include "UStrategyFacility.h"
 #include "USoldierManagerSubsystem.h"
+#include "UBaseManagerSubsystem.h"          // ← NEW INCLUDE
 #include "UStrategyEventDispatcher.h"
 #include "UStrategyBase.h"
 #include "USoldierClassDefinition.h"
@@ -36,7 +37,18 @@ void UProductionManagerSubsystem::CompleteSoldierJob(const FProductionJob& Job, 
 
     if (USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
     {
-        SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset);
+        // Determine which faction owns this base (so Human gets their own soldiers)
+        EFactionType JobFaction = EFactionType::Human;
+        UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+        if (BaseMgr && UseBase)
+        {
+            if (BaseMgr->GetBases(EFactionType::Enemy).Contains(UseBase))
+                JobFaction = EFactionType::Enemy;
+            else if (BaseMgr->GetBases(EFactionType::Human).Contains(UseBase))
+                JobFaction = EFactionType::Human;
+        }
+
+        SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset, JobFaction);   // ← NOW 3 ARGS
     }
 }
 
