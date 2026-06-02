@@ -133,24 +133,44 @@ void UStrategyBase::UpdatePowerFromFacilities()
 
 bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
 {
-    // Find the definition for this facility type
+    // Find the definition for this facility type using the same database your initializer already loads
     UFacilityDefinition* Def = nullptr;
-    // (Your game initializer already loads FacilityDatabase — we use the same lookup you already have)
-    for (UFacilityDefinition* Candidate : /* your facility database array — replace with actual lookup if needed */)
+
+    // This uses your GameInitializer (which already loaded FacilityDatabaseAsset)
+    if (UWorld* World = GetWorld())
     {
-        if (Candidate && Candidate->FacilityType == FacilityType)
+        if (AStrategyGameInitializer* Initializer = Cast<AStrategyGameInitializer>(World->GetAuthGameMode()))
         {
-            Def = Candidate;
-            break;
+            if (UFacilityDatabase* FacilityDB = Initializer->FacilityDatabaseAsset)   // ← your existing asset
+            {
+                for (UFacilityDefinition* Candidate : FacilityDB->Facilities)        // ← the array you already have
+                {
+                    if (Candidate && Candidate->FacilityType == FacilityType)
+                    {
+                        Def = Candidate;
+                        break;
+                    }
+                }
+            }
         }
     }
-    if (!Def) return false;
 
-    // Check every prerequisite
+    if (!Def)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[FACILITY] CanBuildFacilityType: No definition found for %s"), *UEnum::GetValueAsString(FacilityType));
+        return true; // safe fallback
+    }
+
+    // Check every prerequisite listed in the data asset (this is your new data-driven system)
     for (EFacilityType Req : Def->PrerequisiteFacilities)
     {
         if (!HasOperationalFacilityOfType(Req))
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s blocked — missing prerequisite %s"),
+                *UEnum::GetValueAsString(FacilityType), *UEnum::GetValueAsString(Req));
             return false;
+        }
     }
+
     return true;
 }
