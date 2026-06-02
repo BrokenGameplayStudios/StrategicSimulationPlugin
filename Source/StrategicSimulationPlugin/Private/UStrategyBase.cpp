@@ -2,6 +2,8 @@
 #include "UStrategyFacility.h"
 #include "UStrategySoldier.h"
 #include "USoldierManagerSubsystem.h"
+#include "AStrategyGameInitializer.h"
+#include "UFacilityDatabase.h"
 #include "Engine/Engine.h"          // ← Added for GEngine
 #include "Kismet/GameplayStatics.h" // ← Added for safety
 
@@ -133,17 +135,16 @@ void UStrategyBase::UpdatePowerFromFacilities()
 
 bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
 {
-    // Find the definition for this facility type using the same database your initializer already loads
+    // Lookup the facility definition using the same database your GameInitializer already loads
     UFacilityDefinition* Def = nullptr;
 
-    // This uses your GameInitializer (which already loaded FacilityDatabaseAsset)
     if (UWorld* World = GetWorld())
     {
         if (AStrategyGameInitializer* Initializer = Cast<AStrategyGameInitializer>(World->GetAuthGameMode()))
         {
-            if (UFacilityDatabase* FacilityDB = Initializer->FacilityDatabaseAsset)   // ← your existing asset
+            if (UFacilityDatabase* FacilityDB = Initializer->FacilityDatabaseAsset.Get())
             {
-                for (UFacilityDefinition* Candidate : FacilityDB->Facilities)        // ← the array you already have
+                for (UFacilityDefinition* Candidate : FacilityDB->Facilities)
                 {
                     if (Candidate && Candidate->FacilityType == FacilityType)
                     {
@@ -158,10 +159,10 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
     if (!Def)
     {
         UE_LOG(LogTemp, Warning, TEXT("[FACILITY] CanBuildFacilityType: No definition found for %s"), *UEnum::GetValueAsString(FacilityType));
-        return true; // safe fallback
+        return true; // safe fallback so game doesn't break
     }
 
-    // Check every prerequisite listed in the data asset (this is your new data-driven system)
+    // Check every prerequisite listed in the data asset
     for (EFacilityType Req : Def->PrerequisiteFacilities)
     {
         if (!HasOperationalFacilityOfType(Req))
