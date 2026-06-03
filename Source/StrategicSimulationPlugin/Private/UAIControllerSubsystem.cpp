@@ -77,18 +77,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] >>> ENTERING RunAIForFaction for %s (Day %d)"),
         *UEnum::GetValueAsString(Faction), CurrentDay);
 
-    if (!bAIEnabled)
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — GLOBAL bAIEnabled is OFF"), *UEnum::GetValueAsString(Faction));
-        return;
-    }
+    if (!bAIEnabled) return;
 
     int32& LastDay = LastProcessedDayPerFaction.FindOrAdd(Faction, -1);
-    if (CurrentDay == LastDay)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI GUARD] %s — Already processed today, skipping duplicate run"), *UEnum::GetValueAsString(Faction));
-        return;
-    }
+    if (CurrentDay == LastDay) return;
     LastDay = CurrentDay;
 
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -97,77 +89,58 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
     UEngineeringManagerSubsystem* EngineeringMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
 
-    if (!BaseMgr || !ResourceMgr)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] %s — Missing BaseMgr or ResourceMgr, aborting"), *UEnum::GetValueAsString(Faction));
-        return;
-    }
+    if (!BaseMgr || !ResourceMgr) return;
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — Day %d decision (full build order) - Bases: %d | Money: %d | Metals: %d"),
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — Day %d decision - Bases: %d | Money: %d | Metals: %d"),
         *UEnum::GetValueAsString(Faction), CurrentDay,
         BaseMgr->GetBases(Faction).Num(),
         ResourceMgr->GetResources(Faction).Money,
         ResourceMgr->GetResources(Faction).Metals);
 
-    // === INITIAL BASE CREATION (only once) ===
+    // === INITIAL BASE CREATION ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
     {
         FVector2D NewLocation = (Faction == EFactionType::Human) ? FVector2D(300.0f, 540.0f) : FVector2D(1620.0f, 540.0f);
-        FText BaseName = FText::FromString("Command Center");
-
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s has no bases — creating initial Command Center"), *UEnum::GetValueAsString(Faction));
-
-        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, BaseName, NewLocation))
+        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLocation))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial 'Command Center' base created for %s"), *UEnum::GetValueAsString(Faction));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("[AI] FAILED to create initial base for %s!"), *UEnum::GetValueAsString(Faction));
-            return;
+            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial Command Center created for %s"), *UEnum::GetValueAsString(Faction));
         }
     }
 
-    // === GLOBAL EXPANSION PHASE ===
+    // === GLOBAL EXPANSION PHASE (your rule) ===
     int32 NumOperationalHangars = 0;
-    for (UStrategyBase* AnyBase : BaseMgr->GetBases(Faction))
-    {
-        if (AnyBase && AnyBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
+    for (UStrategyBase* B : BaseMgr->GetBases(Faction))
+        if (B && B->HasOperationalFacilityOfType(EFacilityType::Hanger))
             NumOperationalHangars++;
-    }
 
     if (NumOperationalHangars > 0 &&
         BaseMgr->GetBases(Faction).Num() < NumOperationalHangars + 1 &&
         BaseMgr->GetBases(Faction).Num() < MaxBases &&
         ResourceMgr->GetResources(Faction).Money > 9000)
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Building NEW base #%d (Hangar unlocked)"),
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Building NEW base #%d"),
             *UEnum::GetValueAsString(Faction), BaseMgr->GetBases(Faction).Num() + 1);
 
-        FVector2D NewLocation = FVector2D(300.0f + (BaseMgr->GetBases(Faction).Num() * 320.0f), 540.0f);
-        FText NewBaseName = FText::FromString("Command Center");
-
-        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, NewBaseName, NewLocation))
+        FVector2D NewLoc = FVector2D(300.0f + (BaseMgr->GetBases(Faction).Num() * 320.0f), 540.0f);
+        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ %s successfully created new base '%s'"),
-                *UEnum::GetValueAsString(Faction), *NewBase->BaseName.ToString());
-            return;
+            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
+            return; // next day the new base will start its list
         }
     }
 
-    // === PER-BASE DEVELOPMENT PHASE (data-driven prerequisites) ===
+    // === PER-BASE DEVELOPMENT — YOUR EXACT ORDER ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    TArray<EFacilityType> BuildPriority = {
-        EFacilityType::PowerPlant,
-        EFacilityType::LivingQuarters,
-        EFacilityType::Laboratory,      // research early
-        EFacilityType::Workshop,
-        EFacilityType::Hanger,
-        EFacilityType::Medical,
-        EFacilityType::Storage,
-        EFacilityType::VehicleRepair
+    TArray<EFacilityType> DesiredOrder = {
+        EFacilityType::LivingQuarters,   // 2
+        EFacilityType::Laboratory,       // 3
+        EFacilityType::PowerPlant,       // 4
+        EFacilityType::Workshop,         // 5
+        EFacilityType::Hanger,           // 6
+        EFacilityType::Medical,          // 7
+        EFacilityType::VehicleRepair     // 8
     };
 
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
@@ -176,27 +149,21 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
 
-        for (EFacilityType FacType : BuildPriority)
+        for (EFacilityType FacType : DesiredOrder)
         {
-            // Prerequisite check is the FIRST gate — this is what stops Workshop/Hanger before Lab
             if (!Base->CanBuildFacilityType(FacType))
             {
-                UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped in '%s' — prerequisites not met"),
-                    *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
+                UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped — prerequisites not met"), *UEnum::GetValueAsString(FacType));
                 continue;
             }
 
             bool bShouldBuild = false;
 
-            if (FacType == EFacilityType::PowerPlant)
+            if (FacType == EFacilityType::LivingQuarters)
             {
-                bShouldBuild = (Base->GetNetPower() < 0 || !Base->HasOperationalFacilityOfType(EFacilityType::PowerPlant));
-            }
-            else if (FacType == EFacilityType::LivingQuarters)
-            {
-                int32 CurrentCapacity = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
-                int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-                bShouldBuild = (CurrentCapacity < 6 || CurrentSoldiers >= CurrentCapacity);
+                int32 Cap = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
+                int32 Soldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
+                bShouldBuild = (Cap < 12 || Soldiers >= Cap); // only build when actually needed (increased buffer)
             }
             else
             {
@@ -207,14 +174,14 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             {
                 if (TryBuildFacility(Faction, FacType, Base))
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built priority facility %s in '%s'"),
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in '%s'"),
                         *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
-                    break;
+                    break; // one facility per base per day
                 }
             }
         }
 
-        // === YOUR ORIGINAL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
+        // === Your original vehicle / mission / ammo logic (unchanged) ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
