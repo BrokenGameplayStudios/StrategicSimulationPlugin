@@ -145,7 +145,6 @@ void UStrategyBase::UpdatePowerFromFacilities()
 
 bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
 {
-    // Lookup the facility definition using the CampaignSubsystem (exactly where your databases live)
     UFacilityDefinition* Def = nullptr;
 
     if (UWorld* World = GetWorld())
@@ -154,8 +153,6 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
         {
             if (UFacilityDatabase* FacilityDB = Campaign->GetFacilityDatabase())
             {
-                // FacilityDB->AvailableFacilities is an array of TSoftObjectPtr<UFacilityDefinition>.
-                // Use Get() (or LoadSynchronous() if not loaded) to obtain a UFacilityDefinition*.
                 for (const TSoftObjectPtr<UFacilityDefinition>& CandidateSoft : FacilityDB->AvailableFacilities)
                 {
                     UFacilityDefinition* Candidate = CandidateSoft.Get();
@@ -163,7 +160,6 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
                     {
                         Candidate = CandidateSoft.LoadSynchronous();
                     }
-
                     if (Candidate && Candidate->FacilityType == FacilityType)
                     {
                         Def = Candidate;
@@ -176,16 +172,17 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
 
     if (!Def)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[FACILITY] CanBuildFacilityType: No definition found for %s"), *UEnum::GetValueAsString(FacilityType));
-        return true; // safe fallback so the game doesn't break
+        UE_LOG(LogTemp, Warning, TEXT("[FACILITY] CanBuildFacilityType: No definition found for %s - allowing build as fallback"), *UEnum::GetValueAsString(FacilityType));
+        return true;
     }
 
-    // Check every prerequisite listed in the data asset (this is your new data-driven system)
+    // NEW: Use HasFacilityOfType (existence) for prereqs so timing issues don't block the tech tree
+    // (operational check is still used inside HasOperationalFacilityOfType for "use" logic)
     for (EFacilityType Req : Def->PrerequisiteFacilities)
     {
-        if (!HasOperationalFacilityOfType(Req))
+        if (!HasFacilityOfType(Req))   // CHANGED from HasOperationalFacilityOfType
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s blocked — missing prerequisite %s"),
+            UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped — missing prerequisite %s (existence check)"),
                 *UEnum::GetValueAsString(FacilityType), *UEnum::GetValueAsString(Req));
             return false;
         }

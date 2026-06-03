@@ -196,13 +196,12 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (FacType == EFacilityType::LivingQuarters)
             {
-                // Special case: allow multiples of barracks (respect MaxBuilt from data asset)
                 int32 CurrentBarracks = Base->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
-                bShouldBuild = (CurrentBarracks < 6);   // 6 = MaxBuilt from your FacilityDefinition
+                bShouldBuild = (CurrentBarracks < 6);
             }
             else
             {
-                bShouldBuild = !bAlreadyHasOne;
+                bShouldBuild = !Base->HasFacilityOfType(FacType);
             }
 
             if (bShouldBuild)

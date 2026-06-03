@@ -433,7 +433,7 @@ void UBaseManagerSubsystem::ResetAllBases()
 
 void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[DAILY SIM] %s — Medical Bays can heal X soldiers | Vehicle Repair Shops can repair X vehicles (+25 HP)"),
+    UE_LOG(LogTemp, Verbose, TEXT("[DAILY SIM] %s — Medical Bays can heal 0 soldiers | Vehicle Repair Shops can repair 0 vehicles (+25 HP)"),
         *UEnum::GetValueAsString(Faction));
 
     for (UStrategyBase* Base : GetBasesInternal(Faction))
@@ -442,9 +442,9 @@ void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
 
         for (UStrategyFacility* Fac : Base->Facilities)
         {
-            if (Fac->bIsOperational || Fac->ActiveProductionJobs.Num() > 0)
+            if (Fac)
             {
-                Fac->SimulateDaily();
+                Fac->SimulateDaily();   // ALWAYS call - this guarantees production jobs advance and slots empty
             }
         }
     }
