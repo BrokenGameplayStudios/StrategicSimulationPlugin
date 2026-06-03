@@ -107,35 +107,65 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === GLOBAL EXPANSION PHASE ===
-    int32 NumOperationalHangars = 0;
-    for (UStrategyBase* B : BaseMgr->GetBases(Faction))
-        if (B && B->HasOperationalFacilityOfType(EFacilityType::Hanger))
-            NumOperationalHangars++;
-
-    if (NumOperationalHangars > 0 &&
-        BaseMgr->GetBases(Faction).Num() < NumOperationalHangars + 1 &&
-        BaseMgr->GetBases(Faction).Num() < MaxBases &&
-        ResourceMgr->GetResources(Faction).Money > 9000)
+    // === GLOBAL EXPANSION PHASE (new rule you asked for) ===
+    // Only expand when EVERY existing base has an operational Hanger + at least one parked vehicle
+    bool bAllBasesReadyForExpansion = true;
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    if (Bases.Num() >= MaxBases)
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Building NEW base #%d"),
-            *UEnum::GetValueAsString(Faction), BaseMgr->GetBases(Faction).Num() + 1);
-
-        FVector2D NewLoc = FVector2D(300.0f + (BaseMgr->GetBases(Faction).Num() * 320.0f), 540.0f);
-        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
+        bAllBasesReadyForExpansion = false;
+    }
+    else
+    {
+        for (UStrategyBase* B : Bases)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
-            return;
+            if (!B || !B->HasOperationalFacilityOfType(EFacilityType::Hanger))
+            {
+                bAllBasesReadyForExpansion = false;
+                break;
+            }
+
+            // Check for at least one parked vehicle in any Hanger facility
+            bool bHasVehicle = false;
+            for (UStrategyFacility* Fac : B->Facilities)
+            {
+                if (Fac && Fac->FacilityDefinition &&
+                    Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
+                    Fac->ParkedVehicles.Num() > 0)
+                {
+                    bHasVehicle = true;
+                    break;
+                }
+            }
+            if (!bHasVehicle)
+            {
+                bAllBasesReadyForExpansion = false;
+                break;
+            }
         }
     }
 
-    // === PER-BASE DEVELOPMENT — YOUR EXACT ORDER ===
+    if (bAllBasesReadyForExpansion && ResourceMgr->GetResources(Faction).Money > 9000)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! All bases have Hanger + vehicle → Building NEW base #%d"),
+            *UEnum::GetValueAsString(Faction), Bases.Num() + 1);
+
+        FVector2D NewLoc = FVector2D(300.0f + (Bases.Num() * 320.0f), 540.0f);
+        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
+            return;  // expansion happened, skip rest of AI this day
+        }
+    }
+
+    // === PER-BASE DEVELOPMENT — one-of-everything first (new logic) ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
+    // Updated DesiredOrder: Lab first so the prerequisite system forces correct tech order
     TArray<EFacilityType> DesiredOrder = {
+        EFacilityType::Laboratory,      // research first (prereqs will naturally force LivingQuarters before Lab)
         EFacilityType::LivingQuarters,
-        EFacilityType::Laboratory,
         EFacilityType::PowerPlant,
         EFacilityType::Workshop,
         EFacilityType::Hanger,
@@ -149,6 +179,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
 
+        bool bBuiltSomethingThisBase = false;
+
         for (EFacilityType FacType : DesiredOrder)
         {
             if (!Base->CanBuildFacilityType(FacType))
@@ -159,26 +191,27 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             bool bShouldBuild = false;
 
+            // === ONE-OF-EVERYTHING RULE (uses your new PrerequisiteFacilities) ===
+            bool bAlreadyHasOne = Base->HasFacilityOfType(FacType);
+
             if (FacType == EFacilityType::LivingQuarters)
             {
-                int32 CurrentBarracks = Base->GetTotalBuiltOfType(EFacilityType::LivingQuarters);  // NEW HELPER
-                int32 Cap = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
-                int32 Soldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-
-                // YOUR NEW RULE: max 2 barracks per base unless soldiers are overflowing
-                bShouldBuild = (CurrentBarracks < 2) || (Soldiers >= Cap * 0.9f);
+                // Special case: allow multiples of barracks (respect MaxBuilt from data asset)
+                int32 CurrentBarracks = Base->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
+                bShouldBuild = (CurrentBarracks < 6);   // 6 = MaxBuilt from your FacilityDefinition
             }
             else
             {
-                bShouldBuild = !Base->HasFacilityOfType(FacType);
+                bShouldBuild = !bAlreadyHasOne;
             }
 
             if (bShouldBuild)
             {
                 if (TryBuildFacility(Faction, FacType, Base))
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in '%s'"),
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in '%s' (one-of-everything phase)"),
                         *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
+                    bBuiltSomethingThisBase = true;
                     break; // one facility per base per day
                 }
             }
