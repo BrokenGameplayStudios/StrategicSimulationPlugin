@@ -143,7 +143,12 @@ bool UStrategyFacility::StartProduction(EProductionType Type, UObject* TargetAss
 
 void UStrategyFacility::AdvanceProductionDay()
 {
-    for (int32 i = ActiveProductionJobs.Num() - 1; i >= 0; --i)
+    if (ActiveProductionJobs.Num() == 0) return;
+
+    TArray<int32> JobsToComplete;
+
+    // First pass: find all completed jobs (safe, no modification during iteration)
+    for (int32 i = 0; i < ActiveProductionJobs.Num(); ++i)
     {
         FProductionJob& Job = ActiveProductionJobs[i];
         if (Job.RemainingDays > 0)
@@ -154,9 +159,16 @@ void UStrategyFacility::AdvanceProductionDay()
 
         if (Job.RemainingDays <= 0)
         {
-            UE_LOG(LogTemp, Display, TEXT("[COMPLETE] %s production job finishing now!"), *UEnum::GetValueAsString(Job.Type));
-            CompleteProductionJob(i);
+            JobsToComplete.Add(i);
         }
+    }
+
+    // Second pass: complete them (in reverse order so indices stay valid)
+    for (int32 i = JobsToComplete.Num() - 1; i >= 0; --i)
+    {
+        int32 Index = JobsToComplete[i];
+        UE_LOG(LogTemp, Display, TEXT("[COMPLETE] %s production job finishing now!"), *UEnum::GetValueAsString(ActiveProductionJobs[Index].Type));
+        CompleteProductionJob(Index);
     }
 }
 
@@ -165,7 +177,12 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     if (Index < 0 || Index >= ActiveProductionJobs.Num()) return;
 
     FProductionJob Job = ActiveProductionJobs[Index];
+
+    // CRITICAL FIX: Remove the job BEFORE processing completion
     ActiveProductionJobs.RemoveAt(Index);
+
+    UE_LOG(LogTemp, Verbose, TEXT("[PRODUCTION] Job removed — slots now free: %d (was %d)"),
+        GetAvailableProductionSlots(), FacilityDefinition ? FacilityDefinition->ProductionSlots : 0);
 
     if (!Job.TargetAsset) return;
 
@@ -173,11 +190,9 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
     if (!GI) return;
 
-    UE_LOG(LogTemp, Display, TEXT("[COMPLETE] %s production job finishing now!"), *UEnum::GetValueAsString(Job.Type));
-
     UStrategyEventDispatcher* EventDisp = GI->GetSubsystem<UStrategyEventDispatcher>();
 
-    // Determine correct faction (same pattern used for Soldier)
+    // Determine correct faction
     EFactionType JobFaction = EFactionType::Human;
     UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>();
     if (BaseMgr && UseBase)
