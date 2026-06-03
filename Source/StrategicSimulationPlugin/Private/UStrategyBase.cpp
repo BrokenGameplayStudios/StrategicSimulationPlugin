@@ -81,6 +81,15 @@ int32 UStrategyBase::GetTotalCapacityForType(EFacilityType FacilityType) const
     return Total;
 }
 
+int32 UStrategyBase::GetTotalBuiltOfType(EFacilityType FacilityType) const
+{
+    int32 Count = 0;
+    for (UStrategyFacility* Fac : Facilities)
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityType && Fac->bIsOperational)
+            Count++;
+    return Count;
+}
+
 bool UStrategyBase::HasFacilityOfType(EFacilityType FacilityType) const
 {
     for (UStrategyFacility* Fac : Facilities)

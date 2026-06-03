@@ -107,7 +107,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === GLOBAL EXPANSION PHASE (your rule) ===
+    // === GLOBAL EXPANSION PHASE ===
     int32 NumOperationalHangars = 0;
     for (UStrategyBase* B : BaseMgr->GetBases(Faction))
         if (B && B->HasOperationalFacilityOfType(EFacilityType::Hanger))
@@ -125,7 +125,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
-            return; // next day the new base will start its list
+            return;
         }
     }
 
@@ -134,13 +134,13 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     ResourceMgr->ApplyFacilityIncome(Faction);
 
     TArray<EFacilityType> DesiredOrder = {
-        EFacilityType::LivingQuarters,   // 2
-        EFacilityType::Laboratory,       // 3
-        EFacilityType::PowerPlant,       // 4
-        EFacilityType::Workshop,         // 5
-        EFacilityType::Hanger,           // 6
-        EFacilityType::Medical,          // 7
-        EFacilityType::VehicleRepair     // 8
+        EFacilityType::LivingQuarters,
+        EFacilityType::Laboratory,
+        EFacilityType::PowerPlant,
+        EFacilityType::Workshop,
+        EFacilityType::Hanger,
+        EFacilityType::Medical,
+        EFacilityType::VehicleRepair
     };
 
     for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
@@ -161,9 +161,12 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (FacType == EFacilityType::LivingQuarters)
             {
+                int32 CurrentBarracks = Base->GetTotalBuiltOfType(EFacilityType::LivingQuarters);  // NEW HELPER
                 int32 Cap = Base->GetTotalCapacityForType(EFacilityType::LivingQuarters);
                 int32 Soldiers = SoldierMgr ? SoldierMgr->GetNumSoldiersStationedAt(Base, Faction) : 0;
-                bShouldBuild = (Cap < 12 || Soldiers >= Cap); // only build when actually needed (increased buffer)
+
+                // YOUR NEW RULE: max 2 barracks per base unless soldiers are overflowing
+                bShouldBuild = (CurrentBarracks < 2) || (Soldiers >= Cap * 0.9f);
             }
             else
             {
@@ -181,7 +184,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             }
         }
 
-        // === Your original vehicle / mission / ammo logic (unchanged) ===
+        // === YOUR ORIGINAL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
             UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);

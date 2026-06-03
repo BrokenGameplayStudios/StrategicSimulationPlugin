@@ -57,6 +57,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalCapacityForType(EFacilityType FacilityType) const;
 
+    UFUNCTION(BlueprintCallable, Category = "Facilities")
+    int32 GetTotalBuiltOfType(EFacilityType FacilityType) const;
+
     UFUNCTION(BlueprintCallable, Category = "Base")
     bool HasFacilityOfType(EFacilityType FacilityType) const;
 
