@@ -141,20 +141,22 @@ bool UStrategyFacility::StartProduction(EProductionType Type, UObject* TargetAss
     return true;
 }
 
+// ====================== 1. AdvanceProductionDay (deferred safe removal) ======================
 void UStrategyFacility::AdvanceProductionDay()
 {
     if (ActiveProductionJobs.Num() == 0) return;
 
+    // Collect indices first — NEVER modify array while iterating
     TArray<int32> JobsToComplete;
-
-    // First pass: find all completed jobs (safe, no modification during iteration)
     for (int32 i = 0; i < ActiveProductionJobs.Num(); ++i)
     {
         FProductionJob& Job = ActiveProductionJobs[i];
+
         if (Job.RemainingDays > 0)
         {
             Job.RemainingDays--;
-            UE_LOG(LogTemp, Verbose, TEXT("[PROD TICK] %s job — %d days left"), *UEnum::GetValueAsString(Job.Type), Job.RemainingDays);
+            UE_LOG(LogTemp, Verbose, TEXT("[PROD TICK] %s job — %d days left in %s"),
+                *UEnum::GetValueAsString(Job.Type), Job.RemainingDays, *FacilityDefinition->FacilityName.ToString());
         }
 
         if (Job.RemainingDays <= 0)
@@ -163,12 +165,14 @@ void UStrategyFacility::AdvanceProductionDay()
         }
     }
 
-    // Second pass: complete them (in reverse order so indices stay valid)
+    // Process in reverse order so indices stay valid
     for (int32 i = JobsToComplete.Num() - 1; i >= 0; --i)
     {
         int32 Index = JobsToComplete[i];
-        UE_LOG(LogTemp, Display, TEXT("[COMPLETE] %s production job finishing now!"), *UEnum::GetValueAsString(ActiveProductionJobs[Index].Type));
-        CompleteProductionJob(Index);
+        UE_LOG(LogTemp, Display, TEXT("[COMPLETE] %s production job finishing now!"),
+            *UEnum::GetValueAsString(ActiveProductionJobs[Index].Type));
+
+        CompleteProductionJob(Index);   // removal happens FIRST inside this function
     }
 }
 
@@ -176,13 +180,17 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
 {
     if (Index < 0 || Index >= ActiveProductionJobs.Num()) return;
 
+    // Copy the job data FIRST
     FProductionJob Job = ActiveProductionJobs[Index];
 
-    // CRITICAL FIX: Remove the job BEFORE processing completion
+    // CRITICAL FIX: Remove the job BEFORE any completion logic runs
+    // This is what finally frees the production slot for the next tick
     ActiveProductionJobs.RemoveAt(Index);
 
-    UE_LOG(LogTemp, Verbose, TEXT("[PRODUCTION] Job removed — slots now free: %d (was %d)"),
-        GetAvailableProductionSlots(), FacilityDefinition ? FacilityDefinition->ProductionSlots : 0);
+    UE_LOG(LogTemp, Verbose, TEXT("[PRODUCTION] Job removed — slots now free: %d (was %d) in %s"),
+        GetAvailableProductionSlots(),
+        FacilityDefinition ? FacilityDefinition->ProductionSlots : 0,
+        *FacilityDefinition->FacilityName.ToString());
 
     if (!Job.TargetAsset) return;
 
