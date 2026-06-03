@@ -208,7 +208,7 @@ void UStrategyCampaignSubsystem::StartSimulation()
                 if (First) UnlocksList += "None";
                 UnlocksList += ")";
 
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Build Time: %d days (Prerequisites: %s)"),
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Build Time: %d days (Prerequisites: %s)%s"),
                     *Def->FacilityName.ToString(),
                     *UEnum::GetValueAsString(Def->FacilityType),
                     Def->Capacity,
@@ -222,7 +222,8 @@ void UStrategyCampaignSubsystem::StartSimulation()
                     Def->BuildCost.Biologicals,
                     Def->BuildCost.Chemicals,
                     Def->BuildTimeDays,
-                    *FString::JoinBy(Def->PrerequisiteFacilities, TEXT(", "), [](EFacilityType T) { return UEnum::GetValueAsString(T); }));
+                    *FString::JoinBy(Def->PrerequisiteFacilities, TEXT(", "), [](EFacilityType T) { return UEnum::GetValueAsString(T); }),
+                    *RepairInfo);
             }
         }
     }
