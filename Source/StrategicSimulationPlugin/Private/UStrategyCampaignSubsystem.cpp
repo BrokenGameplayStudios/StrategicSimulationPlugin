@@ -208,21 +208,21 @@ void UStrategyCampaignSubsystem::StartSimulation()
                 if (First) UnlocksList += "None";
                 UnlocksList += ")";
 
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Build Time: %d days %s"),
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Build Time: %d days (Prerequisites: %s)"),
                     *Def->FacilityName.ToString(),
                     *UEnum::GetValueAsString(Def->FacilityType),
                     Def->Capacity,
-                    Def->ProductionSlots,                  // NEW
-                    Def->ProductionSpeedMultiplier,        // NEW
+                    Def->ProductionSlots,
+                    Def->ProductionSpeedMultiplier,
                     Def->MaxBuilt,
                     Def->PowerProvided,
                     Def->PowerDraw,
                     Def->BuildCost.Money,
-					Def->BuildCost.Metals,
-					Def->BuildCost.Biologicals,
+                    Def->BuildCost.Metals,
+                    Def->BuildCost.Biologicals,
                     Def->BuildCost.Chemicals,
                     Def->BuildTimeDays,
-                    Def->UnlocksResearch.Num() > 0 ? TEXT("(Unlocks Research)") : TEXT("(Unlocks: None)"));
+                    *FString::JoinBy(Def->PrerequisiteFacilities, TEXT(", "), [](EFacilityType T) { return UEnum::GetValueAsString(T); }));
             }
         }
     }

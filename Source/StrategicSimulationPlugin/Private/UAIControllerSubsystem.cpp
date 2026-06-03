@@ -162,7 +162,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     TArray<EFacilityType> BuildPriority = {
         EFacilityType::PowerPlant,
         EFacilityType::LivingQuarters,
-        EFacilityType::Laboratory,
+        EFacilityType::Laboratory,      // research early
         EFacilityType::Workshop,
         EFacilityType::Hanger,
         EFacilityType::Medical,
@@ -178,7 +178,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         for (EFacilityType FacType : BuildPriority)
         {
-            // NEW: Prerequisite check is now the first gate
+            // Prerequisite check is the FIRST gate — this is what stops Workshop/Hanger before Lab
             if (!Base->CanBuildFacilityType(FacType))
             {
                 UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped in '%s' — prerequisites not met"),
