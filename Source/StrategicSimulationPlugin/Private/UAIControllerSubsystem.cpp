@@ -109,15 +109,26 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === PER-BASE DEVELOPMENT — ONLY OLDEST BASE EACH DAY ===
+    // === PER-BASE DEVELOPMENT — FOCUS BASE (fixes empty shells) ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
     const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
     if (AllBases.Num() == 0) return;
 
-    UStrategyBase* OldestBase = AllBases[0];  // ← Wave rule: only develop oldest base
-    UE_LOG(LogTemp, Display, TEXT("[AI] Developing oldest base '%s' (Net Power: %d)"), *OldestBase->BaseName.ToString(), OldestBase->GetNetPower());
+    // Find the "focus" base: any base without a Command Center gets priority
+    UStrategyBase* FocusBase = nullptr;
+    for (UStrategyBase* B : AllBases)
+    {
+        if (!B->HasOperationalFacilityOfType(EFacilityType::Command))
+        {
+            FocusBase = B;
+            break;
+        }
+    }
+    if (!FocusBase) FocusBase = AllBases[0]; // fall back to oldest once all have Command
+
+    UE_LOG(LogTemp, Display, TEXT("[AI] Developing focus base '%s' (Net Power: %d)"), *FocusBase->BaseName.ToString(), FocusBase->GetNetPower());
 
     TArray<EFacilityType> DesiredOrder = {
         EFacilityType::LivingQuarters,
@@ -132,7 +143,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     {
         UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build"), *UEnum::GetValueAsString(FacType));
 
-        if (!OldestBase->CanBuildFacilityType(FacType))
+        if (!FocusBase->CanBuildFacilityType(FacType))
         {
             UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped — prerequisites not met"), *UEnum::GetValueAsString(FacType));
             continue;
@@ -141,29 +152,29 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         bool bShouldBuild = false;
         if (FacType == EFacilityType::LivingQuarters)
         {
-            bool bCoreLayerDone = OldestBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
-            int32 CurrentBarracks = OldestBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
+            bool bCoreLayerDone = FocusBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
+            int32 CurrentBarracks = FocusBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
             bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
         }
         else
         {
-            bShouldBuild = !OldestBase->HasOperationalFacilityOfType(FacType);
+            bShouldBuild = !FocusBase->HasOperationalFacilityOfType(FacType);
         }
 
         if (bShouldBuild)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s in oldest base '%s'"), *UEnum::GetValueAsString(FacType), *OldestBase->BaseName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s in focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
 
-            if (TryBuildFacility(Faction, FacType, OldestBase))
+            if (TryBuildFacility(Faction, FacType, FocusBase))
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in oldest base '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *OldestBase->BaseName.ToString());
+                UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in focus base '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
                 break; // one facility per day
             }
         }
     }
 
-    // === FULL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
-    if (OldestBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
+    // === FULL VEHICLE / MISSION / AMMO LOGIC (unchanged from your original) ===
+    if (FocusBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
     {
         UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
         if (TargetBase)
@@ -176,10 +187,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    if (OldestBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
+    if (FocusBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
     {
         bool bHasParkedVehicles = false;
-        for (UStrategyFacility* Fac : OldestBase->Facilities)
+        for (UStrategyFacility* Fac : FocusBase->Facilities)
         {
             if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
             {
@@ -213,7 +224,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                         }
                     }
 
-                    for (UStrategyFacility* Fac : OldestBase->Facilities)
+                    for (UStrategyFacility* Fac : FocusBase->Facilities)
                     {
                         if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                         {
@@ -251,7 +262,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2));
 
                 TArray<UStrategyVehicle*> AvailableVehicles;
-                for (UStrategyFacility* Fac : OldestBase->Facilities)
+                for (UStrategyFacility* Fac : FocusBase->Facilities)
                 {
                     if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                         AvailableVehicles.Append(Fac->ParkedVehicles);
@@ -259,17 +270,17 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
                 if (AvailableVehicles.Num() > 0)
                 {
-                    if (UMissionGroup* Mission = MissionMgr->StartMission(OldestBase, AvailableVehicles, 15, TArray<UStrategySoldier*>(), ChosenType, Faction))
+                    if (UMissionGroup* Mission = MissionMgr->StartMission(FocusBase, AvailableVehicles, 15, TArray<UStrategySoldier*>(), ChosenType, Faction))
                     {
                         UE_LOG(LogTemp, Display, TEXT("[AI] %s AI launched %s mission from base '%s' with %d vehicles"),
-                            *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(ChosenType), *OldestBase->BaseName.ToString(), AvailableVehicles.Num());
+                            *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(ChosenType), *FocusBase->BaseName.ToString(), AvailableVehicles.Num());
                     }
                 }
             }
         }
         else
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting"), *OldestBase->BaseName.ToString());
+            UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting"), *FocusBase->BaseName.ToString());
         }
     }
 
@@ -323,7 +334,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             }
         }
 
-        if (bAllBasesHaveVehicle && ResourceMgr->GetResources(Faction).Money > 9500)  // slightly higher threshold to afford Command Center
+        if (bAllBasesHaveVehicle && ResourceMgr->GetResources(Faction).Money > 9500)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! ALL bases own vehicles → Building NEW base #%d"),
                 *UEnum::GetValueAsString(Faction), AllBases.Num() + 1);
