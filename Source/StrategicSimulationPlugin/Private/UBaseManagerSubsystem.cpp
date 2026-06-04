@@ -154,12 +154,18 @@ TArray<UStrategyBase*>& UBaseManagerSubsystem::GetMutableBases(EFactionType Fact
 
 UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase)
 {
-    if (!FacilityDef) return nullptr;
+    if (!FacilityDef)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[BUILD] FacilityDef is null!"));
+        return nullptr;
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] === START BuildFacility for %s (MaxBuilt=%d) ==="),
+        *FacilityDef->FacilityName.ToString(), FacilityDef->MaxBuilt);
 
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (ResourceMgr)
     {
-        FResourceStockpile Current = ResourceMgr->GetResources(Faction);
         if (!ResourceMgr->CanAfford(Faction, FacilityDef->BuildCost))
         {
             UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot afford %s (%d Money, %d Metals, %d Biologicals, %d Chemicals needed)"),
@@ -167,6 +173,9 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
                 FacilityDef->BuildCost.Metals, FacilityDef->BuildCost.Biologicals, FacilityDef->BuildCost.Chemicals);
             return nullptr;
         }
+
+        // Resources OK
+        UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Resources check PASSED for %s"), *FacilityDef->FacilityName.ToString());
 
         FResourceStockpile NegativeCost = FacilityDef->BuildCost;
         NegativeCost.Money = -NegativeCost.Money;
@@ -201,21 +210,26 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 
     if (!ChosenBase)
     {
-        UE_LOG(LogTemp, Error, TEXT("[BASE] No valid base found to build %s!"), *FacilityDef->FacilityName.ToString());
+        UE_LOG(LogTemp, Error, TEXT("[BUILD] No valid base found to build %s!"), *FacilityDef->FacilityName.ToString());
         return nullptr;
     }
+
+    UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Chosen base '%s' for %s"), *ChosenBase->BaseName.ToString(), *FacilityDef->FacilityName.ToString());
 
     if (FacilityDef->FacilityType != EFacilityType::Command)
     {
         if (!ChosenBase->HasOperationalCommandCenter())
         {
-            UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot build %s — Command Center must be operational first in base '%s'!"),
+            UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot build %s — Command Center must be operational first in base '%s'!"),
                 *FacilityDef->FacilityName.ToString(), *ChosenBase->BaseName.ToString());
             return nullptr;
         }
     }
 
-    UStrategyFacility* NewFacility = NewObject<UStrategyFacility>(this);  // ← CHANGED
+    UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Command Center check PASSED"));
+
+    // === Create the facility ===
+    UStrategyFacility* NewFacility = NewObject<UStrategyFacility>(this);
     NewFacility->FacilityDefinition = FacilityDef;
     NewFacility->BuildProgressDays = FacilityDef->BuildTimeDays;
     NewFacility->bIsOperational = false;
@@ -224,13 +238,17 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 
     ChosenBase->AddFacility(NewFacility);
 
+    UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Facility object created and added to base"));
+
     if (FacilityDef->BuildTimeDays > 0)
     {
         NewFacility->StartConstruction(FacilityDef);
+        UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] StartConstruction called (BuildTime = %d days)"), FacilityDef->BuildTimeDays);
     }
     else
     {
         NewFacility->bIsOperational = true;
+        UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Instant operational facility (0 build days)"));
     }
 
     OnFacilityListChanged.Broadcast(Faction);

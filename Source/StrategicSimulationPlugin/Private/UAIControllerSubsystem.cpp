@@ -91,11 +91,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     if (!BaseMgr || !ResourceMgr) return;
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — Day %d decision - Bases: %d | Money: %d | Metals: %d"),
+    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — Day %d decision - Bases: %d | 💰%d | 🛠️%d | 🧬%d | ⚗️%d | 🌌%d | 📚%d"),
         *UEnum::GetValueAsString(Faction), CurrentDay,
         BaseMgr->GetBases(Faction).Num(),
-        ResourceMgr->GetResources(Faction).Money,
-        ResourceMgr->GetResources(Faction).Metals);
+        Res.Money, Res.Metals, Res.Biologicals, Res.Chemicals, Res.ExoticMaterial, Res.ResearchPoints);
 
     // === INITIAL BASE CREATION ===
     if (BaseMgr->GetBases(Faction).Num() == 0)
@@ -559,14 +559,14 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
 
     if (!Campaign || !BaseMgr || !ResourceMgr)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] Missing subsystems for facility build"));
+        UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — Missing subsystems"));
         return false;
     }
 
     UFacilityDatabase* DB = Campaign->FacilityDatabaseAsset.Get();
     if (!DB)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] FacilityDatabase is null!"));
+        UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — FacilityDatabase is null!"));
         return false;
     }
 
@@ -585,10 +585,14 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
 
     if (!FacilityDef)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] No facility of type %s in FacilityDatabase!"), *UEnum::GetValueAsString(FacilityTypeToBuild));
+        UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — No facility definition found for %s in database!"), *UEnum::GetValueAsString(FacilityTypeToBuild));
         return false;
     }
 
+    UE_LOG(LogTemp, Display, TEXT("[AI] TryBuildFacility — Found definition for %s (MaxBuilt=%d, BuildTime=%d days)"),
+        *FacilityDef->FacilityName.ToString(), FacilityDef->MaxBuilt, FacilityDef->BuildTimeDays);
+
+    // === MaxBuilt check ===
     if (TargetBase)
     {
         int32 CurrentCountInBase = 0;
@@ -605,20 +609,26 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
 
         if (CurrentCountInBase + UnderConstruction >= FacilityDef->MaxBuilt)
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[AI] MaxBuilt or already queued for %s in base '%s' (%d built + %d building) — skipping"),
-                *UEnum::GetValueAsString(FacilityTypeToBuild), *TargetBase->BaseName.ToString(), CurrentCountInBase, UnderConstruction);
+            UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — MaxBuilt reached for %s (%d built + %d under construction)"),
+                *UEnum::GetValueAsString(FacilityTypeToBuild), CurrentCountInBase, UnderConstruction);
             return false;
         }
     }
 
+    UE_LOG(LogTemp, Display, TEXT("[AI] TryBuildFacility — MaxBuilt check PASSED"));
+
+    // === Resource check ===
     if (!ResourceMgr->CanAfford(Faction, FacilityDef->BuildCost))
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI] Not enough resources for %s (needs %d Money, %d Metals, %d Biologicals, %d Chemicals)"),
+        UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — Not enough resources for %s (needs %d Money, %d Metals, %d Biologicals, %d Chemicals)"),
             *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money,
             FacilityDef->BuildCost.Metals, FacilityDef->BuildCost.Biologicals, FacilityDef->BuildCost.Chemicals);
         return false;
     }
 
+    UE_LOG(LogTemp, Display, TEXT("[AI] TryBuildFacility — Resources check PASSED"));
+
+    // === Actually build it ===
     if (BaseMgr->BuildFacility(Faction, FacilityDef, TargetBase))
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] %s started construction of %s in base '%s' (%d days)"),
@@ -627,8 +637,8 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
         return true;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[AI] BuildFacility failed for %s in base '%s'"),
-        *FacilityDef->FacilityName.ToString(), TargetBase ? *TargetBase->BaseName.ToString() : TEXT("unknown"));
+    UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — BuildFacility returned false for %s"),
+        *FacilityDef->FacilityName.ToString());
     return false;
 }
 
