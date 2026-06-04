@@ -72,6 +72,8 @@ void UAIControllerSubsystem::PerformDailyBuildOrder(EFactionType Faction)
     RunAIForFaction(Faction, GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay());
 }
 
+// RUN AI FOR FACTION
+// Does routine for AI
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[AI] >>> ENTERING RunAIForFaction for %s (Day %d)"),
@@ -138,7 +140,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             }
 
             bool bShouldBuild = false;
-
             if (FacType == EFacilityType::LivingQuarters)
             {
                 bool bCoreLayerDone = Base->HasOperationalFacilityOfType(EFacilityType::Laboratory);
@@ -282,34 +283,51 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     if (TryBuyAndEquip(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s purchase/equip action taken"), *UEnum::GetValueAsString(Faction));
     if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s production action taken"), *UEnum::GetValueAsString(Faction));
 
-    // === Daily base state summary ===
     if (BaseMgr)
     {
         BaseMgr->DebugPrintFullBaseState(Faction);
     }
 
-    // === EXPANSION — triggers as soon as ANY base has a parked vehicle ===
-    bool bReadyToExpand = false;
+    // === EXPANSION BLOCK WITH EXTRA DEBUG (this is the part that was missing the trigger) ===
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    if (Bases.Num() < MaxBases)
+    int32 MaxBasesAllowed = 4; // ← CHANGE THIS NUMBER IF YOU WANT MORE BASES
+    bool bReadyToExpand = false;
+
+    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Checking expansion: Bases = %d (max %d)"), *UEnum::GetValueAsString(Faction), Bases.Num(), MaxBasesAllowed);
+
+    if (Bases.Num() < MaxBasesAllowed)
     {
         for (UStrategyBase* B : Bases)
         {
             if (B && B->HasOperationalFacilityOfType(EFacilityType::Hanger))
             {
+                UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]   Base '%s' has Hanger"), *B->BaseName.ToString());
+
+                bool bHasParkedVehicle = false;
                 for (UStrategyFacility* Fac : B->Facilities)
                 {
-                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
-                        Fac->ParkedVehicles.Num() > 0)
+                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                     {
-                        bReadyToExpand = true;
-                        break;
+                        int32 Parked = Fac->ParkedVehicles.Num();
+                        UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Hanger has %d parked vehicles"), Parked);
+                        if (Parked > 0)
+                        {
+                            bHasParkedVehicle = true;
+                            break;
+                        }
                     }
                 }
-                if (bReadyToExpand) break;
+                if (bHasParkedVehicle)
+                {
+                    bReadyToExpand = true;
+                    break;
+                }
             }
         }
     }
+
+    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Ready to expand = %s | Money = %d"),
+        *UEnum::GetValueAsString(Faction), bReadyToExpand ? TEXT("TRUE") : TEXT("FALSE"), ResourceMgr->GetResources(Faction).Money);
 
     if (bReadyToExpand && ResourceMgr->GetResources(Faction).Money > 9000)
     {
