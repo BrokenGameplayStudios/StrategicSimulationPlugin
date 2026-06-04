@@ -287,8 +287,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
 
     // === EXPANSION — only after oldest base owns a vehicle (parked OR on mission) ===
-    const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
-    if (AllBases.Num() < MaxBases)   // ← NOW USES THE CAMPAIGN SETTING
+    if (AllBases.Num() < MaxBases)   // ← now uses your campaign MaxBases (no hard-coded 4)
     {
         UStrategyBase* OldestBaseForExpansionCheck = AllBases[0];
 
