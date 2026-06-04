@@ -160,9 +160,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
-    // === CRITICAL: Lab first so prereqs work correctly ===
     TArray<EFacilityType> DesiredOrder = {
-        EFacilityType::Laboratory,
+        EFacilityType::Laboratory,      // MUST be first
         EFacilityType::LivingQuarters,
         EFacilityType::PowerPlant,
         EFacilityType::Workshop,
@@ -193,23 +192,31 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (FacType == EFacilityType::LivingQuarters)
             {
+                // === FINAL FIX: NO MORE ROUND-ROBIN BARRACKS ===
+                // Only allow extra barracks AFTER the first Laboratory is operational
+                bool bCoreLayerDone = Base->HasOperationalFacilityOfType(EFacilityType::Laboratory);
                 int32 CurrentBarracks = Base->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
-                bShouldBuild = (CurrentBarracks < 6);
+                bShouldBuild = bCoreLayerDone && (CurrentBarracks < 6);
             }
             else
             {
-                // FIXED: Use HasOperationalFacilityOfType so the first one can be built while constructing
                 bShouldBuild = !Base->HasOperationalFacilityOfType(FacType);
             }
 
             if (bShouldBuild)
             {
+                UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s (bShouldBuild=true)"), *UEnum::GetValueAsString(FacType));
+
                 if (TryBuildFacility(Faction, FacType, Base))
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in '%s' (one-of-everything phase)"),
                         *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
                     bBuiltSomethingThisBase = true;
-                    break;
+                    break; // one facility per base per day
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED for %s — check resources/MaxBuilt"), *UEnum::GetValueAsString(FacType));
                 }
             }
         }
