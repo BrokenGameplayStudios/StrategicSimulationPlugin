@@ -388,6 +388,12 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     const FResourceStockpile& Cost = ClassDef->TrainingCost;
 
+    if (ResourceMgr->GetResources(Faction).Money < 1500)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] Skipping recruit/purchase — saving for next facility"));
+        return false; 
+    }
+
     if (!ResourceMgr->CanAfford(Faction, Cost))
     {
         UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 💰%d 🛠️%d 🧬%d ⚗️%d 🌌%d 📚%d)"),
