@@ -351,8 +351,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     if (TryBuyAndEquip(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s purchase/equip action taken"), *UEnum::GetValueAsString(Faction));
     if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s production action taken"), *UEnum::GetValueAsString(Faction));
 
-    // At the very end of RunAIForFaction, after all other logic
-    if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+    // === NEW: Daily base state summary (for debugging + future UI) ===
+    if (BaseMgr)  // <-- reuse the BaseMgr that already exists at the top of the function
     {
         BaseMgr->DebugPrintFullBaseState(Faction);
     }
