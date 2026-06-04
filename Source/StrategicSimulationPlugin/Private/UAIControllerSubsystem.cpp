@@ -288,41 +288,87 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         BaseMgr->DebugPrintFullBaseState(Faction);
     }
 
-    // === EXPANSION BLOCK WITH EXTRA DEBUG (this is the part that was missing the trigger) ===
+    // === EXPANSION — now checks "base owns a vehicle" using HomeBase (parked OR on mission) ===
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    int32 MaxBasesAllowed = 4; // ← CHANGE THIS NUMBER IF YOU WANT MORE BASES
+    int32 MaxBasesAllowed = 4; // change if you want more/less bases
+
     bool bReadyToExpand = false;
 
-    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Checking expansion: Bases = %d (max %d)"), *UEnum::GetValueAsString(Faction), Bases.Num(), MaxBasesAllowed);
+    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Checking expansion: Bases = %d (max %d)"),
+        *UEnum::GetValueAsString(Faction), Bases.Num(), MaxBasesAllowed);
 
     if (Bases.Num() < MaxBasesAllowed)
     {
         for (UStrategyBase* B : Bases)
         {
-            if (B && B->HasOperationalFacilityOfType(EFacilityType::Hanger))
-            {
-                UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]   Base '%s' has Hanger"), *B->BaseName.ToString());
+            if (!B || !B->HasOperationalFacilityOfType(EFacilityType::Hanger)) continue;
 
-                bool bHasParkedVehicle = false;
-                for (UStrategyFacility* Fac : B->Facilities)
+            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]   Base '%s' has Hanger"), *B->BaseName.ToString());
+
+            bool bThisBaseOwnsVehicle = false;
+
+            // 1. Check parked vehicles (using HomeBase for safety)
+            for (UStrategyFacility* Fac : B->Facilities)
+            {
+                if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                 {
-                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+                    for (UStrategyVehicle* V : Fac->ParkedVehicles)
                     {
-                        int32 Parked = Fac->ParkedVehicles.Num();
-                        UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Hanger has %d parked vehicles"), Parked);
-                        if (Parked > 0)
+                        if (V && V->HomeBase == B)
                         {
-                            bHasParkedVehicle = true;
+                            bThisBaseOwnsVehicle = true;
+                            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Found parked vehicle (HomeBase match)"));
                             break;
                         }
                     }
                 }
-                if (bHasParkedVehicle)
+                if (bThisBaseOwnsVehicle) break;
+            }
+
+            // 2. Check active missions (vehicles on mission still belong to this base)
+            if (!bThisBaseOwnsVehicle)
+            {
+                if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
                 {
-                    bReadyToExpand = true;
-                    break;
+                    for (UMissionGroup* Mission : MissionMgr->ActiveMissions)  // your existing array
+                    {
+                        if (Mission && Mission->OwningBase == B)  // mission knows its home base
+                        {
+                            for (UStrategyVehicle* V : Mission->Vehicles)  // vehicles on this mission
+                            {
+                                if (V && V->HomeBase == B)
+                                {
+                                    bThisBaseOwnsVehicle = true;
+                                    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Found vehicle on active mission (HomeBase match)"));
+                                    break;
+                                }
+                            }
+                        }
+                        if (bThisBaseOwnsVehicle) break;
+                    }
                 }
             }
+
+            if (bThisBaseOwnsVehicle)
+            {
+                bReadyToExpand = true;
+                break;
+            }
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Ready to expand = %s | Money = %d"),
+        *UEnum::GetValueAsString(Faction), bReadyToExpand ? TEXT("TRUE") : TEXT("FALSE"), ResourceMgr->GetResources(Faction).Money);
+
+    if (bReadyToExpand && ResourceMgr->GetResources(Faction).Money > 9000)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Base owns vehicle → Building NEW base #%d"),
+            *UEnum::GetValueAsString(Faction), Bases.Num() + 1);
+
+        FVector2D NewLoc = FVector2D(300.0f + (Bases.Num() * 320.0f), 540.0f);
+        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
         }
     }
 
