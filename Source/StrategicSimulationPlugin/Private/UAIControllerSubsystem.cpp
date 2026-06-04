@@ -130,7 +130,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     UE_LOG(LogTemp, Display, TEXT("[AI] Developing focus base '%s' (Net Power: %d)"), *FocusBase->BaseName.ToString(), FocusBase->GetNetPower());
 
-    // === FACILITY BUILD ORDER (quicker wave — only 1 LivingQuarters required) ===
+    // === FACILITY BUILD ORDER (quicker wave) ===
     TArray<EFacilityType> DesiredOrder = {
         EFacilityType::LivingQuarters,
         EFacilityType::Laboratory,
@@ -140,17 +140,25 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         EFacilityType::VehicleRepair
     };
 
-    // Only attempt normal facilities once the Command Center is OPERATIONAL
-    if (!FocusBase->HasOperationalFacilityOfType(EFacilityType::Command))
+    // Check if this base has ANY Command Center (built OR under construction)
+    bool bHasAnyCommandCenter = false;
+    for (UStrategyFacility* Fac : FocusBase->Facilities)
+    {
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Command)
+        {
+            bHasAnyCommandCenter = true;
+            break;
+        }
+    }
+
+    if (!bHasAnyCommandCenter)
     {
         UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Force-building Command Center for new base '%s'"), *FocusBase->BaseName.ToString());
-        if (TryBuildFacility(Faction, EFacilityType::Command, FocusBase))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] %s built Command Center in focus base '%s'"), *UEnum::GetValueAsString(Faction), *FocusBase->BaseName.ToString());
-        }
+        TryBuildFacility(Faction, EFacilityType::Command, FocusBase);
     }
     else
     {
+        // Normal build order once Command Center exists (even if still under construction)
         for (EFacilityType FacType : DesiredOrder)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build on focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
@@ -160,7 +168,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             {
                 bool bCoreLayerDone = FocusBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
                 int32 CurrentBarracks = FocusBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
-                bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0); // only 1 required for expansion
+                bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
             }
             else
             {
