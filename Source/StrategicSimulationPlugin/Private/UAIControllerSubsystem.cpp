@@ -130,6 +130,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     UE_LOG(LogTemp, Display, TEXT("[AI] Developing focus base '%s' (Net Power: %d)"), *FocusBase->BaseName.ToString(), FocusBase->GetNetPower());
 
+    // === FACILITY BUILD ORDER ===
     TArray<EFacilityType> DesiredOrder = {
         EFacilityType::LivingQuarters,
         EFacilityType::Laboratory,
@@ -139,36 +140,48 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         EFacilityType::VehicleRepair
     };
 
-    for (EFacilityType FacType : DesiredOrder)
+    // Special case: if focus base has no Command Center, force it first
+    if (!FocusBase->HasOperationalFacilityOfType(EFacilityType::Command))
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build"), *UEnum::GetValueAsString(FacType));
-
-        if (!FocusBase->CanBuildFacilityType(FacType))
+        UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Force-building Command Center for new base '%s'"), *FocusBase->BaseName.ToString());
+        if (TryBuildFacility(Faction, EFacilityType::Command, FocusBase))
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped — prerequisites not met"), *UEnum::GetValueAsString(FacType));
-            continue;
+            UE_LOG(LogTemp, Display, TEXT("[AI] %s built Command Center in focus base '%s'"), *UEnum::GetValueAsString(Faction), *FocusBase->BaseName.ToString());
         }
-
-        bool bShouldBuild = false;
-        if (FacType == EFacilityType::LivingQuarters)
+    }
+    else
+    {
+        for (EFacilityType FacType : DesiredOrder)
         {
-            bool bCoreLayerDone = FocusBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
-            int32 CurrentBarracks = FocusBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
-            bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
-        }
-        else
-        {
-            bShouldBuild = !FocusBase->HasOperationalFacilityOfType(FacType);
-        }
+            UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build"), *UEnum::GetValueAsString(FacType));
 
-        if (bShouldBuild)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s in focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
-
-            if (TryBuildFacility(Faction, FacType, FocusBase))
+            if (!FocusBase->CanBuildFacilityType(FacType))
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in focus base '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
-                break; // one facility per day
+                UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped — prerequisites not met"), *UEnum::GetValueAsString(FacType));
+                continue;
+            }
+
+            bool bShouldBuild = false;
+            if (FacType == EFacilityType::LivingQuarters)
+            {
+                bool bCoreLayerDone = FocusBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
+                int32 CurrentBarracks = FocusBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
+                bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
+            }
+            else
+            {
+                bShouldBuild = !FocusBase->HasOperationalFacilityOfType(FacType);
+            }
+
+            if (bShouldBuild)
+            {
+                UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s in focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
+
+                if (TryBuildFacility(Faction, FacType, FocusBase))
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in focus base '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
+                    break; // one facility per day
+                }
             }
         }
     }
