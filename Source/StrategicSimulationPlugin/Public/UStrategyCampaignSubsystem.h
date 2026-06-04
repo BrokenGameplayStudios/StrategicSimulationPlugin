@@ -28,6 +28,10 @@ class STRATEGICSIMULATIONPLUGIN_API UStrategyCampaignSubsystem : public UGameIns
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
+    // === AI / Simulation Settings ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | AI")
+    int32 MaxAIBases = 4;   // ← change this in the editor / BP to control AI expansion globally
+
     /** Full reset of the simulation (call from UI for New Game) */
     UFUNCTION(BlueprintCallable, Category = "Simulation")
     void ResetSimulation();

@@ -180,6 +180,13 @@ void UStrategyCampaignSubsystem::StartSimulation()
     GetTimeManager()->SetTimeScale(1.0f);
     UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED"));
 
+    // === SET AI EXPANSION LIMIT AS A GAME SETTING ===
+    if (UAIControllerSubsystem* AIController = GetAIController())
+    {
+        AIController->MaxBases = MaxAIBases;
+        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] AI MaxBases set to %d (campaign setting)"), AIController->MaxBases);
+    }
+
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));
 
     if (UFacilityDatabase* FacilityDB = FacilityDatabaseAsset.Get())

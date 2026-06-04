@@ -286,73 +286,65 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         BaseMgr->DebugPrintFullBaseState(Faction);
     }
 
-    // === EXPANSION — ONLY WHEN OLDEST BASE OWNS A VEHICLE ===
-    int32 MaxBasesAllowed = 4;
-    bool bReadyToExpand = false;
-
-    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Checking expansion: Bases = %d (max %d)"),
-        *UEnum::GetValueAsString(Faction), AllBases.Num(), MaxBasesAllowed);
-
-    if (AllBases.Num() < MaxBasesAllowed)
+    // === EXPANSION — only after oldest base owns a vehicle (parked OR on mission) ===
+    const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
+    if (AllBases.Num() < MaxBases)   // ← NOW USES THE CAMPAIGN SETTING
     {
-        UStrategyBase* Oldest = AllBases[0];
-        if (Oldest && Oldest->HasOperationalFacilityOfType(EFacilityType::Hanger))
+        UStrategyBase* OldestBaseForExpansionCheck = AllBases[0];
+
+        bool bReadyToExpand = false;
+        UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Checking expansion: Bases = %d (max %d)"),
+            *UEnum::GetValueAsString(Faction), AllBases.Num(), MaxBases);
+
+        // Does oldest base have a Hanger?
+        if (OldestBaseForExpansionCheck->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
-            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]   Oldest base '%s' has Hanger"), *Oldest->BaseName.ToString());
-
-            bool bOwnsVehicle = false;
-
-            // Parked vehicles
-            for (UStrategyFacility* Fac : Oldest->Facilities)
+            // Check parked vehicles
+            bool bHasParked = false;
+            for (UStrategyFacility* Fac : OldestBaseForExpansionCheck->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                 {
-                    for (UStrategyVehicle* V : Fac->ParkedVehicles)
+                    if (Fac->ParkedVehicles.Num() > 0)
                     {
-                        if (V && V->HomeBase == Oldest)
-                        {
-                            bOwnsVehicle = true;
-                            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Found parked vehicle"));
-                            break;
-                        }
-                    }
-                }
-                if (bOwnsVehicle) break;
-            }
-
-            // Vehicles on missions
-            if (!bOwnsVehicle)
-            {
-                if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
-                {
-                    if (MissionMgr->ActiveMissions.Num() > 0)
-                    {
-                        bOwnsVehicle = true;
-                        UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Has active missions → vehicles are flying"));
+                        bHasParked = true;
+                        break;
                     }
                 }
             }
 
-            if (bOwnsVehicle)
+            // Or has active missions (vehicles are flying but still owned by this base)
+            UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+            bool bHasFlyingVehicles = (MissionMgr && MissionMgr->ActiveMissions.Num() > 0);
+
+            if (bHasParked || bHasFlyingVehicles)
             {
                 bReadyToExpand = true;
+                UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]   Oldest base '%s' owns vehicle (parked:%s | flying:%s)"),
+                    *OldestBaseForExpansionCheck->BaseName.ToString(),
+                    bHasParked ? TEXT("YES") : TEXT("no"),
+                    bHasFlyingVehicles ? TEXT("YES") : TEXT("no"));
             }
         }
-    }
 
-    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Ready to expand = %s | Money = %d"),
-        *UEnum::GetValueAsString(Faction), bReadyToExpand ? TEXT("TRUE") : TEXT("FALSE"), ResourceMgr->GetResources(Faction).Money);
-
-    if (bReadyToExpand && ResourceMgr->GetResources(Faction).Money > 9000)
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Oldest base owns vehicle → Building NEW base #%d"),
-            *UEnum::GetValueAsString(Faction), AllBases.Num() + 1);
-
-        FVector2D NewLoc = FVector2D(300.0f + (AllBases.Num() * 320.0f), 540.0f);
-        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
+        if (bReadyToExpand && ResourceMgr->GetResources(Faction).Money > 9000)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Oldest base owns vehicle → Building NEW base #%d"),
+                *UEnum::GetValueAsString(Faction), AllBases.Num() + 1);
+
+            if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString(FString::Printf(TEXT("Forward Base %02d"), AllBases.Num() + 1)), FVector2D::ZeroVector))
+            {
+                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base created: %s"), *NewBase->BaseName.ToString());
+            }
         }
+        else if (bReadyToExpand)
+        {
+            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Ready to expand but not enough money"), *UEnum::GetValueAsString(Faction));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[EXPANSION DEBUG] %s — At maximum bases (%d)"), *UEnum::GetValueAsString(Faction), MaxBases);
     }
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
