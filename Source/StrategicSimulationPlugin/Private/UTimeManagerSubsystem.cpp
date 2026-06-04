@@ -130,3 +130,27 @@ FText UTimeManagerSubsystem::GetCurrentDayOfWeekName() const
     default:                    return FText::FromString("Unknown");
     }
 }
+
+FString UTimeManagerSubsystem::GetFormattedDateString() const
+{
+    // Returns nice readable date like "MARCH 3, 2027"
+    FString MonthName;
+    switch (CurrentGameDate.GetMonth())
+    {
+    case 1:  MonthName = TEXT("JANUARY");   break;
+    case 2:  MonthName = TEXT("FEBRUARY");  break;
+    case 3:  MonthName = TEXT("MARCH");     break;
+    case 4:  MonthName = TEXT("APRIL");     break;
+    case 5:  MonthName = TEXT("MAY");       break;
+    case 6:  MonthName = TEXT("JUNE");      break;
+    case 7:  MonthName = TEXT("JULY");      break;
+    case 8:  MonthName = TEXT("AUGUST");    break;
+    case 9:  MonthName = TEXT("SEPTEMBER"); break;
+    case 10: MonthName = TEXT("OCTOBER");   break;
+    case 11: MonthName = TEXT("NOVEMBER");  break;
+    case 12: MonthName = TEXT("DECEMBER");  break;
+    default: MonthName = TEXT("UNKNOWN");   break;
+    }
+
+    return FString::Printf(TEXT("%s %d, %d"), *MonthName, CurrentGameDate.GetDay(), CurrentGameDate.GetYear());
+}

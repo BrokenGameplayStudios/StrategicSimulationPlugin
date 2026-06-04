@@ -502,6 +502,8 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
     UE_LOG(LogTemp, Display, TEXT("=== BASE STATE FOR %s (%d bases) ==="),
         *UEnum::GetValueAsString(Faction), Bases.Num());
 
+    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+
     for (UStrategyBase* Base : Bases)
     {
         if (!Base) continue;
@@ -526,13 +528,21 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
         }
         UE_LOG(LogTemp, Display, TEXT("  Facilities:%s"), *FacStr);
 
-        // Soldiers stationed in this base
-        int32 Stationed = Base->GetStationedSoldiers().Num();
+        // === CORRECT PER-BASE SOLDIER COUNT ===
+        int32 Stationed = 0;
+        if (SoldierMgr)
+        {
+            for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
+            {
+                if (Soldier && Soldier->StationedBase == Base)   // or Soldier->HomeBase == Base if you use that name
+                    Stationed++;
+            }
+        }
+
         UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d"), Stationed);
     }
 
-    // === GLOBAL TOTALS (now correctly pulled from SoldierMgr) ===
-    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    // === GLOBAL TOTALS ===
     int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetRoster(Faction).Num() : 0;
 
     UE_LOG(LogTemp, Display, TEXT("=== GLOBAL TOTALS ==="));

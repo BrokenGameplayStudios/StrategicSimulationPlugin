@@ -57,6 +57,9 @@ public:
     int32 GetCurrentDay() const;
 
     UFUNCTION(BlueprintCallable, Category = "Time")
+    FString GetFormattedDateString() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Time")
     FDateTime GetCurrentGameDate() const;
 
     UFUNCTION(BlueprintCallable, Category = "Time")

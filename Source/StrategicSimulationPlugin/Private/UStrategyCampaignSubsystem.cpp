@@ -55,11 +55,9 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
 
 void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
 {
-    // === Date header (safe fallback until you add real date formatting) ===
+    // === Real in-game date header ===
     UTimeManagerSubsystem* TimeMgr = GetTimeManager();
-    FString DateHeader = TimeMgr
-        ? FString::Printf(TEXT("DAY %d"), NewDay)   // replace this line later with your real date method
-        : FString::Printf(TEXT("DAY %d"), NewDay);
+    FString DateHeader = TimeMgr ? TimeMgr->GetFormattedDateString() : FString::Printf(TEXT("DAY %d"), NewDay);
 
     // === BOLD DAY SEPARATOR ===
     UE_LOG(LogTemp, Display, TEXT(""));
@@ -114,7 +112,7 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("[DAILY SIM] Both factions — Medical Bays can heal %d soldiers | Vehicle Repair Shops can repair %d vehicles (+25 HP)"),
         TotalMedical, TotalRepair);
 
-    // === AI CALLS (using the correct flags that actually exist) ===
+    // === AI CALLS ===
     UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Checking AI simulation toggles..."));
 
     if (UAIControllerSubsystem* AI = GetAIController())
