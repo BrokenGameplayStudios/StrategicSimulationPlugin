@@ -109,14 +109,14 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === PER-BASE DEVELOPMENT — FOCUS BASE (fixes empty shells) ===
+    // === PER-BASE DEVELOPMENT — FOCUS BASE ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
     const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
     if (AllBases.Num() == 0) return;
 
-    // Find the "focus" base: any base without a Command Center gets priority
+    // Find the "focus" base: any base without an operational Command Center gets priority
     UStrategyBase* FocusBase = nullptr;
     for (UStrategyBase* B : AllBases)
     {
@@ -140,13 +140,28 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         EFacilityType::VehicleRepair
     };
 
-    if (!FocusBase->HasOperationalFacilityOfType(EFacilityType::Command))
+    // Only force Command Center if the base has NONE at all (not even under construction)
+    bool bHasAnyCommandCenter = false;
+    for (UStrategyFacility* Fac : FocusBase->Facilities)
+    {
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Command)
+        {
+            bHasAnyCommandCenter = true;
+            break;
+        }
+    }
+
+    if (!bHasAnyCommandCenter)
     {
         UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Force-building Command Center for new base '%s'"), *FocusBase->BaseName.ToString());
-        TryBuildFacility(Faction, EFacilityType::Command, FocusBase);
+        if (TryBuildFacility(Faction, EFacilityType::Command, FocusBase))
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] %s built Command Center in focus base '%s'"), *UEnum::GetValueAsString(Faction), *FocusBase->BaseName.ToString());
+        }
     }
     else
     {
+        // Normal build order once Command Center exists (even if still under construction)
         for (EFacilityType FacType : DesiredOrder)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build on focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
@@ -180,7 +195,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === FULL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
+    // === FULL VEHICLE / MISSION / AMMO LOGIC (unchanged from your original) ===
     if (FocusBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
     {
         UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
@@ -207,7 +222,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                     break;
                 }
             }
-        }  
+        }
 
         if (bHasParkedVehicles)
         {
@@ -314,6 +329,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         for (UStrategyBase* B : AllBases)
         {
             bool bThisBaseHasVehicle = false;
+
             if (B->HasOperationalFacilityOfType(EFacilityType::Hanger))
             {
                 for (UStrategyFacility* Fac : B->Facilities)
