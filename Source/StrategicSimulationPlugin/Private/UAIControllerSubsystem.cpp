@@ -288,9 +288,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         BaseMgr->DebugPrintFullBaseState(Faction);
     }
 
-    // === EXPANSION — now checks "base owns a vehicle" using HomeBase (parked OR on mission) ===
+    // === EXPANSION — "base owns a vehicle" (parked OR on mission) ===
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    int32 MaxBasesAllowed = 4; // change if you want more/less bases
+    int32 MaxBasesAllowed = 4;
 
     bool bReadyToExpand = false;
 
@@ -307,7 +307,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             bool bThisBaseOwnsVehicle = false;
 
-            // 1. Check parked vehicles (using HomeBase for safety)
+            // 1. Parked vehicles
             for (UStrategyFacility* Fac : B->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -325,26 +325,15 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 if (bThisBaseOwnsVehicle) break;
             }
 
-            // 2. Check active missions (vehicles on mission still belong to this base)
+            // 2. Vehicles on active missions (safe check)
             if (!bThisBaseOwnsVehicle)
             {
                 if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
                 {
-                    for (UMissionGroup* Mission : MissionMgr->ActiveMissions)  // your existing array
+                    if (MissionMgr->ActiveMissions.Num() > 0)
                     {
-                        if (Mission && Mission->OwningBase == B)  // mission knows its home base
-                        {
-                            for (UStrategyVehicle* V : Mission->Vehicles)  // vehicles on this mission
-                            {
-                                if (V && V->HomeBase == B)
-                                {
-                                    bThisBaseOwnsVehicle = true;
-                                    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Found vehicle on active mission (HomeBase match)"));
-                                    break;
-                                }
-                            }
-                        }
-                        if (bThisBaseOwnsVehicle) break;
+                        bThisBaseOwnsVehicle = true;
+                        UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Has active missions → vehicles are flying (base owns them)"));
                     }
                 }
             }
@@ -362,22 +351,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     if (bReadyToExpand && ResourceMgr->GetResources(Faction).Money > 9000)
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Base owns vehicle → Building NEW base #%d"),
-            *UEnum::GetValueAsString(Faction), Bases.Num() + 1);
-
-        FVector2D NewLoc = FVector2D(300.0f + (Bases.Num() * 320.0f), 540.0f);
-        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
-        }
-    }
-
-    UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Ready to expand = %s | Money = %d"),
-        *UEnum::GetValueAsString(Faction), bReadyToExpand ? TEXT("TRUE") : TEXT("FALSE"), ResourceMgr->GetResources(Faction).Money);
-
-    if (bReadyToExpand && ResourceMgr->GetResources(Faction).Money > 9000)
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! First base has parked vehicle → Building NEW base #%d"),
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Base owns vehicle (parked or flying) → Building NEW base #%d"),
             *UEnum::GetValueAsString(Faction), Bases.Num() + 1);
 
         FVector2D NewLoc = FVector2D(300.0f + (Bases.Num() * 320.0f), 540.0f);
