@@ -55,14 +55,17 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
 
 void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
 {
-    // === BOLD DAY SEPARATOR (easy to spot) ===
+    UTimeManagerSubsystem* TimeMgr = GetTimeManager();
+    FString DateHeader = TimeMgr ? GetFormattedDate() : FString::Printf(TEXT("DAY %d"), NewDay);
+
+    // === BOLD DAY SEPARATOR WITH ACTUAL DATE ===
     UE_LOG(LogTemp, Display, TEXT(""));
     UE_LOG(LogTemp, Display, TEXT("################################################################################"));
-    UE_LOG(LogTemp, Display, TEXT("##############################   DAY %d STARTED   ##############################"), NewDay);
+    UE_LOG(LogTemp, Display, TEXT("##############################   %s STARTED   ##############################"), *DateHeader);
     UE_LOG(LogTemp, Display, TEXT("################################################################################"));
-    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Day %d passed — calling AI automatically"), NewDay);
+    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] %s passed — calling AI automatically"), *DateHeader);
 
-    // === DAILY SIMULATION (repairs + healing) — already good for both factions ===
+    // === DAILY SIMULATION (repairs + healing) ===
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
     {
         BaseMgr->SimulateDailyRepairs(EFactionType::Human);
@@ -75,7 +78,7 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
 
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
     {
-        // Count for both factions (optional future improvement)
+        // Count for both factions
         for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
         {
             if (!Base) continue;
@@ -109,36 +112,21 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("[DAILY SIM] Both factions — Medical Bays can heal %d soldiers | Vehicle Repair Shops can repair %d vehicles (+25 HP)"),
         TotalMedical, TotalRepair);
 
-    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Daily repairs completed for both factions"));
+    // === AI CALLS ===
+    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Checking AI simulation toggles..."));
 
-    // === AI Turn — NOW RESPECTS THE TOGGLES ===
-    if (UAIControllerSubsystem* AI = GetGameInstance()->GetSubsystem<UAIControllerSubsystem>())
+    if (bSimulateHumanAI)
     {
-        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Checking AI simulation toggles..."));
-
-        if (AI->IsSimulatingHumanAI())
-        {
-            UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Human AI enabled — calling RunAIForFaction"));
+        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Human AI enabled — calling RunAIForFaction"));
+        if (UAIControllerSubsystem* AI = GetAIController())
             AI->RunAIForFaction(EFactionType::Human, NewDay);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Human AI DISABLED (toggle off)"));
-        }
-
-        if (AI->IsSimulatingEnemyAI())
-        {
-            UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Enemy AI enabled — calling RunAIForFaction"));
-            AI->RunAIForFaction(EFactionType::Enemy, NewDay);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Enemy AI DISABLED (toggle off)"));
-        }
     }
-    else
+
+    if (bSimulateEnemyAI)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[CAMPAIGN] Could not find UAIControllerSubsystem!"));
+        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Enemy AI enabled — calling RunAIForFaction"));
+        if (UAIControllerSubsystem* AI = GetAIController())
+            AI->RunAIForFaction(EFactionType::Enemy, NewDay);    
     }
 }
 

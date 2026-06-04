@@ -116,7 +116,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
     if (AllBases.Num() == 0) return;
 
-    // Find the "focus" base: any base without an operational Command Center gets priority
+    // Find the "focus" base
     UStrategyBase* FocusBase = nullptr;
     for (UStrategyBase* B : AllBases)
     {
@@ -140,18 +140,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         EFacilityType::VehicleRepair
     };
 
-    // Only force Command Center if the base has NONE at all (not even under construction)
-    bool bHasAnyCommandCenter = false;
-    for (UStrategyFacility* Fac : FocusBase->Facilities)
-    {
-        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Command)
-        {
-            bHasAnyCommandCenter = true;
-            break;
-        }
-    }
-
-    if (!bHasAnyCommandCenter)
+    // Only attempt normal facilities once the Command Center is OPERATIONAL
+    if (!FocusBase->HasOperationalFacilityOfType(EFacilityType::Command))
     {
         UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Force-building Command Center for new base '%s'"), *FocusBase->BaseName.ToString());
         if (TryBuildFacility(Faction, EFacilityType::Command, FocusBase))
@@ -161,7 +151,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
     else
     {
-        // Normal build order once Command Center exists (even if still under construction)
         for (EFacilityType FacType : DesiredOrder)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build on focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
@@ -195,7 +184,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === FULL VEHICLE / MISSION / AMMO LOGIC (unchanged from your original) ===
+    // === FULL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
     if (FocusBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
     {
         UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
