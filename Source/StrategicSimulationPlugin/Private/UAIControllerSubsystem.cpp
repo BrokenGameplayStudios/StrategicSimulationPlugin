@@ -116,7 +116,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
     if (AllBases.Num() == 0) return;
 
-    // Find the "focus" base: any base without a Command Center gets priority
+    // Find the "focus" base: any base without an operational Command Center gets priority
     UStrategyBase* FocusBase = nullptr;
     for (UStrategyBase* B : AllBases)
     {
@@ -140,7 +140,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         EFacilityType::VehicleRepair
     };
 
-    // Special case: if focus base has no Command Center, force it first
+    // Special case: force Command Center for new/empty bases
     if (!FocusBase->HasOperationalFacilityOfType(EFacilityType::Command))
     {
         UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Force-building Command Center for new base '%s'"), *FocusBase->BaseName.ToString());
@@ -153,20 +153,18 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     {
         for (EFacilityType FacType : DesiredOrder)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build"), *UEnum::GetValueAsString(FacType));
+            UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build on focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
 
-            if (!FocusBase->CanBuildFacilityType(FacType))
-            {
-                UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped — prerequisites not met"), *UEnum::GetValueAsString(FacType));
-                continue;
-            }
-
+            // REMOVED CanBuildFacilityType gate — we let TryBuildFacility handle it and log failures
             bool bShouldBuild = false;
             if (FacType == EFacilityType::LivingQuarters)
             {
                 bool bCoreLayerDone = FocusBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
                 int32 CurrentBarracks = FocusBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
                 bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
+
+                UE_LOG(LogTemp, Verbose, TEXT("[AI DEBUG] LivingQuarters check — Barracks: %d | CoreDone: %s | ShouldBuild: %s"),
+                    CurrentBarracks, bCoreLayerDone ? TEXT("YES") : TEXT("NO"), bShouldBuild ? TEXT("YES") : TEXT("NO"));
             }
             else
             {
@@ -181,6 +179,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in focus base '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
                     break; // one facility per day
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED for %s in focus base — check resources/prereqs"), *UEnum::GetValueAsString(FacType));
                 }
             }
         }
