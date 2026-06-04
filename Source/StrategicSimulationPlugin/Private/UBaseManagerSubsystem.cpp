@@ -6,6 +6,7 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
+#include "USoldierManagerSubsystem.h" // <-- added to access Soldier roster
 
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -504,26 +505,37 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
     for (UStrategyBase* Base : Bases)
     {
         if (!Base) continue;
-        UE_LOG(LogTemp, Display, TEXT("Base: %s | Net Power: %d"), *Base->BaseName.ToString(), Base->GetNetPower());
+
+        UE_LOG(LogTemp, Display, TEXT("Base: %s | Net Power: %d"),
+            *Base->BaseName.ToString(), Base->GetNetPower());
 
         // Facilities summary
         TMap<EFacilityType, int32> FacilityCounts;
         for (UStrategyFacility* Fac : Base->Facilities)
         {
             if (Fac && Fac->FacilityDefinition)
+            {
                 FacilityCounts.FindOrAdd(Fac->FacilityDefinition->FacilityType)++;
+            }
         }
+
         FString FacStr;
         for (auto& Pair : FacilityCounts)
+        {
             FacStr += FString::Printf(TEXT(" %d %s,"), Pair.Value, *UEnum::GetValueAsString(Pair.Key));
+        }
         UE_LOG(LogTemp, Display, TEXT("  Facilities:%s"), *FacStr);
 
-        // Soldiers
+        // Soldiers stationed in this base
         int32 Stationed = Base->GetStationedSoldiers().Num();
         UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d"), Stationed);
     }
 
-    // Global totals
+    // === GLOBAL TOTALS (now correctly pulled from SoldierMgr) ===
+    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetRoster(Faction).Num() : 0;
+
+    UE_LOG(LogTemp, Display, TEXT("=== GLOBAL TOTALS ==="));
     UE_LOG(LogTemp, Display, TEXT("Total Barracks Capacity: %d | Current Soldiers: %d"),
-        GetTotalBarracksCapacity(Faction), GetRoster(Faction).Num());  // wait, roster is in SoldierMgr — call SoldierMgr->GetRoster if you want
+        GetTotalBarracksCapacity(Faction), CurrentSoldiers);
 }
