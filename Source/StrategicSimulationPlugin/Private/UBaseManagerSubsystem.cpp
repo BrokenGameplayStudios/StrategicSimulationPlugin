@@ -494,3 +494,36 @@ void UBaseManagerSubsystem::AdvanceAllConstruction()
         }
     }    
 }
+
+void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
+{
+    const TArray<UStrategyBase*>& Bases = GetBases(Faction);
+    UE_LOG(LogTemp, Display, TEXT("=== BASE STATE FOR %s (%d bases) ==="),
+        *UEnum::GetValueAsString(Faction), Bases.Num());
+
+    for (UStrategyBase* Base : Bases)
+    {
+        if (!Base) continue;
+        UE_LOG(LogTemp, Display, TEXT("Base: %s | Net Power: %d"), *Base->BaseName.ToString(), Base->GetNetPower());
+
+        // Facilities summary
+        TMap<EFacilityType, int32> FacilityCounts;
+        for (UStrategyFacility* Fac : Base->Facilities)
+        {
+            if (Fac && Fac->FacilityDefinition)
+                FacilityCounts.FindOrAdd(Fac->FacilityDefinition->FacilityType)++;
+        }
+        FString FacStr;
+        for (auto& Pair : FacilityCounts)
+            FacStr += FString::Printf(TEXT(" %d %s,"), Pair.Value, *UEnum::GetValueAsString(Pair.Key));
+        UE_LOG(LogTemp, Display, TEXT("  Facilities:%s"), *FacStr);
+
+        // Soldiers
+        int32 Stationed = Base->GetStationedSoldiers().Num();
+        UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d"), Stationed);
+    }
+
+    // Global totals
+    UE_LOG(LogTemp, Display, TEXT("Total Barracks Capacity: %d | Current Soldiers: %d"),
+        GetTotalBarracksCapacity(Faction), GetRoster(Faction).Num());  // wait, roster is in SoldierMgr — call SoldierMgr->GetRoster if you want
+}

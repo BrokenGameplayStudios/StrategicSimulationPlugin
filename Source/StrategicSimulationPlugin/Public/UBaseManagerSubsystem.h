@@ -78,6 +78,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnBaseListChanged OnBaseListChanged;
 
+    UFUNCTION(BlueprintCallable, Category = "Debug|UI")
+    void DebugPrintFullBaseState(EFactionType Faction) const;
+
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Bases")
     TArray<UStrategyBase*> HumanBases;

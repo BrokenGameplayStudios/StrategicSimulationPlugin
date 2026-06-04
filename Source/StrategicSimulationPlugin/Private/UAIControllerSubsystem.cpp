@@ -362,75 +362,68 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
 
-    if (!BaseMgr || !ResourceMgr || !SoldierMgr || !Campaign)
+    if (!BaseMgr || !ResourceMgr || !SoldierMgr || !Campaign) return false;
+
+    // === NEW: Respect total barracks capacity (prevents infinite soldiers) ===
+    int32 TotalCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
+    int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
+    if (CurrentSoldiers >= TotalCapacity)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] Missing required subsystems!"));
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] EFactionType::%s at max capacity (%d/%d soldiers) — skipping"),
+            *UEnum::GetValueAsString(Faction), CurrentSoldiers, TotalCapacity);
         return false;
     }
 
-    // === Get the soldier class definition (we use the first available one) ===
+    // === NEW: Light money reserve so it doesn't spend every last dollar ===
+    if (ResourceMgr->GetResources(Faction).Money < 1500)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] Skipping — saving for next facility"));
+        return false;
+    }
+
+    // Get soldier class (first one in DB)
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
         if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
         {
-            if (DB->AvailableSoldierClasses.Num() > 0)
+            if (!DB->AvailableSoldierClasses.IsEmpty())
                 ClassDef = DB->AvailableSoldierClasses[0].Get();
         }
     }
+    if (!ClassDef) return false;
 
-    if (!ClassDef)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No soldier class definition found!"));
-        return false;
-    }
-
-    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
     const FResourceStockpile& Cost = ClassDef->TrainingCost;
+    if (!ResourceMgr->CanAfford(Faction, Cost)) return false;
 
-    if (ResourceMgr->GetResources(Faction).Money < 1500)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI] Skipping recruit/purchase — saving for next facility"));
-        return false; 
-    }
-
-    if (!ResourceMgr->CanAfford(Faction, Cost))
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 💰%d 🛠️%d 🧬%d ⚗️%d 🌌%d 📚%d)"),
-            *UEnum::GetValueAsString(Faction),
-            Cost.Money, Cost.Metals, Cost.Biologicals, Cost.Chemicals, Cost.ExoticMaterial, Cost.ResearchPoints);
-        return false;
-    }
-
+    // Try to queue in any barracks with free production slot
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
     for (UStrategyBase* Base : Bases)
     {
         if (!Base) continue;
-
         for (UStrategyFacility* Barracks : Base->Facilities)
         {
-            if (Barracks && Barracks->FacilityDefinition && Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
+            if (Barracks && Barracks->FacilityDefinition &&
+                Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters &&
+                Barracks->HasFreeProductionSlot())
             {
-                if (Barracks->HasFreeProductionSlot())
+                if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, ClassDef->TrainingDays))
                 {
-                    if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, ClassDef->TrainingDays))
-                    {
-                        ResourceMgr->AddResources(Faction, FResourceStockpile{ -Cost.Money, -Cost.Metals, -Cost.Biologicals, -Cost.Chemicals, -Cost.ExoticMaterial, -Cost.ResearchPoints });
+                    ResourceMgr->AddResources(Faction, FResourceStockpile{
+                        -Cost.Money, -Cost.Metals, -Cost.Biologicals,
+                        -Cost.Chemicals, -Cost.ExoticMaterial, -Cost.ResearchPoints });
 
-                        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ EFactionType::%s queued %s training in %s (%d days)"),
-                            *UEnum::GetValueAsString(Faction),
-                            *ClassDef->ClassName.ToString(),
-                            *Barracks->FacilityDefinition->FacilityName.ToString(),
-                            ClassDef->TrainingDays);
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued %s training in %s (%d days)"),
+                        *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(),
+                        *Barracks->FacilityDefinition->FacilityName.ToString(), ClassDef->TrainingDays);
 
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] No base with free barracks production slots"));
+    UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] No free production slots in any barracks"));
     return false;
 }
 
