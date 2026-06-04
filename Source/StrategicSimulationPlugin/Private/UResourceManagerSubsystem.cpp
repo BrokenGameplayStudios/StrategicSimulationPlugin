@@ -66,8 +66,7 @@ void UResourceManagerSubsystem::ApplyFacilityIncome(EFactionType Faction)
 
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
 
-    int32 TotalMoney = 0;
-    int32 TotalSupplies = 0;
+    FResourceStockpile TotalIncome;  // starts at zero for all 6 resources
 
     UE_LOG(LogTemp, Verbose, TEXT("[INCOME DEBUG] %s has %d bases"), *UEnum::GetValueAsString(Faction), Bases.Num());
 
@@ -85,24 +84,30 @@ void UResourceManagerSubsystem::ApplyFacilityIncome(EFactionType Faction)
                 continue;
             }
 
-            int32 MoneyIncome = Fac->FacilityDefinition->MoneyIncomePerDay;
-            int32 SuppliesIncome = Fac->FacilityDefinition->SuppliesIncomePerDay;
+            const FResourceStockpile& Prod = Fac->FacilityDefinition->ProductionPerDay;
 
-            TotalMoney += MoneyIncome;
-            TotalSupplies += SuppliesIncome;
+            TotalIncome.Money += Prod.Money;
+            TotalIncome.Metals += Prod.Metals;
+            TotalIncome.Biologicals += Prod.Biologicals;
+            TotalIncome.Chemicals += Prod.Chemicals;
+            TotalIncome.ExoticMaterial += Prod.ExoticMaterial;
+            TotalIncome.ResearchPoints += Prod.ResearchPoints;
 
-            UE_LOG(LogTemp, Verbose, TEXT("[INCOME] %s in '%s' → +%d Money, +%d Supplies"),
-                *Fac->FacilityDefinition->FacilityName.ToString(), *Base->BaseName.ToString(), MoneyIncome, SuppliesIncome);
+            UE_LOG(LogTemp, Verbose, TEXT("[INCOME] %s in '%s' → 💰%d 🛠️%d 🧬%d ⚗️%d 🌌%d 📚%d"),
+                *Fac->FacilityDefinition->FacilityName.ToString(), *Base->BaseName.ToString(),
+                Prod.Money, Prod.Metals, Prod.Biologicals, Prod.Chemicals, Prod.ExoticMaterial, Prod.ResearchPoints);
         }
     }
 
-    if (TotalMoney > 0 || TotalSupplies > 0)
+    if (TotalIncome.Money != 0 || TotalIncome.Metals != 0 || TotalIncome.Biologicals != 0 ||
+        TotalIncome.Chemicals != 0 || TotalIncome.ExoticMaterial != 0 || TotalIncome.ResearchPoints != 0)
     {
-        FResourceStockpile Income{ TotalMoney, TotalSupplies, 0, 0 };
-        AddResources(Faction, Income);
+        AddResources(Faction, TotalIncome);
 
-        UE_LOG(LogTemp, Display, TEXT("[INCOME] %s gained %d Money and %d Supplies from facilities"),
-            *UEnum::GetValueAsString(Faction), TotalMoney, TotalSupplies);
+        UE_LOG(LogTemp, Display, TEXT("[INCOME] %s gained 💰%d 🛠️%d 🧬%d ⚗️%d 🌌%d 📚%d from facilities"),
+            *UEnum::GetValueAsString(Faction),
+            TotalIncome.Money, TotalIncome.Metals, TotalIncome.Biologicals,
+            TotalIncome.Chemicals, TotalIncome.ExoticMaterial, TotalIncome.ResearchPoints);
     }
     else
     {

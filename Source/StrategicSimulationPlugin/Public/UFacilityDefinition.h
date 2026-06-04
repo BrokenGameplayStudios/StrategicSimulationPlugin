@@ -44,11 +44,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Capacity")
     int32 Capacity = 0;
 
+    /** Full data-driven daily production — any resource in the stockpile */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy")
-    int32 MoneyIncomePerDay = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy")
-    int32 SuppliesIncomePerDay = 0;
+    FResourceStockpile ProductionPerDay;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Build")
     int32 MaxBuilt = 1;
