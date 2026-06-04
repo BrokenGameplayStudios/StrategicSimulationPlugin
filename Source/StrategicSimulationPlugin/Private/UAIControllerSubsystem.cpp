@@ -354,45 +354,45 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === UPDATED: Queues soldier training in Barracks using Production Slots ===
+// === UPDATED: Uses data-driven soldier class cost and training time ===
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
-    // === NEW: Don't spam soldiers until we have the first Laboratory ===
-    UBaseManagerSubsystem* BaseMgrCheck = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-    if (BaseMgrCheck)
-    {
-        bool bHasLab = false;
-        for (UStrategyBase* Base : BaseMgrCheck->GetBases(Faction))
-        {
-            if (Base && Base->HasOperationalFacilityOfType(EFacilityType::Laboratory))
-            {
-                bHasLab = true;
-                break;
-            }
-        }
-        if (!bHasLab)
-        {
-            UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] Skipping soldier training — core layer (Laboratory) not complete yet"));
-            return false;
-        }
-    }
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
 
-    // === ORIGINAL CODE (no duplicate BaseMgr) ===
-    auto* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    auto* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-    auto* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-    auto* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-
-    if (!ResourceMgr || !BaseMgr || !SoldierMgr)
+    if (!BaseMgr || !ResourceMgr || !SoldierMgr || !Campaign)
     {
         UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] Missing required subsystems!"));
         return false;
     }
 
-    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-    if (Res.Money < 500)
+    // === Get the soldier class definition (we use the first available one) ===
+    USoldierClassDefinition* ClassDef = nullptr;
+    if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 500 Money)"), *UEnum::GetValueAsString(Faction));
+        if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
+        {
+            if (DB->AvailableSoldierClasses.Num() > 0)
+                ClassDef = DB->AvailableSoldierClasses[0].Get();
+        }
+    }
+
+    if (!ClassDef)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No soldier class definition found!"));
+        return false;
+    }
+
+    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+    const FResourceStockpile& Cost = ClassDef->TrainingCost;
+
+    if (!ResourceMgr->CanAfford(Faction, Cost))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] EFactionType::%s cannot afford recruit (needs 💰%d 🛠️%d 🧬%d ⚗️%d 🌌%d 📚%d)"),
+            *UEnum::GetValueAsString(Faction),
+            Cost.Money, Cost.Metals, Cost.Biologicals, Cost.Chemicals, Cost.ExoticMaterial, Cost.ResearchPoints);
         return false;
     }
 
@@ -407,21 +407,16 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
             {
                 if (Barracks->HasFreeProductionSlot())
                 {
-                    USoldierClassDefinition* ClassDef = nullptr;
-                    if (Campaign && Campaign->SoldierClassDatabaseAsset.IsValid())
+                    if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, ClassDef->TrainingDays))
                     {
-                        if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
-                            if (DB->AvailableSoldierClasses.Num() > 0)
-                                ClassDef = DB->AvailableSoldierClasses[0].Get();
-                    }
+                        ResourceMgr->AddResources(Faction, FResourceStockpile{ -Cost.Money, -Cost.Metals, -Cost.Biologicals, -Cost.Chemicals, -Cost.ExoticMaterial, -Cost.ResearchPoints });
 
-                    if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, 4))
-                    {
-                        Res.Money -= 500;
-                        ResourceMgr->SetResources(Faction, Res);
+                        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ EFactionType::%s queued %s training in %s (%d days)"),
+                            *UEnum::GetValueAsString(Faction),
+                            *ClassDef->ClassName.ToString(),
+                            *Barracks->FacilityDefinition->FacilityName.ToString(),
+                            ClassDef->TrainingDays);
 
-                        UE_LOG(LogTemp, Display, TEXT("[AI] ✅ EFactionType::%s queued soldier training in %s (4 days)"),
-                            *UEnum::GetValueAsString(Faction), *Barracks->FacilityDefinition->FacilityName.ToString());
                         return true;
                     }
                 }

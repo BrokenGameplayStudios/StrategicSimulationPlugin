@@ -235,7 +235,14 @@ void UStrategyCampaignSubsystem::StartSimulation()
         {
             if (USoldierClassDefinition* ClassDef = SoftClass.Get())
             {
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Starting XP: %d"), *ClassDef->ClassName.ToString(), ClassDef->StartingXP);
+                const FResourceStockpile& Cost = ClassDef->TrainingCost;
+
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Starting XP: %d | Training Cost: 💰%d 🛠️%d 🧬%d ⚗️%d 🌌%d 📚%d | Training Days: %d"),
+                    *ClassDef->ClassName.ToString(),
+                    ClassDef->StartingXP,
+                    Cost.Money, Cost.Metals, Cost.Biologicals, Cost.Chemicals,
+                    Cost.ExoticMaterial, Cost.ResearchPoints,
+                    ClassDef->TrainingDays);
             }
         }
     }
