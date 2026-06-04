@@ -370,15 +370,24 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 
     if (!BaseMgr || !ResourceMgr || !SoldierMgr || !Campaign) return false;
 
-    // === NEW: Respect total barracks capacity (prevents infinite soldiers) ===
+    // === RESPECT TOTAL BARRACKS CAPACITY ACROSS ALL BASES ===
     int32 TotalCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
     int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
+
     if (CurrentSoldiers >= TotalCapacity)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] EFactionType::%s at max capacity (%d/%d soldiers) — skipping"),
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s at max capacity (%d/%d) — skipping"),
             *UEnum::GetValueAsString(Faction), CurrentSoldiers, TotalCapacity);
         return false;
     }
+
+    // Light reserve so it doesn't spend every last dollar
+    if (ResourceMgr->GetResources(Faction).Money < 1500)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] Skipping — saving for next facility"));
+        return false;
+    }
+
 
     // === NEW: Light money reserve so it doesn't spend every last dollar ===
     if (ResourceMgr->GetResources(Faction).Money < 1500)
