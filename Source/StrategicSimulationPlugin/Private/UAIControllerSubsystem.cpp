@@ -341,6 +341,27 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 // === UPDATED: Queues soldier training in Barracks using Production Slots ===
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
+    // === NEW: Don't spam soldiers until we have the first Laboratory ===
+    UBaseManagerSubsystem* BaseMgrCheck = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (BaseMgrCheck)
+    {
+        bool bHasLab = false;
+        for (UStrategyBase* Base : BaseMgrCheck->GetBases(Faction))
+        {
+            if (Base && Base->HasOperationalFacilityOfType(EFacilityType::Laboratory))
+            {
+                bHasLab = true;
+                break;
+            }
+        }
+        if (!bHasLab)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] Skipping soldier training — core layer (Laboratory) not complete yet"));
+            return false;
+        }
+    }
+
+    // === ORIGINAL CODE (no duplicate BaseMgr) ===
     auto* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     auto* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     auto* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
