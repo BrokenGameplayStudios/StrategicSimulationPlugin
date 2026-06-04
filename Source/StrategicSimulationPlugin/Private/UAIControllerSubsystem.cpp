@@ -109,169 +109,167 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === PER-BASE DEVELOPMENT ===
+    // === PER-BASE DEVELOPMENT — ONLY OLDEST BASE EACH DAY ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
     const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
-    for (UStrategyBase* Base : AllBases)
+    if (AllBases.Num() == 0) return;
+
+    UStrategyBase* OldestBase = AllBases[0];  // ← Wave rule: only develop oldest base
+    UE_LOG(LogTemp, Display, TEXT("[AI] Developing oldest base '%s' (Net Power: %d)"), *OldestBase->BaseName.ToString(), OldestBase->GetNetPower());
+
+    TArray<EFacilityType> DesiredOrder = {
+        EFacilityType::LivingQuarters,
+        EFacilityType::Laboratory,
+        EFacilityType::Workshop,
+        EFacilityType::Hanger,
+        EFacilityType::Medical,
+        EFacilityType::VehicleRepair
+    };
+
+    for (EFacilityType FacType : DesiredOrder)
     {
-        if (!Base) continue;
+        UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build"), *UEnum::GetValueAsString(FacType));
 
-        UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
-
-        TArray<EFacilityType> DesiredOrder = {
-            EFacilityType::LivingQuarters,
-            EFacilityType::Laboratory,
-            EFacilityType::Workshop,
-            EFacilityType::Hanger,
-            EFacilityType::Medical,
-            EFacilityType::VehicleRepair
-        };
-
-        for (EFacilityType FacType : DesiredOrder)
+        if (!OldestBase->CanBuildFacilityType(FacType))
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build"), *UEnum::GetValueAsString(FacType));
+            UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped — prerequisites not met"), *UEnum::GetValueAsString(FacType));
+            continue;
+        }
 
-            if (!Base->CanBuildFacilityType(FacType))
+        bool bShouldBuild = false;
+        if (FacType == EFacilityType::LivingQuarters)
+        {
+            bool bCoreLayerDone = OldestBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
+            int32 CurrentBarracks = OldestBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
+            bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
+        }
+        else
+        {
+            bShouldBuild = !OldestBase->HasOperationalFacilityOfType(FacType);
+        }
+
+        if (bShouldBuild)
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s in oldest base '%s'"), *UEnum::GetValueAsString(FacType), *OldestBase->BaseName.ToString());
+
+            if (TryBuildFacility(Faction, FacType, OldestBase))
             {
-                UE_LOG(LogTemp, Verbose, TEXT("[FACILITY] %s skipped — prerequisites not met"), *UEnum::GetValueAsString(FacType));
-                continue;
+                UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in oldest base '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *OldestBase->BaseName.ToString());
+                break; // one facility per day
             }
+        }
+    }
 
-            bool bShouldBuild = false;
-            if (FacType == EFacilityType::LivingQuarters)
+    // === FULL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
+    if (OldestBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
+    {
+        UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
+        if (TargetBase)
+        {
+            if (TryBuildVehicle(Faction, TargetBase))
             {
-                bool bCoreLayerDone = Base->HasOperationalFacilityOfType(EFacilityType::Laboratory);
-                int32 CurrentBarracks = Base->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
-                bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
+                UE_LOG(LogTemp, Display, TEXT("[AI] %s queued vehicle in base with fewest vehicles ('%s')"),
+                    *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString());
             }
-            else
-            {
-                bShouldBuild = !Base->HasOperationalFacilityOfType(FacType);
-            }
+        }
+    }
 
-            if (bShouldBuild)
+    if (OldestBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
+    {
+        bool bHasParkedVehicles = false;
+        for (UStrategyFacility* Fac : OldestBase->Facilities)
+        {
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s in base '%s'"), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
-
-                if (TryBuildFacility(Faction, FacType, Base))
+                if (Fac->ParkedVehicles.Num() > 0)
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
-                    break; // one facility per base per day
+                    bHasParkedVehicles = true;
+                    break;
                 }
             }
         }
 
-        // === FULL VEHICLE / MISSION / AMMO LOGIC (exactly as in your original file) ===
-        if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
+        if (bHasParkedVehicles)
         {
-            UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
-            if (TargetBase)
+            UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
+            UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+            if (EngMgr && Campaign && ResourceMgr)
             {
-                if (TryBuildVehicle(Faction, TargetBase))
+                UItemDatabase* VehicleItemDB = Campaign->GetVehicleItemDatabase();
+                if (VehicleItemDB)
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued vehicle in base with fewest vehicles ('%s')"),
-                        *UEnum::GetValueAsString(Faction), *TargetBase->BaseName.ToString());
-                }
-            }
-        }
-
-        if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
-        {
-            bool bHasParkedVehicles = false;
-            for (UStrategyFacility* Fac : Base->Facilities)
-            {
-                if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-                {
-                    if (Fac->ParkedVehicles.Num() > 0)
+                    UItemDefinition* AvailableWeapon = nullptr;
+                    for (const TSoftObjectPtr<UItemDefinition>& SoftItem : VehicleItemDB->BuyableItems)
                     {
-                        bHasParkedVehicles = true;
-                        break;
-                    }
-                }
-            }
-
-            if (bHasParkedVehicles)
-            {
-                UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
-                UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-                if (EngMgr && Campaign && ResourceMgr)
-                {
-                    UItemDatabase* VehicleItemDB = Campaign->GetVehicleItemDatabase();
-                    if (VehicleItemDB)
-                    {
-                        UItemDefinition* AvailableWeapon = nullptr;
-                        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : VehicleItemDB->BuyableItems)
+                        if (UItemDefinition* Item = SoftItem.Get())
                         {
-                            if (UItemDefinition* Item = SoftItem.Get())
+                            if (Item->Category == EItemCategory::VehicleWeapon)
                             {
-                                if (Item->Category == EItemCategory::VehicleWeapon)
-                                {
-                                    AvailableWeapon = Item;
-                                    break;
-                                }
-                            }
-                        }
-
-                        for (UStrategyFacility* Fac : Base->Facilities)
-                        {
-                            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-                            {
-                                for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
-                                {
-                                    if (!Vehicle) continue;
-
-                                    if (Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots() && AvailableWeapon)
-                                    {
-                                        if (EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, AvailableWeapon))
-                                        {
-                                            UE_LOG(LogTemp, Display, TEXT("[AI] %s equipped vehicle weapon '%s' on %s"),
-                                                *UEnum::GetValueAsString(Faction), *AvailableWeapon->ItemName.ToString(),
-                                                *Vehicle->VehicleDefinition->VehicleName.ToString());
-                                        }
-                                    }
-
-                                    for (int32 i = 0; i < Vehicle->WeaponAmmoCounts.Num(); ++i)
-                                    {
-                                        if (Vehicle->WeaponAmmoCounts.IsValidIndex(i) &&
-                                            Vehicle->EquippedWeapons.IsValidIndex(i) &&
-                                            Vehicle->WeaponAmmoCounts[i] < Vehicle->EquippedWeapons[i].Get()->MaxAmmo)
-                                        {
-                                            EngMgr->PurchaseAmmoForVehicle(Faction, Vehicle, i);
-                                        }
-                                    }
-                                }
+                                AvailableWeapon = Item;
+                                break;
                             }
                         }
                     }
-                }
 
-                if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
-                {
-                    EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2));
-
-                    TArray<UStrategyVehicle*> AvailableVehicles;
-                    for (UStrategyFacility* Fac : Base->Facilities)
+                    for (UStrategyFacility* Fac : OldestBase->Facilities)
                     {
                         if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-                            AvailableVehicles.Append(Fac->ParkedVehicles);
-                    }
-
-                    if (AvailableVehicles.Num() > 0)
-                    {
-                        if (UMissionGroup* Mission = MissionMgr->StartMission(Base, AvailableVehicles, 15, TArray<UStrategySoldier*>(), ChosenType, Faction))
                         {
-                            UE_LOG(LogTemp, Display, TEXT("[AI] %s AI launched %s mission from base '%s' with %d vehicles"),
-                                *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(ChosenType), *Base->BaseName.ToString(), AvailableVehicles.Num());
+                            for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
+                            {
+                                if (!Vehicle) continue;
+
+                                if (Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots() && AvailableWeapon)
+                                {
+                                    if (EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, AvailableWeapon))
+                                    {
+                                        UE_LOG(LogTemp, Display, TEXT("[AI] %s equipped vehicle weapon '%s' on %s"),
+                                            *UEnum::GetValueAsString(Faction), *AvailableWeapon->ItemName.ToString(),
+                                            *Vehicle->VehicleDefinition->VehicleName.ToString());
+                                    }
+                                }
+
+                                for (int32 i = 0; i < Vehicle->WeaponAmmoCounts.Num(); ++i)
+                                {
+                                    if (Vehicle->WeaponAmmoCounts.IsValidIndex(i) &&
+                                        Vehicle->EquippedWeapons.IsValidIndex(i) &&
+                                        Vehicle->WeaponAmmoCounts[i] < Vehicle->EquippedWeapons[i].Get()->MaxAmmo)
+                                    {
+                                        EngMgr->PurchaseAmmoForVehicle(Faction, Vehicle, i);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
-            else
+
+            if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
             {
-                UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting"), *Base->BaseName.ToString());
+                EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2));
+
+                TArray<UStrategyVehicle*> AvailableVehicles;
+                for (UStrategyFacility* Fac : OldestBase->Facilities)
+                {
+                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+                        AvailableVehicles.Append(Fac->ParkedVehicles);
+                }
+
+                if (AvailableVehicles.Num() > 0)
+                {
+                    if (UMissionGroup* Mission = MissionMgr->StartMission(OldestBase, AvailableVehicles, 15, TArray<UStrategySoldier*>(), ChosenType, Faction))
+                    {
+                        UE_LOG(LogTemp, Display, TEXT("[AI] %s AI launched %s mission from base '%s' with %d vehicles"),
+                            *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(ChosenType), *OldestBase->BaseName.ToString(), AvailableVehicles.Num());
+                    }
+                }
             }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting"), *OldestBase->BaseName.ToString());
         }
     }
 
@@ -288,60 +286,56 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         BaseMgr->DebugPrintFullBaseState(Faction);
     }
 
-    // === EXPANSION — "base owns a vehicle" (parked OR on mission) ===
-    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    // === EXPANSION — ONLY WHEN OLDEST BASE OWNS A VEHICLE ===
     int32 MaxBasesAllowed = 4;
-
     bool bReadyToExpand = false;
 
     UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Checking expansion: Bases = %d (max %d)"),
-        *UEnum::GetValueAsString(Faction), Bases.Num(), MaxBasesAllowed);
+        *UEnum::GetValueAsString(Faction), AllBases.Num(), MaxBasesAllowed);
 
-    if (Bases.Num() < MaxBasesAllowed)
+    if (AllBases.Num() < MaxBasesAllowed)
     {
-        for (UStrategyBase* B : Bases)
+        UStrategyBase* Oldest = AllBases[0];
+        if (Oldest && Oldest->HasOperationalFacilityOfType(EFacilityType::Hanger))
         {
-            if (!B || !B->HasOperationalFacilityOfType(EFacilityType::Hanger)) continue;
+            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]   Oldest base '%s' has Hanger"), *Oldest->BaseName.ToString());
 
-            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]   Base '%s' has Hanger"), *B->BaseName.ToString());
+            bool bOwnsVehicle = false;
 
-            bool bThisBaseOwnsVehicle = false;
-
-            // 1. Parked vehicles
-            for (UStrategyFacility* Fac : B->Facilities)
+            // Parked vehicles
+            for (UStrategyFacility* Fac : Oldest->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                 {
                     for (UStrategyVehicle* V : Fac->ParkedVehicles)
                     {
-                        if (V && V->HomeBase == B)
+                        if (V && V->HomeBase == Oldest)
                         {
-                            bThisBaseOwnsVehicle = true;
-                            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Found parked vehicle (HomeBase match)"));
+                            bOwnsVehicle = true;
+                            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Found parked vehicle"));
                             break;
                         }
                     }
                 }
-                if (bThisBaseOwnsVehicle) break;
+                if (bOwnsVehicle) break;
             }
 
-            // 2. Vehicles on active missions (safe check)
-            if (!bThisBaseOwnsVehicle)
+            // Vehicles on missions
+            if (!bOwnsVehicle)
             {
                 if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
                 {
                     if (MissionMgr->ActiveMissions.Num() > 0)
                     {
-                        bThisBaseOwnsVehicle = true;
-                        UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Has active missions → vehicles are flying (base owns them)"));
+                        bOwnsVehicle = true;
+                        UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]     Has active missions → vehicles are flying"));
                     }
                 }
             }
 
-            if (bThisBaseOwnsVehicle)
+            if (bOwnsVehicle)
             {
                 bReadyToExpand = true;
-                break;
             }
         }
     }
@@ -351,10 +345,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     if (bReadyToExpand && ResourceMgr->GetResources(Faction).Money > 9000)
     {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Base owns vehicle (parked or flying) → Building NEW base #%d"),
-            *UEnum::GetValueAsString(Faction), Bases.Num() + 1);
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! Oldest base owns vehicle → Building NEW base #%d"),
+            *UEnum::GetValueAsString(Faction), AllBases.Num() + 1);
 
-        FVector2D NewLoc = FVector2D(300.0f + (Bases.Num() * 320.0f), 540.0f);
+        FVector2D NewLoc = FVector2D(300.0f + (AllBases.Num() * 320.0f), 540.0f);
         if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
