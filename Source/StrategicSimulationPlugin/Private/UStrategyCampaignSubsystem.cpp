@@ -56,7 +56,7 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
 void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
 {
     UTimeManagerSubsystem* TimeMgr = GetTimeManager();
-    FString DateHeader = TimeMgr ? GetFormattedDate() : FString::Printf(TEXT("DAY %d"), NewDay);
+    FString DateHeader = TimeMgr ? TimeMgr->GetFormattedDateString() : FString::Printf(TEXT("DAY %d"), NewDay);
 
     // === BOLD DAY SEPARATOR WITH ACTUAL DATE ===
     UE_LOG(LogTemp, Display, TEXT(""));
@@ -112,21 +112,26 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("[DAILY SIM] Both factions — Medical Bays can heal %d soldiers | Vehicle Repair Shops can repair %d vehicles (+25 HP)"),
         TotalMedical, TotalRepair);
 
-    // === AI CALLS ===
+    // === AI CALLS — use the AI Controller's own flags (correct way) ===
     UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Checking AI simulation toggles..."));
 
-    if (bSimulateHumanAI)
+    if (UAIControllerSubsystem* AI = GetAIController())
     {
-        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Human AI enabled — calling RunAIForFaction"));
-        if (UAIControllerSubsystem* AI = GetAIController())
+        if (AI->IsHumanAIEnabled())
+        {
+            UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Human AI enabled — calling RunAIForFaction"));
             AI->RunAIForFaction(EFactionType::Human, NewDay);
-    }
+        }
 
-    if (bSimulateEnemyAI)
+        if (AI->IsEnemyAIEnabled())
+        {
+            UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Enemy AI enabled — calling RunAIForFaction"));
+            AI->RunAIForFaction(EFactionType::Enemy, NewDay);
+        }
+    }
+    else
     {
-        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Enemy AI enabled — calling RunAIForFaction"));
-        if (UAIControllerSubsystem* AI = GetAIController())
-            AI->RunAIForFaction(EFactionType::Enemy, NewDay);    
+        UE_LOG(LogTemp, Warning, TEXT("[CAMPAIGN] Could not find AIControllerSubsystem!"));
     }
 }
 
