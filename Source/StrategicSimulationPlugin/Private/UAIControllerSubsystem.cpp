@@ -126,11 +126,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             break;
         }
     }
-    if (!FocusBase) FocusBase = AllBases[0]; // fall back to oldest once all have Command
+    if (!FocusBase) FocusBase = AllBases[0];
 
     UE_LOG(LogTemp, Display, TEXT("[AI] Developing focus base '%s' (Net Power: %d)"), *FocusBase->BaseName.ToString(), FocusBase->GetNetPower());
 
-    // === FACILITY BUILD ORDER ===
+    // === FACILITY BUILD ORDER (quicker wave — only 1 LivingQuarters required) ===
     TArray<EFacilityType> DesiredOrder = {
         EFacilityType::LivingQuarters,
         EFacilityType::Laboratory,
@@ -140,14 +140,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         EFacilityType::VehicleRepair
     };
 
-    // Special case: force Command Center for new/empty bases
     if (!FocusBase->HasOperationalFacilityOfType(EFacilityType::Command))
     {
         UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Force-building Command Center for new base '%s'"), *FocusBase->BaseName.ToString());
-        if (TryBuildFacility(Faction, EFacilityType::Command, FocusBase))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] %s built Command Center in focus base '%s'"), *UEnum::GetValueAsString(Faction), *FocusBase->BaseName.ToString());
-        }
+        TryBuildFacility(Faction, EFacilityType::Command, FocusBase);
     }
     else
     {
@@ -160,7 +156,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             {
                 bool bCoreLayerDone = FocusBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
                 int32 CurrentBarracks = FocusBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
-                bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);  // only 1 required for expansion
+                bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0); // only 1 required for expansion
             }
             else
             {
@@ -178,7 +174,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED for %s in focus base — check resources/prereqs"), *UEnum::GetValueAsString(FacType));
+                    UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED for %s — check resources/prereqs"), *UEnum::GetValueAsString(FacType));
                 }
             }
         }
@@ -211,7 +207,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                     break;
                 }
             }
-        }
+        }  
 
         if (bHasParkedVehicles)
         {
@@ -308,7 +304,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         BaseMgr->DebugPrintFullBaseState(Faction);
     }
 
-    // === EXPANSION — TRUE WAVE: only expand when EVERY base owns a vehicle ===
+    // === EXPANSION — TRUE WAVE ===
     if (AllBases.Num() < MaxBases)
     {
         bool bAllBasesHaveVehicle = true;
@@ -318,10 +314,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         for (UStrategyBase* B : AllBases)
         {
             bool bThisBaseHasVehicle = false;
-
             if (B->HasOperationalFacilityOfType(EFacilityType::Hanger))
             {
-                // parked?
                 for (UStrategyFacility* Fac : B->Facilities)
                 {
                     if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -329,7 +323,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                         if (Fac->ParkedVehicles.Num() > 0) { bThisBaseHasVehicle = true; break; }
                     }
                 }
-                // or flying (on mission)?
                 if (!bThisBaseHasVehicle)
                 {
                     UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
@@ -370,6 +363,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 }
 
 // === UPDATED: Uses data-driven soldier class cost and training time ===
+// Removed Laboratory gate so new bases can recruit as soon as they have barracks
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -377,8 +371,13 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
 
-    if (!BaseMgr || !ResourceMgr || !SoldierMgr || !Campaign) return false;
+    if (!BaseMgr || !ResourceMgr || !SoldierMgr || !Campaign)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] Missing required subsystems!"));
+        return false;
+    }
 
+    // Get total barracks capacity across ALL bases (global)
     int32 TotalCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
     int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
 
@@ -400,12 +399,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    if (ResourceMgr->GetResources(Faction).Money < 1500)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] Skipping — saving for next facility"));
-        return false;
-    }
-
     // Get soldier class (first one in DB)
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
@@ -416,16 +409,28 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
                 ClassDef = DB->AvailableSoldierClasses[0].Get();
         }
     }
-    if (!ClassDef) return false;
+    if (!ClassDef)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No soldier class definition found!"));
+        return false;
+    }
 
     const FResourceStockpile& Cost = ClassDef->TrainingCost;
-    if (!ResourceMgr->CanAfford(Faction, Cost)) return false;
+
+    if (!ResourceMgr->CanAfford(Faction, Cost))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s cannot afford soldier training (needs %d Money) — saving resources"),
+            *UEnum::GetValueAsString(Faction), Cost.Money);
+        return false;
+    }
 
     // Try to queue in any barracks with free production slot
+    // Prefer the current focus base first so new bases get soldiers quickly
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
     for (UStrategyBase* Base : Bases)
     {
         if (!Base) continue;
+
         for (UStrategyFacility* Barracks : Base->Facilities)
         {
             if (Barracks && Barracks->FacilityDefinition &&
@@ -438,9 +443,10 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
                         -Cost.Money, -Cost.Metals, -Cost.Biologicals,
                         -Cost.Chemicals, -Cost.ExoticMaterial, -Cost.ResearchPoints });
 
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued %s training in %s (%d days)"),
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued %s training in %s (%d days) at base '%s'"),
                         *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(),
-                        *Barracks->FacilityDefinition->FacilityName.ToString(), ClassDef->TrainingDays);
+                        *Barracks->FacilityDefinition->FacilityName.ToString(), ClassDef->TrainingDays,
+                        *Base->BaseName.ToString());
 
                     return true;
                 }
@@ -448,7 +454,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         }
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] No free production slots in any barracks"));
+    UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] No free production slots in any barracks for %s"), *UEnum::GetValueAsString(Faction));
     return false;
 }
 
@@ -620,11 +626,12 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
     UE_LOG(LogTemp, Display, TEXT("[AI] TryBuildFacility — Found definition for %s (MaxBuilt=%d, BuildTime=%d days)"),
         *FacilityDef->FacilityName.ToString(), FacilityDef->MaxBuilt, FacilityDef->BuildTimeDays);
 
-    // === MaxBuilt check ===
+    // === PER-BASE MaxBuilt check (this is the critical fix) ===
     if (TargetBase)
     {
         int32 CurrentCountInBase = 0;
         int32 UnderConstruction = 0;
+
         for (UStrategyFacility* Fac : TargetBase->Facilities)
         {
             if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityTypeToBuild)
@@ -637,13 +644,18 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
 
         if (CurrentCountInBase + UnderConstruction >= FacilityDef->MaxBuilt)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — MaxBuilt reached for %s (%d built + %d under construction)"),
-                *UEnum::GetValueAsString(FacilityTypeToBuild), CurrentCountInBase, UnderConstruction);
+            UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — MaxBuilt reached for %s in base '%s' (%d built + %d under construction)"),
+                *UEnum::GetValueAsString(FacilityTypeToBuild), *TargetBase->BaseName.ToString(), CurrentCountInBase, UnderConstruction);
             return false;
         }
     }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED — No TargetBase provided!"));
+        return false;
+    }
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] TryBuildFacility — MaxBuilt check PASSED"));
+    UE_LOG(LogTemp, Display, TEXT("[AI] TryBuildFacility — MaxBuilt check PASSED (per-base)"));
 
     // === Resource check ===
     if (!ResourceMgr->CanAfford(Faction, FacilityDef->BuildCost))
