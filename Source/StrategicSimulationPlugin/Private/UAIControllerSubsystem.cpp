@@ -107,55 +107,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === GLOBAL EXPANSION PHASE ===
-    bool bAllBasesReadyForExpansion = true;
-    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    if (Bases.Num() >= MaxBases)
-    {
-        bAllBasesReadyForExpansion = false;
-    }
-    else
-    {
-        for (UStrategyBase* B : Bases)
-        {
-            if (!B || !B->HasOperationalFacilityOfType(EFacilityType::Hanger))
-            {
-                bAllBasesReadyForExpansion = false;
-                break;
-            }
-
-            bool bHasVehicle = false;
-            for (UStrategyFacility* Fac : B->Facilities)
-            {
-                if (Fac && Fac->FacilityDefinition &&
-                    Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
-                    Fac->ParkedVehicles.Num() > 0)
-                {
-                    bHasVehicle = true;
-                    break;
-                }
-            }
-            if (!bHasVehicle)
-            {
-                bAllBasesReadyForExpansion = false;
-                break;
-            }
-        }
-    }
-
-    if (bAllBasesReadyForExpansion && ResourceMgr->GetResources(Faction).Money > 9000)
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! All bases have Hanger + vehicle → Building NEW base #%d"),
-            *UEnum::GetValueAsString(Faction), Bases.Num() + 1);
-
-        FVector2D NewLoc = FVector2D(300.0f + (Bases.Num() * 320.0f), 540.0f);
-        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
-        }
-    }
-
-    // === PER-BASE DEVELOPMENT (works on EVERY base, including new ones) ===
+    // === PER-BASE DEVELOPMENT (works on EVERY base) ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
@@ -167,7 +119,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         UE_LOG(LogTemp, Display, TEXT("[AI] Developing base '%s' (Net Power: %d)"), *Base->BaseName.ToString(), Base->GetNetPower());
 
         TArray<EFacilityType> DesiredOrder = {
-            EFacilityType::LivingQuarters,   // first barracks on new base
+            EFacilityType::LivingQuarters,
             EFacilityType::Laboratory,
             EFacilityType::Workshop,
             EFacilityType::Hanger,
@@ -219,10 +171,58 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     if (TryBuyAndEquip(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s purchase/equip action taken"), *UEnum::GetValueAsString(Faction));
     if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s production action taken"), *UEnum::GetValueAsString(Faction));
 
-    // === Daily base state summary (debug + future UI) ===
+    // === NEW: Daily base state summary ===
     if (BaseMgr)
     {
         BaseMgr->DebugPrintFullBaseState(Faction);
+    }
+
+    // === GLOBAL EXPANSION PHASE — MOVED TO THE END (after vehicles are parked) ===
+    bool bAllBasesReadyForExpansion = true;
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    if (Bases.Num() >= MaxBases)
+    {
+        bAllBasesReadyForExpansion = false;
+    }
+    else
+    {
+        for (UStrategyBase* B : Bases)
+        {
+            if (!B || !B->HasOperationalFacilityOfType(EFacilityType::Hanger))
+            {
+                bAllBasesReadyForExpansion = false;
+                break;
+            }
+
+            bool bHasVehicle = false;
+            for (UStrategyFacility* Fac : B->Facilities)
+            {
+                if (Fac && Fac->FacilityDefinition &&
+                    Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
+                    Fac->ParkedVehicles.Num() > 0)
+                {
+                    bHasVehicle = true;
+                    break;
+                }
+            }
+            if (!bHasVehicle)
+            {
+                bAllBasesReadyForExpansion = false;
+                break;
+            }
+        }
+    }
+
+    if (bAllBasesReadyForExpansion && ResourceMgr->GetResources(Faction).Money > 9000)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! All bases have Hanger + vehicle → Building NEW base #%d"),
+            *UEnum::GetValueAsString(Faction), Bases.Num() + 1);
+
+        FVector2D NewLoc = FVector2D(300.0f + (Bases.Num() * 320.0f), 540.0f);
+        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
+        }
     }
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
