@@ -110,13 +110,14 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
 
     // === PER-BASE DEVELOPMENT — FOCUS BASE ===
+// (REPLACEMENT BLOCK — paste this entire section exactly in place of the old focus + build-order code)
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
     const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
     if (AllBases.Num() == 0) return;
 
-    // Find the "focus" base
+    // Keep old FocusBase only for the vehicle/mission/expansion logic later in the function (unchanged behavior)
     UStrategyBase* FocusBase = nullptr;
     for (UStrategyBase* B : AllBases)
     {
@@ -128,10 +129,12 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
     if (!FocusBase) FocusBase = AllBases[0];
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] Developing focus base '%s' (Net Power: %d)"), *FocusBase->BaseName.ToString(), FocusBase->GetNetPower());
+    UE_LOG(LogTemp, Display, TEXT("[AI] Developing focus base '%s' (Net Power: %d) — [PARALLEL wave build now active]"),
+        *FocusBase->BaseName.ToString(), FocusBase->GetNetPower());
 
-    // === FACILITY BUILD ORDER (quicker wave) ===
+    // === FACILITY BUILD ORDER (quicker wave — PARALLEL per-base, newest-first priority) ===
     TArray<EFacilityType> DesiredOrder = {
+        EFacilityType::Command,      // ← NEW: forces new bases to build Command first (replaces the old bHasAnyCommandCenter block)
         EFacilityType::LivingQuarters,
         EFacilityType::Laboratory,
         EFacilityType::Workshop,
@@ -140,53 +143,44 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         EFacilityType::VehicleRepair
     };
 
-    // Check if this base has ANY Command Center (built OR under construction)
-    bool bHasAnyCommandCenter = false;
-    for (UStrategyFacility* Fac : FocusBase->Facilities)
+    for (int32 i = AllBases.Num() - 1; i >= 0; --i)   // newest bases get first priority every day (true wave)
     {
-        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Command)
-        {
-            bHasAnyCommandCenter = true;
-            break;
-        }
-    }
+        UStrategyBase* B = AllBases[i];
 
-    if (!bHasAnyCommandCenter)
-    {
-        UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Force-building Command Center for new base '%s'"), *FocusBase->BaseName.ToString());
-        TryBuildFacility(Faction, EFacilityType::Command, FocusBase);
-    }
-    else
-    {
-        // Normal build order once Command Center exists (even if still under construction)
+        UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Checking build order for base '%s'"), *B->BaseName.ToString());
+
         for (EFacilityType FacType : DesiredOrder)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build on focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build on base '%s'"),
+                *UEnum::GetValueAsString(FacType), *B->BaseName.ToString());
 
             bool bShouldBuild = false;
             if (FacType == EFacilityType::LivingQuarters)
             {
-                bool bCoreLayerDone = FocusBase->HasOperationalFacilityOfType(EFacilityType::Laboratory);
-                int32 CurrentBarracks = FocusBase->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
+                bool bCoreLayerDone = B->HasOperationalFacilityOfType(EFacilityType::Laboratory);
+                int32 CurrentBarracks = B->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
                 bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
             }
             else
             {
-                bShouldBuild = !FocusBase->HasOperationalFacilityOfType(FacType);
+                bShouldBuild = !B->HasOperationalFacilityOfType(FacType);
             }
 
             if (bShouldBuild)
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s in focus base '%s'"), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
+                UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s in base '%s'"),
+                    *UEnum::GetValueAsString(FacType), *B->BaseName.ToString());
 
-                if (TryBuildFacility(Faction, FacType, FocusBase))
+                if (TryBuildFacility(Faction, FacType, B))
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in focus base '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *FocusBase->BaseName.ToString());
-                    break; // one facility per day
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in base '%s'"),
+                        *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *B->BaseName.ToString());
+                    break; // one facility per base per day (parallel across bases)
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED for %s — check resources/prereqs"), *UEnum::GetValueAsString(FacType));
+                    UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED for %s in '%s' — check resources/prereqs"),
+                        *UEnum::GetValueAsString(FacType), *B->BaseName.ToString());
                 }
             }
         }
