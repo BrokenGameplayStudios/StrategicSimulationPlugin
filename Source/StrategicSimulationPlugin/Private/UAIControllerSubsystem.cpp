@@ -160,10 +160,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
+    // === YOUR ORIGINAL DESIRED ORDER (Command is already built) ===
     TArray<EFacilityType> DesiredOrder = {
-        EFacilityType::Laboratory,      // MUST be first
         EFacilityType::LivingQuarters,
-        EFacilityType::PowerPlant,
+        EFacilityType::Laboratory,
         EFacilityType::Workshop,
         EFacilityType::Hanger,
         EFacilityType::Medical,
@@ -178,6 +178,22 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         bool bBuiltSomethingThisBase = false;
 
+        // === POWER PLANT — opportunistic (build when power is low) ===
+        if (Base->GetNetPower() < 20)   // you can tweak this threshold
+        {
+            if (Base->CanBuildFacilityType(EFacilityType::PowerPlant))
+            {
+                if (TryBuildFacility(Faction, EFacilityType::PowerPlant, Base))
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s built PowerPlant (low power priority) in '%s'"),
+                        *UEnum::GetValueAsString(Faction), *Base->BaseName.ToString());
+                    bBuiltSomethingThisBase = true;
+                    continue; // power was urgent, skip the rest this day
+                }
+            }
+        }
+
+        // === MAIN DESIRED ORDER ===
         for (EFacilityType FacType : DesiredOrder)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build"), *UEnum::GetValueAsString(FacType));
@@ -192,11 +208,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (FacType == EFacilityType::LivingQuarters)
             {
-                // === FINAL FIX: NO MORE ROUND-ROBIN BARRACKS ===
-                // Only allow extra barracks AFTER the first Laboratory is operational
+                // First barracks always allowed (Lab needs it)
+                // Extra barracks only after Lab is operational
                 bool bCoreLayerDone = Base->HasOperationalFacilityOfType(EFacilityType::Laboratory);
                 int32 CurrentBarracks = Base->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
-                bShouldBuild = bCoreLayerDone && (CurrentBarracks < 6);
+                bShouldBuild = (CurrentBarracks == 0) || (bCoreLayerDone && CurrentBarracks < 6);
             }
             else
             {
@@ -205,8 +221,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (bShouldBuild)
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] Attempting to build %s (bShouldBuild=true)"), *UEnum::GetValueAsString(FacType));
-
                 if (TryBuildFacility(Faction, FacType, Base))
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in '%s' (one-of-everything phase)"),
@@ -214,13 +228,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                     bBuiltSomethingThisBase = true;
                     break; // one facility per base per day
                 }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("[AI] TryBuildFacility FAILED for %s — check resources/MaxBuilt"), *UEnum::GetValueAsString(FacType));
-                }
             }
         }
-
 
         // === YOUR ORIGINAL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
         if (Base->HasOperationalFacilityOfType(EFacilityType::Hanger))
