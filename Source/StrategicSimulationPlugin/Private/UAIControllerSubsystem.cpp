@@ -152,11 +152,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLoc))
         {
             UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base '%s' created"), *NewBase->BaseName.ToString());
-            return;
         }
     }
 
-    // === PER-BASE DEVELOPMENT — NOW WORKS ON EVERY BASE ===
+    // === PER-BASE DEVELOPMENT (works on EVERY base, including new ones) ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
@@ -176,7 +175,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             EFacilityType::VehicleRepair
         };
 
-        bool bBuiltSomethingThisBase = false;
         for (EFacilityType FacType : DesiredOrder)
         {
             UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build"), *UEnum::GetValueAsString(FacType));
@@ -207,7 +205,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 if (TryBuildFacility(Faction, FacType, Base))
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s built %s in '%s'"), *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(FacType), *Base->BaseName.ToString());
-                    bBuiltSomethingThisBase = true;
                     break; // one facility per base per day
                 }
             }
@@ -244,10 +241,21 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     int32 TotalCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
     int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
 
-    if (CurrentSoldiers >= TotalCapacity)
+    // === COMMANDER EXCEPTION ===
+    // The initial "Sgt. Rookie" / "Overlord Rookie" is the owner/flag — he stays in Command Center
+    // and does NOT count against barracks capacity.
+    int32 CommanderCount = 0;
+    for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s at max capacity (%d/%d) — skipping"),
-            *UEnum::GetValueAsString(Faction), CurrentSoldiers, TotalCapacity);
+        if (Soldier && Soldier->SoldierName.Contains(TEXT("Rookie")))
+            CommanderCount++;
+    }
+    int32 EffectiveSoldiers = CurrentSoldiers - CommanderCount;
+
+    if (EffectiveSoldiers >= TotalCapacity)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s at max capacity (%d regular soldiers + %d commander / %d slots) — skipping"),
+            *UEnum::GetValueAsString(Faction), EffectiveSoldiers, CommanderCount, TotalCapacity);
         return false;
     }
 
