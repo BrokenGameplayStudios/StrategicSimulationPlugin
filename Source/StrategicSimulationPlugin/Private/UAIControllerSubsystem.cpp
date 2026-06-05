@@ -442,7 +442,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         UStrategyBase* Base = Bases[i];
         if (!Base) continue;
 
-        int32 Stationed = Base->GetStationedSoldiers();   // assume this exists — if not, replace with your per-base count
+        int32 Stationed = Base->GetStationedSoldiers().Num();   // count stationed soldiers per base
 
         for (UStrategyFacility* Barracks : Base->Facilities)
         {
