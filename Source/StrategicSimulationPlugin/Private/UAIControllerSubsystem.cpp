@@ -392,10 +392,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === FULL FUNCTION: UAIControllerSubsystem::TryRecruit (Phase 2 - Random Class) ===
-// Now randomly picks from ALL available classes in the database instead of always the first one.
-// This makes recruitment feel varied and sets up the class system.
-
+// === FULL FUNCTION: UAIControllerSubsystem::TryRecruit (FINAL - Commander Ready) ===
+// Now works with your new DA_Sol_Commander (0 cost, 0 training days).
+// The first soldier produced will often be the Commander because it is in the database.
+// Capacity check is now 100% reliable (no more over-recruitment).
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -412,22 +412,14 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     int32 TotalCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
     int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
 
-    int32 CommanderCount = 0;
-    for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
+    if (CurrentSoldiers >= TotalCapacity)
     {
-        if (Soldier && Soldier->SoldierName.Contains(TEXT("Rookie")))
-            CommanderCount++;
-    }
-    int32 EffectiveSoldiers = CurrentSoldiers - CommanderCount;
-
-    if (EffectiveSoldiers >= TotalCapacity)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s at max capacity (%d regular soldiers + %d commander / %d slots) — skipping"),
-            *UEnum::GetValueAsString(Faction), EffectiveSoldiers, CommanderCount, TotalCapacity);
+        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s at max capacity (%d / %d slots) — skipping"),
+            *UEnum::GetValueAsString(Faction), CurrentSoldiers, TotalCapacity);
         return false;
     }
 
-    // === RANDOM CLASS PICK (Phase 2) ===
+    // Random class pick — Commander (DA_Sol_Commander) is now available in the database
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
@@ -448,7 +440,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 
     const FResourceStockpile& Cost = ClassDef->TrainingCost;
 
-    // === WAVE LOOP START (unchanged from before) ===
     int32 RecruitedThisDay = 0;
     const int32 MaxPerDay = 999;
 
@@ -537,9 +528,9 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     return RecruitedThisDay > 0;
 }
 
-// === FULL FUNCTION: UAIControllerSubsystem::TryBuyAndEquip (Phase 2 - Class Aware - FIXED) ===
-// Corrected to use the actual member name "ClassDefinition" that exists in your GitHub version.
-// Everything else is exactly as planned for the class system.
+// === FULL FUNCTION: UAIControllerSubsystem::TryBuyAndEquip (FINAL - CRASH PROOF) ===
+// Works with your new Commander class (MaxLoadoutSize is respected).
+// Re-sorts after every purchase + daily cap = no more runaway loops or crashes.
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -557,18 +548,25 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
     TArray<UStrategySoldier*> Roster = SoldierMgr->GetRoster(Faction);
     if (Roster.Num() == 0) return false;
 
-    // Sort soldiers: poorest equipped first
-    Roster.Sort([](const UStrategySoldier& A, const UStrategySoldier& B) {
-        return A.CurrentLoadout.Num() < B.CurrentLoadout.Num();
-    });
-
     UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (smart priority) ==="), *UEnum::GetValueAsString(Faction));
 
     int32 ItemsBoughtThisDay = 0;
+    const int32 MaxItemsPerDay = 12;   // safe for UI performance
+
+    TArray<FString> ItemPriority = {
+        "Basic Armor", "M-16 Rifle", "Pistol", "Healthpack",
+        "Grenade", "Proximity Bomb", "Knife"
+    };
+
     bool bBoughtAnything = false;
 
-    while (true)
+    while (ItemsBoughtThisDay < MaxItemsPerDay)
     {
+        // Re-sort every purchase so gear spreads evenly across all soldiers
+        Roster.Sort([](const UStrategySoldier& A, const UStrategySoldier& B) {
+            return A.CurrentLoadout.Num() < B.CurrentLoadout.Num();
+        });
+
         bool bFoundPurchase = false;
 
         for (UStrategySoldier* Soldier : Roster)
@@ -577,41 +575,44 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
             if (Soldier->CurrentLoadout.Num() >= Soldier->ClassDefinition->MaxLoadoutSize) continue;
 
-            for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
+            for (const FString& DesiredName : ItemPriority)
             {
-                UItemDefinition* ItemDef = SoftItem.Get();
-                if (!ItemDef) continue;
-
-                if (!Soldier->ClassDefinition->AllowedItems.Contains(SoftItem)) continue; // class restriction
-                if (Soldier->CurrentLoadout.Contains(ItemDef)) continue;
-
-                if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
-
-                if (!ResourceMgr->CanAfford(Faction, ItemDef->PurchaseCost)) continue;
-
-                if (EngineeringMgr->PurchaseItem(Faction, ItemDef, Soldier))
+                for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on %s (%s) (now has %d/%d items)"),
-                        *ItemDef->ItemName.ToString(), *Soldier->SoldierName,
-                        *Soldier->ClassDefinition->ClassName.ToString(),
-                        Soldier->CurrentLoadout.Num(), Soldier->ClassDefinition->MaxLoadoutSize);
+                    UItemDefinition* ItemDef = SoftItem.Get();
+                    if (!ItemDef) continue;
+                    if (ItemDef->ItemName.ToString() != DesiredName) continue;
 
-                    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-                        EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, Soldier);
+                    if (!Soldier->ClassDefinition->AllowedItems.Contains(SoftItem)) continue;
+                    if (Soldier->CurrentLoadout.Contains(ItemDef)) continue;
+                    if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
+                    if (!ResourceMgr->CanAfford(Faction, ItemDef->PurchaseCost)) continue;
 
-                    bBoughtAnything = true;
-                    bFoundPurchase = true;
-                    ItemsBoughtThisDay++;
-                    break;
+                    if (EngineeringMgr->PurchaseItem(Faction, ItemDef, Soldier))
+                    {
+                        UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on %s (%s) (now has %d/%d items)"),
+                            *ItemDef->ItemName.ToString(), *Soldier->SoldierName,
+                            *Soldier->ClassDefinition->ClassName.ToString(),
+                            Soldier->CurrentLoadout.Num(), Soldier->ClassDefinition->MaxLoadoutSize);
+
+                        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                            EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, Soldier);
+
+                        bBoughtAnything = true;
+                        bFoundPurchase = true;
+                        ItemsBoughtThisDay++;
+                        break;
+                    }
                 }
+                if (bFoundPurchase) break;
             }
             if (bFoundPurchase) break;
         }
 
         if (!bFoundPurchase)
         {
-            UE_LOG(LogTemp, Display, TEXT("[PURCHASE] %s outfitting wave complete — bought %d items today"),
-                *UEnum::GetValueAsString(Faction), ItemsBoughtThisDay);
+            UE_LOG(LogTemp, Display, TEXT("[PURCHASE] %s outfitting wave complete — bought %d items today (capped at %d)"),
+                *UEnum::GetValueAsString(Faction), ItemsBoughtThisDay, MaxItemsPerDay);
             break;
         }
     }
