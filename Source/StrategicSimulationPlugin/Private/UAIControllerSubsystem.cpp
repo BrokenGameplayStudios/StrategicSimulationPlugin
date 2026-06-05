@@ -588,7 +588,10 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
                     if (ItemDef->ItemName.ToString() != DesiredName) continue;
 
                     if (!Soldier->ClassDefinition->AllowedItems.Contains(SoftItem)) continue;
-                    if (Soldier->CurrentLoadout.Contains(ItemDef)) continue;
+
+                    // FIXED: Compare against the SoftObjectPtr that is actually stored in CurrentLoadout
+                    if (Soldier->CurrentLoadout.Contains(SoftItem)) continue;
+
                     if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
                     if (!ResourceMgr->CanAfford(Faction, ItemDef->PurchaseCost)) continue;
 
@@ -622,81 +625,6 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
     }
 
     return bBoughtAnything;
-}
-
-// === FULL FUNCTION: UAIControllerSubsystem::TryBuildVehicle (WAVE VERSION) ===
-// Same wave logic as TryRecruit. Hangars now act as their own controllers —
-// multiple vehicles can be started in one day if multiple slots exist.
-bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
-{
-    if (!TargetBase)
-        return false;
-
-    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-    if (!Campaign) return false;
-
-    UVehicleDatabase* VehicleDB = Campaign->VehicleDatabaseAsset.Get();
-    if (!VehicleDB || VehicleDB->AvailableVehicles.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[AI] No vehicles available in database for %s"), *UEnum::GetValueAsString(Faction));
-        return false;
-    }
-
-    UVehicleDefinition* VehDef = VehicleDB->AvailableVehicles[0].Get();
-    if (!VehDef) return false;
-
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    if (!ResourceMgr) return false;
-
-    // === WAVE LOOP START ===
-    int32 BuiltThisDay = 0;
-    const int32 MaxPerDay = 999;
-
-    while (BuiltThisDay < MaxPerDay)
-    {
-        if (!ResourceMgr->CanAfford(Faction, VehDef->BuildCost))
-        {
-            UE_LOG(LogTemp, Verbose, TEXT("[AI] %s ran out of resources mid-vehicle wave — built %d vehicles today"),
-                *UEnum::GetValueAsString(Faction), BuiltThisDay);
-            break;
-        }
-
-        bool bQueued = false;
-        for (UStrategyFacility* Hanger : TargetBase->Facilities)
-        {
-            if (Hanger && Hanger->FacilityDefinition &&
-                Hanger->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
-                Hanger->HasFreeProductionSlot())
-            {
-                if (Hanger->StartProduction(EProductionType::Vehicle, VehDef, VehDef->ProductionDays))
-                {
-                    ResourceMgr->AddResources(Faction, {
-                        -VehDef->BuildCost.Money,
-                        -VehDef->BuildCost.Metals,
-                        -VehDef->BuildCost.Biologicals,
-                        -VehDef->BuildCost.Chemicals,
-                        0, 0 });
-
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s WAVE VEHICLE — queued '%s' in hanger at base '%s' (slots left: %d)"),
-                        *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(),
-                        *TargetBase->BaseName.ToString(),
-                        Hanger->GetAvailableProductionSlots());
-
-                    BuiltThisDay++;
-                    bQueued = true;
-                    break;
-                }
-            }
-        }
-
-        if (!bQueued)
-            break;  // no more free hangar slots in this base
-    }
-
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s vehicle wave complete — built %d vehicles today"),
-        *UEnum::GetValueAsString(Faction), BuiltThisDay);
-
-    return BuiltThisDay > 0;
 }
 
 bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase)
