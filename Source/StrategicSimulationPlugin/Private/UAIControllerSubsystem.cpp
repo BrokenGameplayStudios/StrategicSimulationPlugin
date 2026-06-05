@@ -134,7 +134,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     // === FACILITY BUILD ORDER (quicker wave — PARALLEL per-base, newest-first priority) ===
     TArray<EFacilityType> DesiredOrder = {
-        EFacilityType::Command,      // ← NEW: forces new bases to build Command first (replaces the old bHasAnyCommandCenter block)
+        EFacilityType::Command,      // will now be skipped once started
         EFacilityType::LivingQuarters,
         EFacilityType::Laboratory,
         EFacilityType::Workshop,
@@ -155,7 +155,12 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 *UEnum::GetValueAsString(FacType), *B->BaseName.ToString());
 
             bool bShouldBuild = false;
-            if (FacType == EFacilityType::LivingQuarters)
+            if (FacType == EFacilityType::Command)
+            {
+                // NEW: respect under-construction exactly like TryBuildFacility's MaxBuilt check
+                bShouldBuild = !B->HasAnyFacilityOfType(EFacilityType::Command);
+            }
+            else if (FacType == EFacilityType::LivingQuarters)
             {
                 bool bCoreLayerDone = B->HasOperationalFacilityOfType(EFacilityType::Laboratory);
                 int32 CurrentBarracks = B->GetTotalBuiltOfType(EFacilityType::LivingQuarters);

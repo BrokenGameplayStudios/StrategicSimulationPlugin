@@ -50,6 +50,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Base")
     bool HasOperationalFacilityOfType(EFacilityType FacilityType) const;   // <-- THIS IS THE NEW ONE WE NEED
+    
+    UFUNCTION(BlueprintCallable, Category = "Base")
+    bool HasAnyFacilityOfType(EFacilityType FacilityType) const;
 
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalProductionSlots() const;

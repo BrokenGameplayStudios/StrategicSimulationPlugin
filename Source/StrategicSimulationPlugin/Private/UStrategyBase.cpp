@@ -111,6 +111,19 @@ int32 UStrategyBase::GetCountOfType(EFacilityType FacilityType) const
     return Count;
 }
 
+// NEW HELPER — counts ANY facility of this type (operational OR under construction)
+bool UStrategyBase::HasAnyFacilityOfType(EFacilityType FacilityType) const
+{
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == FacilityType)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool UStrategyBase::IsOperational() const
 {
     return HasOperationalCommandCenter();
