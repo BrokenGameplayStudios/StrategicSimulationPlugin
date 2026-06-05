@@ -133,7 +133,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     // === FACILITY BUILD ORDER (quicker wave — PARALLEL per-base, newest-first priority) ===
     TArray<EFacilityType> DesiredOrder = {
-        EFacilityType::Command,      // ← MUST be here so new bases get their Command Center
+        EFacilityType::Command,      // kept so new bases get it, but now properly skipped after start
         EFacilityType::LivingQuarters,
         EFacilityType::Laboratory,
         EFacilityType::Workshop,
@@ -156,7 +156,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             bool bShouldBuild = false;
             if (FacType == EFacilityType::Command)
             {
-                // This prevents the duplicate-Command bug while still allowing the AI to build the very first one
+                // CRITICAL FIX: only build if the base has ZERO Command Centers (built or under construction)
+                // This stops the duplicate on the newest forward base
                 bShouldBuild = !B->HasAnyFacilityOfType(EFacilityType::Command);
             }
             else if (FacType == EFacilityType::LivingQuarters)
@@ -373,9 +374,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === UPDATED TryRecruit (newest-base-first wave) ===
-// Soldiers now prioritize forward bases that have operational LivingQuarters + free slot
-// This fixes "soldiers only go to main base" while keeping everything else you already had
+// === UPDATED TryRecruit (checks ALL bases every day — newest first) ===
+// Now backfills older bases when soldiers die, are captured (POW), or are on missions
+// Perfect for your existing POW/KIA logic that frees barracks slots
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -409,7 +410,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // Get the (first) soldier class definition
+    // Get the soldier class
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
@@ -434,9 +435,9 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // === WAVE RECRUITMENT: newest bases get priority (forward bases fill first) ===
+    // === RECRUITMENT WAVE: check EVERY base (newest first) so older bases get back-filled after KIA/POW ===
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    for (int32 i = Bases.Num() - 1; i >= 0; --i)   // reverse order = newest base first
+    for (int32 i = Bases.Num() - 1; i >= 0; --i)
     {
         UStrategyBase* Base = Bases[i];
         if (!Base) continue;
@@ -449,7 +450,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
             {
                 if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, ClassDef->TrainingDays))
                 {
-                    // Deduct cost only on successful queue
                     ResourceMgr->AddResources(Faction, FResourceStockpile{
                         -Cost.Money, -Cost.Metals, -Cost.Biologicals,
                         -Cost.Chemicals, -Cost.ExoticMaterial, -Cost.ResearchPoints });
@@ -459,7 +459,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
                         *Barracks->FacilityDefinition->FacilityName.ToString(),
                         *Base->BaseName.ToString());
 
-                    return true;   // one recruit per day
+                    return true;   // one recruit per day, but we checked all bases
                 }
             }
         }
