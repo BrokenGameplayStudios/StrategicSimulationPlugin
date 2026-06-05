@@ -110,7 +110,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
 
     // === PER-BASE DEVELOPMENT — FOCUS BASE ===
-// (REPLACEMENT BLOCK — paste this entire section exactly in place of the old focus + build-order code)
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
@@ -134,7 +133,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     // === FACILITY BUILD ORDER (quicker wave — PARALLEL per-base, newest-first priority) ===
     TArray<EFacilityType> DesiredOrder = {
-        EFacilityType::Command,      // will now be skipped once started
+        EFacilityType::Command,      // ← MUST be here so new bases get their Command Center
         EFacilityType::LivingQuarters,
         EFacilityType::Laboratory,
         EFacilityType::Workshop,
@@ -157,7 +156,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             bool bShouldBuild = false;
             if (FacType == EFacilityType::Command)
             {
-                // NEW: respect under-construction exactly like TryBuildFacility's MaxBuilt check
+                // This prevents the duplicate-Command bug while still allowing the AI to build the very first one
                 bShouldBuild = !B->HasAnyFacilityOfType(EFacilityType::Command);
             }
             else if (FacType == EFacilityType::LivingQuarters)
