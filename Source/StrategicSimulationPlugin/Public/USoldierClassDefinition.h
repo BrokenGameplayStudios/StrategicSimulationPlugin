@@ -29,6 +29,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soldier")
     int32 StartingXP = 0;
 
+    /** Items this soldier is allowed to equip (class restrictions) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout")
+    TArray<TSoftObjectPtr<UItemDefinition>> AllowedItems;
+
+    /** Maximum number of items this class can carry */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout")
+    int32 MaxLoadoutSize = 6;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout")
     TArray<TSoftObjectPtr<UItemDefinition>> StartingGear;
 };

@@ -392,11 +392,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === UPDATED TryRecruit — BALANCED across ALL bases (newest-first but spreads + backfills after KIA/POW) ===
-// This is the main fix for the daily trickle. Instead of queuing ONE soldier per day,
-// we now keep queuing until we run out of free production slots across ALL barracks
-// or run out of resources. Each facility (barracks) decides for itself whether it
-// can start production that day — exactly as you described (per-base controller).
+// === FULL FUNCTION: UAIControllerSubsystem::TryRecruit (Phase 2 - Random Class) ===
+// Now randomly picks from ALL available classes in the database instead of always the first one.
+// This makes recruitment feel varied and sets up the class system.
+
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -428,13 +427,17 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
+    // === RANDOM CLASS PICK (Phase 2) ===
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
         if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
         {
             if (!DB->AvailableSoldierClasses.IsEmpty())
-                ClassDef = DB->AvailableSoldierClasses[0].Get();
+            {
+                int32 RandomIndex = FMath::RandRange(0, DB->AvailableSoldierClasses.Num() - 1);
+                ClassDef = DB->AvailableSoldierClasses[RandomIndex].Get();
+            }
         }
     }
     if (!ClassDef)
@@ -445,34 +448,25 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 
     const FResourceStockpile& Cost = ClassDef->TrainingCost;
 
-    // === WAVE LOOP START ===
-    // This is the key change: we no longer return after one recruit.
-    // We keep going as long as we have open production slots in any barracks
-    // AND enough resources. This gives you the 6x6x4 = 144 troops in one day
-    // example you described (if resources allow).
+    // === WAVE LOOP START (unchanged from before) ===
     int32 RecruitedThisDay = 0;
-    const int32 MaxPerDay = 999; // safety cap — can be turned into UPROPERTY later if you want
+    const int32 MaxPerDay = 999;
 
     while (RecruitedThisDay < MaxPerDay)
     {
-        // Find the best base: lowest stationed soldiers that has at least one barracks
-        // with a free production slot. This fixes the "stuck on last base" bug
-        // because we now correctly count soldiers PER BASE (the old GetStationedSoldiers()
-        // was returning the global roster every time).
         const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
         UStrategyBase* BestBase = nullptr;
         int32 LowestStationed = INT_MAX;
 
-        for (int32 i = Bases.Num() - 1; i >= 0; --i)   // newest-first priority (wave expansion feel)
+        for (int32 i = Bases.Num() - 1; i >= 0; --i)
         {
             UStrategyBase* Base = Bases[i];
             if (!Base) continue;
 
-            // === CORRECT PER-BASE SOLDIER COUNT (this was the root of the stuck-on-last-base bug) ===
             int32 Stationed = 0;
             for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
             {
-                if (Soldier && Soldier->StationedBase == Base)  // assumes your soldier has a UStrategyBase* StationedBase property
+                if (Soldier && Soldier->StationedBase == Base)
                     Stationed++;
             }
 
@@ -484,7 +478,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
                     Barracks->HasFreeProductionSlot())
                 {
                     bHasFreeSlot = true;
-                    break;  // we only care that this base has at least one usable barracks
+                    break;
                 }
             }
 
@@ -498,7 +492,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         if (!BestBase)
         {
             UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] No base with free barracks slot found for %s"), *UEnum::GetValueAsString(Faction));
-            break;  // no more slots anywhere — wave is done
+            break;
         }
 
         if (!ResourceMgr->CanAfford(Faction, Cost))
@@ -508,7 +502,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
             break;
         }
 
-        // Queue one soldier into this base's barracks and continue the wave
         bool bQueued = false;
         for (UStrategyFacility* Barracks : BestBase->Facilities)
         {
@@ -518,7 +511,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
             {
                 if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, ClassDef->TrainingDays))
                 {
-                    // Deduct cost
                     ResourceMgr->AddResources(Faction, FResourceStockpile{
                         -Cost.Money, -Cost.Metals, -Cost.Biologicals,
                         -Cost.Chemicals, -Cost.ExoticMaterial, -Cost.ResearchPoints });
@@ -527,7 +519,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
                         *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(),
                         *Barracks->FacilityDefinition->FacilityName.ToString(),
                         *BestBase->BaseName.ToString(),
-                        Barracks->GetAvailableProductionSlots());  // assuming you have this helper; if not, remove this line
+                        Barracks->GetAvailableProductionSlots());
 
                     RecruitedThisDay++;
                     bQueued = true;
@@ -536,14 +528,96 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
             }
         }
 
-        if (!bQueued)
-            break;  // safety — should never happen
+        if (!bQueued) break;
     }
 
     UE_LOG(LogTemp, Display, TEXT("[RECRUIT] %s wave complete — recruited %d soldiers today"),
         *UEnum::GetValueAsString(Faction), RecruitedThisDay);
 
     return RecruitedThisDay > 0;
+}
+
+// === FULL FUNCTION: UAIControllerSubsystem::TryBuyAndEquip (Phase 2 - Class Aware) ===
+// Now respects each soldier's class AllowedItems and MaxLoadoutSize.
+// Soldiers only get items their class is allowed to carry.
+
+bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
+{
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    UEngineeringManagerSubsystem* EngineeringMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    UItemDatabase* ItemDB = Campaign ? Campaign->ItemDatabaseAsset.Get() : nullptr;
+
+    if (!SoldierMgr || !EngineeringMgr || !ResourceMgr || !ItemDB)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[PURCHASE] Missing subsystems!"));
+        return false;
+    }
+
+    TArray<UStrategySoldier*> Roster = SoldierMgr->GetRoster(Faction);
+    if (Roster.Num() == 0) return false;
+
+    // Sort soldiers: poorest equipped first
+    Roster.Sort([](const UStrategySoldier& A, const UStrategySoldier& B) {
+        return A.CurrentLoadout.Num() < B.CurrentLoadout.Num();
+    });
+
+    UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (smart priority) ==="), *UEnum::GetValueAsString(Faction));
+
+    int32 ItemsBoughtThisDay = 0;
+    bool bBoughtAnything = false;
+
+    while (true)
+    {
+        bool bFoundPurchase = false;
+
+        for (UStrategySoldier* Soldier : Roster)
+        {
+            if (!Soldier || !Soldier->SoldierClass) continue;
+
+            if (Soldier->CurrentLoadout.Num() >= Soldier->SoldierClass->MaxLoadoutSize) continue;
+
+            for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
+            {
+                UItemDefinition* ItemDef = SoftItem.Get();
+                if (!ItemDef) continue;
+
+                if (!Soldier->SoldierClass->AllowedItems.Contains(SoftItem)) continue; // class restriction
+                if (Soldier->CurrentLoadout.Contains(ItemDef)) continue;
+
+                if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
+
+                if (!ResourceMgr->CanAfford(Faction, ItemDef->PurchaseCost)) continue;
+
+                if (EngineeringMgr->PurchaseItem(Faction, ItemDef, Soldier))
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on %s (%s) (now has %d/%d items)"),
+                        *ItemDef->ItemName.ToString(), *Soldier->SoldierName,
+                        *Soldier->SoldierClass->ClassName.ToString(),
+                        Soldier->CurrentLoadout.Num(), Soldier->SoldierClass->MaxLoadoutSize);
+
+                    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                        EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, Soldier);
+
+                    bBoughtAnything = true;
+                    bFoundPurchase = true;
+                    ItemsBoughtThisDay++;
+                    break;
+                }
+            }
+            if (bFoundPurchase) break;
+        }
+
+        if (!bFoundPurchase)
+        {
+            UE_LOG(LogTemp, Display, TEXT("[PURCHASE] %s outfitting wave complete — bought %d items today"),
+                *UEnum::GetValueAsString(Faction), ItemsBoughtThisDay);
+            break;
+        }
+    }
+
+    return bBoughtAnything;
 }
 
 // === FULL FUNCTION: UAIControllerSubsystem::TryBuildVehicle (WAVE VERSION) ===
@@ -619,104 +693,6 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
         *UEnum::GetValueAsString(Faction), BuiltThisDay);
 
     return BuiltThisDay > 0;
-}
-
-// === FULL FUNCTION: UAIControllerSubsystem::TryBuyAndEquip (WAVE OUTFITTING FIX) ===
-// Phase 1 fix — this is the only change needed right now.
-// Instead of buying ONE item for the whole faction per day, we now keep buying
-// until we run out of resources or every soldier is fully equipped.
-// Soldiers are sorted by "poorest equipped first" so gear spreads evenly.
-// This directly fixes the "money rising but no equipment" problem you saw.
-bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
-{
-    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-    UEngineeringManagerSubsystem* EngineeringMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    UItemDatabase* ItemDB = Campaign ? Campaign->ItemDatabaseAsset.Get() : nullptr;
-
-    if (!SoldierMgr || !EngineeringMgr || !ResourceMgr || !ItemDB)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[PURCHASE] Missing subsystems!"));
-        return false;
-    }
-
-    TArray<UStrategySoldier*> Roster = SoldierMgr->GetRoster(Faction);
-    if (Roster.Num() == 0) return false;
-
-    // Sort soldiers: poorest equipped first (everyone gets filled evenly)
-    Roster.Sort([](const UStrategySoldier& A, const UStrategySoldier& B) {
-        return A.CurrentLoadout.Num() < B.CurrentLoadout.Num();
-    });
-
-    UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (smart priority) ==="), *UEnum::GetValueAsString(Faction));
-
-    // Priority order for items (highest value first — change this list anytime)
-    TArray<FString> ItemPriority = {
-        "Basic Armor", "M-16 Rifle", "Pistol", "Healthpack",
-        "Grenade", "Proximity Bomb", "Knife"
-    };
-
-    int32 ItemsBoughtThisDay = 0;
-    bool bBoughtAnything = false;
-
-    // === WAVE LOOP: keep buying until we can't afford anything more ===
-    while (true)
-    {
-        bool bFoundPurchase = false;
-
-        for (UStrategySoldier* Soldier : Roster)
-        {
-            if (!Soldier) continue;
-
-            // Skip fully equipped soldiers (temporary safety — we'll use class MaxLoadoutSize in Phase 2)
-            if (Soldier->CurrentLoadout.Num() >= 10) continue;
-
-            for (const FString& DesiredName : ItemPriority)
-            {
-                for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
-                {
-                    UItemDefinition* ItemDef = SoftItem.Get();
-                    if (!ItemDef) continue;
-                    if (ItemDef->ItemName.ToString() != DesiredName) continue;
-
-                    if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
-                    if (Soldier->CurrentLoadout.Contains(ItemDef)) continue; // already has it
-
-                    // Can we afford it?
-                    if (!ResourceMgr->CanAfford(Faction, ItemDef->PurchaseCost))
-                        continue;
-
-                    if (EngineeringMgr->PurchaseItem(Faction, ItemDef, Soldier))
-                    {
-                        UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier %s (now has %d items)"),
-                            *ItemDef->ItemName.ToString(), *Soldier->SoldierName, Soldier->CurrentLoadout.Num());
-
-                        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
-                        {
-                            EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, Soldier);
-                        }
-
-                        bBoughtAnything = true;
-                        bFoundPurchase = true;
-                        ItemsBoughtThisDay++;
-                        break;
-                    }
-                }
-                if (bFoundPurchase) break;
-            }
-            if (bFoundPurchase) break;
-        }
-
-        if (!bFoundPurchase)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[PURCHASE] %s outfitting wave complete — bought %d items today"),
-                *UEnum::GetValueAsString(Faction), ItemsBoughtThisDay);
-            break;  // nothing more we can buy this day
-        }
-    }
-
-    return bBoughtAnything;
 }
 
 bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase)
