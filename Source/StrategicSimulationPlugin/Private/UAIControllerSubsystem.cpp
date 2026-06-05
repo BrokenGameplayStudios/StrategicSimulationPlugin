@@ -156,9 +156,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
         for (EFacilityType FacType : DesiredOrder)
         {
-            UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Testing %s for build on base '%s'"),
-                *UEnum::GetValueAsString(FacType), *B->BaseName.ToString());
-
             bool bShouldBuild = false;
             if (FacType == EFacilityType::Command)
             {
