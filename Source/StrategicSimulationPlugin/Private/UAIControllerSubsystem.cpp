@@ -537,10 +537,9 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     return RecruitedThisDay > 0;
 }
 
-// === FULL FUNCTION: UAIControllerSubsystem::TryBuyAndEquip (Phase 2 - Class Aware) ===
-// Now respects each soldier's class AllowedItems and MaxLoadoutSize.
-// Soldiers only get items their class is allowed to carry.
-
+// === FULL FUNCTION: UAIControllerSubsystem::TryBuyAndEquip (Phase 2 - Class Aware - FIXED) ===
+// Corrected to use the actual member name "ClassDefinition" that exists in your GitHub version.
+// Everything else is exactly as planned for the class system.
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -574,16 +573,16 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
         for (UStrategySoldier* Soldier : Roster)
         {
-            if (!Soldier || !Soldier->SoldierClass) continue;
+            if (!Soldier || !Soldier->ClassDefinition) continue;
 
-            if (Soldier->CurrentLoadout.Num() >= Soldier->SoldierClass->MaxLoadoutSize) continue;
+            if (Soldier->CurrentLoadout.Num() >= Soldier->ClassDefinition->MaxLoadoutSize) continue;
 
             for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
             {
                 UItemDefinition* ItemDef = SoftItem.Get();
                 if (!ItemDef) continue;
 
-                if (!Soldier->SoldierClass->AllowedItems.Contains(SoftItem)) continue; // class restriction
+                if (!Soldier->ClassDefinition->AllowedItems.Contains(SoftItem)) continue; // class restriction
                 if (Soldier->CurrentLoadout.Contains(ItemDef)) continue;
 
                 if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
@@ -594,8 +593,8 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on %s (%s) (now has %d/%d items)"),
                         *ItemDef->ItemName.ToString(), *Soldier->SoldierName,
-                        *Soldier->SoldierClass->ClassName.ToString(),
-                        Soldier->CurrentLoadout.Num(), Soldier->SoldierClass->MaxLoadoutSize);
+                        *Soldier->ClassDefinition->ClassName.ToString(),
+                        Soldier->CurrentLoadout.Num(), Soldier->ClassDefinition->MaxLoadoutSize);
 
                     if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
                         EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, Soldier);
