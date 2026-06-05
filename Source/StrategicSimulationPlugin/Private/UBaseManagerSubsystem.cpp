@@ -76,7 +76,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] Initial Command Center is NOW OPERATIONAL in base '%s'"),
             *NewBase->BaseName.ToString());
 
-        // 2. Spawn the Commander using the FIRST class in SoldierClassDatabase
+        // 2. Spawn the Commander (first class in SoldierClassDatabase = DA_Sol_Commander)
         UStrategyCampaignSubsystem* CampaignSub = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
         USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
 
@@ -86,19 +86,18 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
             {
                 if (!DB->AvailableSoldierClasses.IsEmpty())
                 {
-                    USoldierClassDefinition* CommanderClass = DB->AvailableSoldierClasses[0].Get(); // FIRST = Commander
+                    USoldierClassDefinition* CommanderClass = DB->AvailableSoldierClasses[0].Get(); // index 0 = Commander
 
                     if (CommanderClass)
                     {
-                        // Use the public RecruitSoldier function (correct API)
                         UStrategySoldier* Commander = SoldierMgr->RecruitSoldier(Faction, CommanderClass, NewBase);
 
                         if (Commander)
                         {
-                            // Override name for the leader
+                            // Correct FString assignment (this was the syntax error)
                             Commander->SoldierName = (Faction == EFactionType::Human)
-                                ? FText::FromString("Sgt. Commander")
-                                : FText::FromString("Overlord Commander");
+                                ? FString("Sgt. Commander")
+                                : FString("Overlord Commander");
 
                             UE_LOG(LogTemp, Display, TEXT("[COMMANDER] %s spawned Commander (%s) in initial base '%s'"),
                                 *UEnum::GetValueAsString(Faction), *CommanderClass->ClassName.ToString(), *NewBase->BaseName.ToString());
