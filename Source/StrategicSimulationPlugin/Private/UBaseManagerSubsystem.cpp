@@ -20,11 +20,9 @@ void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     UE_LOG(LogTemp, Display, TEXT("UBaseManagerSubsystem initialized — multiple-base systems online"));
 }
 
-// === FULL FUNCTION: UBaseManagerSubsystem::BuildNewBase (DUPLICATE CC FIX) ===
-// This is the ONLY function that needs changing now.
-// The duplicate was caused by BuildFacility already adding the facility to the base,
-// then BuildNewBase adding it a second time.
-// We now remove the second AddFacility call (only the initial base case adds manually).
+// === FULL FUNCTION: UBaseManagerSubsystem::BuildNewBase (COMMANDER INTEGRATED) ===
+// Major change: Initial bases now automatically spawn the Commander (first class in database).
+// The Commander is assigned to the Command Center (home base) and does NOT use barracks slots.
 UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation)
 {
     UStrategyBase* NewBase = NewObject<UStrategyBase>(this);
@@ -42,12 +40,13 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
     UE_LOG(LogTemp, Display, TEXT("Built new base '%s' for %s at (%.0f, %.0f)"),
         *NewBase->BaseName.ToString(), *UEnum::GetValueAsString(Faction), MapLocation.X, MapLocation.Y);
 
-    // === SPECIAL CASE: Initial Command Center (free + instant, no cost) ===
+    // === SPECIAL CASE: Initial Command Center + Commander (free + instant) ===
     bool bIsInitialBase = (Faction == EFactionType::Enemy && EnemyBases.Num() == 1) ||
         (Faction == EFactionType::Human && HumanBases.Num() == 1);
 
     if (bIsInitialBase)
     {
+        // 1. Create the Command Center facility (unchanged)
         UStrategyFacility* CommandFacility = NewObject<UStrategyFacility>(this);
 
         if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
@@ -74,13 +73,43 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         NewBase->AddFacility(CommandFacility);
         NewBase->UpdatePowerFromFacilities();
 
-        UE_LOG(LogTemp, Display, TEXT("[FACILITY] Initial Command Center is NOW OPERATIONAL in base '%s' (instant for starting base)"),
+        UE_LOG(LogTemp, Display, TEXT("[FACILITY] Initial Command Center is NOW OPERATIONAL in base '%s'"),
             *NewBase->BaseName.ToString());
+
+        // 2. Spawn the Commander (using FIRST class in SoldierClassDatabase)
+        UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+        USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+
+        if (Campaign && SoldierMgr && Campaign->SoldierClassDatabaseAsset.IsValid())
+        {
+            if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
+            {
+                if (!DB->AvailableSoldierClasses.IsEmpty())
+                {
+                    USoldierClassDefinition* CommanderClass = DB->AvailableSoldierClasses[0].Get(); // FIRST in list = Commander
+
+                    if (CommanderClass)
+                    {
+                        // Create the commander soldier
+                        UStrategySoldier* Commander = NewObject<UStrategySoldier>(this);
+                        Commander->SoldierClass = CommanderClass;           // or ClassDefinition depending on your property name
+                        Commander->SoldierName = (Faction == EFactionType::Human) ? FText::FromString("Sgt. Commander") : FText::FromString("Overlord Commander");
+                        Commander->StationedBase = NewBase;
+                        Commander->CurrentLoadout.Empty(); // starts with no extra gear or use StartingGear if you want
+
+                        SoldierMgr->AddSoldier(Faction, Commander); // assume this function exists; if not, use your roster add logic
+
+                        UE_LOG(LogTemp, Display, TEXT("[COMMANDER] %s spawned Commander (%s) in initial base '%s'"),
+                            *UEnum::GetValueAsString(Faction), *CommanderClass->ClassName.ToString(), *NewBase->BaseName.ToString());
+                    }
+                }
+            }
+        }
 
         if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
             EventDisp->OnFacilityCompleted.Broadcast(Faction, CommandFacility);
 
-        UE_LOG(LogTemp, Display, TEXT("[AI] Initial 'Command Center' base created successfully"));
+        UE_LOG(LogTemp, Display, TEXT("[AI] Initial 'Command Center' base + Commander created successfully"));
         return NewBase;
     }
 
