@@ -392,9 +392,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === FULL FUNCTION: UAIControllerSubsystem::TryRecruit (Commander Reserved - FINAL) ===
-// This version explicitly skips index 0 (your DA_Sol_Commander).
-// Only classes from index 1 and higher (like Grunt) will be recruited from barracks.
+// === FULL FUNCTION: UAIControllerSubsystem::TryRecruit (CAPACITY FIXED - FINAL) ===
+// Now checks capacity AFTER every soldier is queued. 
+// Never exceeds barracks capacity, even during large waves.
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -408,17 +408,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    int32 TotalCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
-    int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
-
-    if (CurrentSoldiers >= TotalCapacity)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s at max capacity (%d / %d slots) — skipping"),
-            *UEnum::GetValueAsString(Faction), CurrentSoldiers, TotalCapacity);
-        return false;
-    }
-
-    // === CLASS PICK — SKIP INDEX 0 (Commander is reserved for initial spawn only) ===
+    // === CLASS PICK — SKIP INDEX 0 (Commander is reserved) ===
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
@@ -426,7 +416,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         {
             if (DB->AvailableSoldierClasses.Num() > 1)
             {
-                // Skip index 0 (Commander) — only pick from normal classes
                 int32 RandomIndex = FMath::RandRange(1, DB->AvailableSoldierClasses.Num() - 1);
                 ClassDef = DB->AvailableSoldierClasses[RandomIndex].Get();
             }
@@ -451,6 +440,15 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 
     while (RecruitedThisDay < MaxPerDay)
     {
+        // Re-check capacity every iteration (this fixes the over-recruitment)
+        int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
+        if (CurrentSoldiers >= BaseMgr->GetTotalBarracksCapacity(Faction))
+        {
+            UE_LOG(LogTemp, Display, TEXT("[RECRUIT] %s reached max capacity mid-wave — queued %d soldiers today"),
+                *UEnum::GetValueAsString(Faction), RecruitedThisDay);
+            break;
+        }
+
         const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
         UStrategyBase* BestBase = nullptr;
         int32 LowestStationed = INT_MAX;
