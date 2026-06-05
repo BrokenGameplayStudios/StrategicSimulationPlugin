@@ -6,7 +6,7 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
-#include "USoldierManagerSubsystem.h" // <-- added to access Soldier roster
+#include "USoldierManagerSubsystem.h"
 
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -22,7 +22,7 @@ void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation)
 {
-    UStrategyBase* NewBase = NewObject<UStrategyBase>(this);  // ← CHANGED
+    UStrategyBase* NewBase = NewObject<UStrategyBase>(this);
     NewBase->BaseName = BaseName.IsEmpty() ? FText::FromString("New Base") : BaseName;
     NewBase->MapLocation = MapLocation;
 
@@ -165,28 +165,13 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
         *FacilityDef->FacilityName.ToString(), FacilityDef->MaxBuilt);
 
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    if (ResourceMgr)
-    {
-        if (!ResourceMgr->CanAfford(Faction, FacilityDef->BuildCost))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot afford %s (%d Money, %d Metals, %d Biologicals, %d Chemicals needed)"),
-                *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money,
-                FacilityDef->BuildCost.Metals, FacilityDef->BuildCost.Biologicals, FacilityDef->BuildCost.Chemicals);
-            return nullptr;
-        }
 
-        // Resources OK
-        UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Resources check PASSED for %s"), *FacilityDef->FacilityName.ToString());
-
-        FResourceStockpile NegativeCost = FacilityDef->BuildCost;
-        NegativeCost.Money = -NegativeCost.Money;
-        NegativeCost.Metals = -NegativeCost.Metals;
-        NegativeCost.Biologicals = -NegativeCost.Biologicals;
-        NegativeCost.Chemicals = -NegativeCost.Chemicals;
-        ResourceMgr->AddResources(Faction, NegativeCost);
-    }
-
+    // ===============================
+    // STEP 1: Choose the target base 
+    // ===============================
     TArray<UStrategyBase*>& Bases = GetMutableBases(Faction);
+
+    // (Kept your original safety check — rare case for brand-new game)
     if (Bases.IsEmpty())
     {
         FVector2D DefaultLoc = FVector2D(960.f, 540.f);
@@ -215,21 +200,51 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
         return nullptr;
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Chosen base '%s' for %s"), *ChosenBase->BaseName.ToString(), *FacilityDef->FacilityName.ToString());
+    UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Chosen base '%s' for %s"),
+        *ChosenBase->BaseName.ToString(), *FacilityDef->FacilityName.ToString());
 
+    // ===================================================================
+    // STEP 2: PREREQUISITE CHECK — BEFORE ANY RESOURCE DEDUCTION
+    // ===================================================================
     if (FacilityDef->FacilityType != EFacilityType::Command)
     {
         if (!ChosenBase->HasOperationalCommandCenter())
         {
             UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot build %s — Command Center must be operational first in base '%s'!"),
                 *FacilityDef->FacilityName.ToString(), *ChosenBase->BaseName.ToString());
-            return nullptr;
+            return nullptr;   // ← EXIT HERE. No money is touched.
         }
     }
 
     UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Command Center check PASSED"));
 
-    // === Create the facility ===
+    // ===================================
+    // STEP 3: RESOURCE CHECK & DEDUCTION 
+    // ===================================
+    if (ResourceMgr)
+    {
+        if (!ResourceMgr->CanAfford(Faction, FacilityDef->BuildCost))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[BUILD] Cannot afford %s (%d Money, %d Metals, %d Biologicals, %d Chemicals needed)"),
+                *FacilityDef->FacilityName.ToString(), FacilityDef->BuildCost.Money,
+                FacilityDef->BuildCost.Metals, FacilityDef->BuildCost.Biologicals, FacilityDef->BuildCost.Chemicals);
+            return nullptr;
+        }
+
+        // Resources OK
+        UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Resources check PASSED for %s"), *FacilityDef->FacilityName.ToString());
+
+        FResourceStockpile NegativeCost = FacilityDef->BuildCost;
+        NegativeCost.Money = -NegativeCost.Money;
+        NegativeCost.Metals = -NegativeCost.Metals;
+        NegativeCost.Biologicals = -NegativeCost.Biologicals;
+        NegativeCost.Chemicals = -NegativeCost.Chemicals;
+        ResourceMgr->AddResources(Faction, NegativeCost);
+    }
+
+    // ============================
+    // STEP 4: Create the facility
+    // ============================
     UStrategyFacility* NewFacility = NewObject<UStrategyFacility>(this);
     NewFacility->FacilityDefinition = FacilityDef;
     NewFacility->BuildProgressDays = FacilityDef->BuildTimeDays;

@@ -374,8 +374,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === UPDATED: Uses data-driven soldier class cost and training time ===
-// Removed Laboratory gate so new bases can recruit as soon as they have barracks
+// === UPDATED TryRecruit (newest-base-first wave) ===
+// Soldiers now prioritize forward bases that have operational LivingQuarters + free slot
+// This fixes "soldiers only go to main base" while keeping everything else you already had
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -389,13 +390,11 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // Get total barracks capacity across ALL bases (global)
+    // Global barracks capacity check (unchanged)
     int32 TotalCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
     int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
 
-    // === COMMANDER EXCEPTION ===
-    // The initial "Sgt. Rookie" / "Overlord Rookie" is the owner/flag — he stays in Command Center
-    // and does NOT count against barracks capacity.
+    // Commander exception (the "Rookie" owner does not count against capacity)
     int32 CommanderCount = 0;
     for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
     {
@@ -411,7 +410,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // Get soldier class (first one in DB)
+    // Get the (first) soldier class definition
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
@@ -436,11 +435,11 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // Try to queue in any barracks with free production slot
-    // Prefer the current focus base first so new bases get soldiers quickly
+    // === WAVE RECRUITMENT: newest bases get priority (forward bases fill first) ===
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    for (UStrategyBase* Base : Bases)
+    for (int32 i = Bases.Num() - 1; i >= 0; --i)   // reverse order = newest base first
     {
+        UStrategyBase* Base = Bases[i];
         if (!Base) continue;
 
         for (UStrategyFacility* Barracks : Base->Facilities)
@@ -451,16 +450,17 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
             {
                 if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, ClassDef->TrainingDays))
                 {
+                    // Deduct cost only on successful queue
                     ResourceMgr->AddResources(Faction, FResourceStockpile{
                         -Cost.Money, -Cost.Metals, -Cost.Biologicals,
                         -Cost.Chemicals, -Cost.ExoticMaterial, -Cost.ResearchPoints });
 
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued %s training in %s (%d days) at base '%s'"),
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued %s training in %s (4 days) at base '%s'"),
                         *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(),
-                        *Barracks->FacilityDefinition->FacilityName.ToString(), ClassDef->TrainingDays,
+                        *Barracks->FacilityDefinition->FacilityName.ToString(),
                         *Base->BaseName.ToString());
 
-                    return true;
+                    return true;   // one recruit per day
                 }
             }
         }
