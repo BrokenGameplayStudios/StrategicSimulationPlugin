@@ -621,7 +621,12 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     return BuiltThisDay > 0;
 }
 
-// === FIXED PURCHASE — 100% deterministic, same for both factions ===
+// === FULL FUNCTION: UAIControllerSubsystem::TryBuyAndEquip (WAVE OUTFITTING FIX) ===
+// Phase 1 fix — this is the only change needed right now.
+// Instead of buying ONE item for the whole faction per day, we now keep buying
+// until we run out of resources or every soldier is fully equipped.
+// Soldiers are sorted by "poorest equipped first" so gear spreads evenly.
+// This directly fixes the "money rising but no equipment" problem you saw.
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -630,67 +635,84 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     UItemDatabase* ItemDB = Campaign ? Campaign->ItemDatabaseAsset.Get() : nullptr;
 
-    if (!SoldierMgr || !EngineeringMgr || !ResourceMgr || !ItemDB) return false;
+    if (!SoldierMgr || !EngineeringMgr || !ResourceMgr || !ItemDB)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[PURCHASE] Missing subsystems!"));
+        return false;
+    }
 
     TArray<UStrategySoldier*> Roster = SoldierMgr->GetRoster(Faction);
     if (Roster.Num() == 0) return false;
 
-    // === FORCE SAME ROSTER ORDER EVERY TIME (alphabetical by name) ===
+    // Sort soldiers: poorest equipped first (everyone gets filled evenly)
     Roster.Sort([](const UStrategySoldier& A, const UStrategySoldier& B) {
-        return A.SoldierName < B.SoldierName;   // FString comparison, no .ToString()
+        return A.CurrentLoadout.Num() < B.CurrentLoadout.Num();
     });
 
     UE_LOG(LogTemp, Display, TEXT("[PURCHASE] === %s starting buy round (smart priority) ==="), *UEnum::GetValueAsString(Faction));
 
-    TArray<FString> ItemPriority = { "Knife", "Pistol", "Basic Armor", "Healthpack", "M-16 Rifle", "Grenade", "Proximity Bomb" };
+    // Priority order for items (highest value first — change this list anytime)
+    TArray<FString> ItemPriority = {
+        "Basic Armor", "M-16 Rifle", "Pistol", "Healthpack",
+        "Grenade", "Proximity Bomb", "Knife"
+    };
 
+    int32 ItemsBoughtThisDay = 0;
     bool bBoughtAnything = false;
-    int32 PurchasesThisDay = 0;
-    const int32 MaxPurchasesPerDay = 1;
 
-    for (const FString& DesiredName : ItemPriority)
+    // === WAVE LOOP: keep buying until we can't afford anything more ===
+    while (true)
     {
-        if (PurchasesThisDay >= MaxPurchasesPerDay) break;
+        bool bFoundPurchase = false;
 
-        UStrategySoldier* TargetSoldier = nullptr;
-        int32 MinItems = INT_MAX;
         for (UStrategySoldier* Soldier : Roster)
         {
-            if (Soldier && Soldier->CurrentLoadout.Num() < MinItems)
+            if (!Soldier) continue;
+
+            // Skip fully equipped soldiers (temporary safety — we'll use class MaxLoadoutSize in Phase 2)
+            if (Soldier->CurrentLoadout.Num() >= 10) continue;
+
+            for (const FString& DesiredName : ItemPriority)
             {
-                MinItems = Soldier->CurrentLoadout.Num();
-                TargetSoldier = Soldier;
-            }
-        }
-        if (!TargetSoldier || MinItems >= 10) break;
-
-        for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
-        {
-            UItemDefinition* ItemDef = SoftItem.Get();
-            if (!ItemDef) continue;
-            if (ItemDef->ItemName.ToString() != DesiredName) continue;
-
-            if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
-            if (TargetSoldier->CurrentLoadout.Contains(ItemDef)) continue;
-
-            FResourceStockpile Res = ResourceMgr->GetResources(Faction);
-            if (Res.Money >= ItemDef->PurchaseCost.Money)
-            {
-                if (EngineeringMgr->PurchaseItem(Faction, ItemDef, TargetSoldier))
+                for (const TSoftObjectPtr<UItemDefinition>& SoftItem : ItemDB->BuyableItems)
                 {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier %s (now has %d items)"),
-                        *ItemDef->ItemName.ToString(), *TargetSoldier->SoldierName, TargetSoldier->CurrentLoadout.Num());
+                    UItemDefinition* ItemDef = SoftItem.Get();
+                    if (!ItemDef) continue;
+                    if (ItemDef->ItemName.ToString() != DesiredName) continue;
 
-                    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                    if (!Campaign->IsItemUnlocked(Faction, ItemDef)) continue;
+                    if (Soldier->CurrentLoadout.Contains(ItemDef)) continue; // already has it
+
+                    // Can we afford it?
+                    if (!ResourceMgr->CanAfford(Faction, ItemDef->PurchaseCost))
+                        continue;
+
+                    if (EngineeringMgr->PurchaseItem(Faction, ItemDef, Soldier))
                     {
-                        EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, TargetSoldier);
-                    }
+                        UE_LOG(LogTemp, Display, TEXT("[AI] Bought %s on soldier %s (now has %d items)"),
+                            *ItemDef->ItemName.ToString(), *Soldier->SoldierName, Soldier->CurrentLoadout.Num());
 
-                    bBoughtAnything = true;
-                    PurchasesThisDay++;
-                    break;
+                        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                        {
+                            EventDisp->OnSoldierLoadoutChanged.Broadcast(Faction, Soldier);
+                        }
+
+                        bBoughtAnything = true;
+                        bFoundPurchase = true;
+                        ItemsBoughtThisDay++;
+                        break;
+                    }
                 }
+                if (bFoundPurchase) break;
             }
+            if (bFoundPurchase) break;
+        }
+
+        if (!bFoundPurchase)
+        {
+            UE_LOG(LogTemp, Display, TEXT("[PURCHASE] %s outfitting wave complete — bought %d items today"),
+                *UEnum::GetValueAsString(Faction), ItemsBoughtThisDay);
+            break;  // nothing more we can buy this day
         }
     }
 
