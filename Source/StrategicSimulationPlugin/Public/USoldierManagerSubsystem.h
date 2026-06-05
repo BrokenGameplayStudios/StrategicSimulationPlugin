@@ -16,6 +16,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Soldier")
     UStrategySoldier* RecruitSoldier(EFactionType Faction, USoldierClassDefinition* ClassDef, UStrategyBase* TargetBase);
+        
+    UFUNCTION(BlueprintCallable, Category = "Soldier")
+    UStrategySoldier* GetCommander(EFactionType Faction) const;
 
     UFUNCTION(BlueprintCallable, Category = "Soldier")
     void FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset, EFactionType Faction);

@@ -11,23 +11,6 @@
 void USoldierManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-
-    USoldierClassDefinition* DefaultClass = NewObject<USoldierClassDefinition>();
-    DefaultClass->ClassName = FText::FromString("Rookie");
-
-    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-
-    UStrategyBase* HumanBase = nullptr;
-    if (BaseMgr && !BaseMgr->GetBases(EFactionType::Human).IsEmpty())
-        HumanBase = BaseMgr->GetBases(EFactionType::Human)[0];
-    RecruitSoldier(EFactionType::Human, DefaultClass, HumanBase);
-
-    UStrategyBase* EnemyBase = nullptr;
-    if (BaseMgr && !BaseMgr->GetBases(EFactionType::Enemy).IsEmpty())
-        EnemyBase = BaseMgr->GetBases(EFactionType::Enemy)[0];
-    RecruitSoldier(EFactionType::Enemy, DefaultClass, EnemyBase);
-
-    UE_LOG(LogTemp, Display, TEXT("USoldierManagerSubsystem initialized — rosters created for both factions"));
 }
 
 UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction, USoldierClassDefinition* ClassDef, UStrategyBase* TargetBase)
@@ -176,4 +159,20 @@ void USoldierManagerSubsystem::BroadcastSoldierListChanged(EFactionType Faction)
     {
         Disp->OnSoldierListChanged.Broadcast(Faction, Faction == EFactionType::Enemy ? EnemyRoster : HumanRoster);
     }
+}
+
+// === NEW FUNCTION: USoldierManagerSubsystem::GetCommander ===
+UStrategySoldier* USoldierManagerSubsystem::GetCommander(EFactionType Faction) const
+{
+    const TArray<UStrategySoldier*>& Roster = GetRoster(Faction);
+
+    for (UStrategySoldier* Soldier : Roster)
+    {
+        if (Soldier && Soldier->ClassDefinition &&
+            Soldier->ClassDefinition->ClassName.ToString().Contains("Commander"))
+        {
+            return Soldier;
+        }
+    }
+    return nullptr;
 }

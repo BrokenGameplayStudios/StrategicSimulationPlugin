@@ -392,10 +392,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === FULL FUNCTION: UAIControllerSubsystem::TryRecruit (FINAL - Commander Ready) ===
-// Now works with your new DA_Sol_Commander (0 cost, 0 training days).
-// The first soldier produced will often be the Commander because it is in the database.
-// Capacity check is now 100% reliable (no more over-recruitment).
+// === FULL FUNCTION: UAIControllerSubsystem::TryRecruit (Commander Reserved - FINAL) ===
+// This version explicitly skips index 0 (your DA_Sol_Commander).
+// Only classes from index 1 and higher (like Grunt) will be recruited from barracks.
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -419,19 +418,26 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // Random class pick — Commander (DA_Sol_Commander) is now available in the database
+    // === CLASS PICK — SKIP INDEX 0 (Commander is reserved for initial spawn only) ===
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
         if (USoldierClassDatabase* DB = Campaign->SoldierClassDatabaseAsset.Get())
         {
-            if (!DB->AvailableSoldierClasses.IsEmpty())
+            if (DB->AvailableSoldierClasses.Num() > 1)
             {
-                int32 RandomIndex = FMath::RandRange(0, DB->AvailableSoldierClasses.Num() - 1);
+                // Skip index 0 (Commander) — only pick from normal classes
+                int32 RandomIndex = FMath::RandRange(1, DB->AvailableSoldierClasses.Num() - 1);
                 ClassDef = DB->AvailableSoldierClasses[RandomIndex].Get();
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] Only Commander class exists — add more classes to database"));
+                return false;
             }
         }
     }
+
     if (!ClassDef)
     {
         UE_LOG(LogTemp, Warning, TEXT("[RECRUIT] No soldier class definition found!"));
