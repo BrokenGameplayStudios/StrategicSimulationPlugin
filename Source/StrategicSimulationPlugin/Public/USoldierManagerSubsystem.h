@@ -38,10 +38,26 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void Debug_PrintTeamRoster(EFactionType Faction) const;
 
-private:
-    UPROPERTY(VisibleAnywhere, Transient)
-    TArray<UStrategySoldier*> HumanRoster;
+    // === NEW: POW/KIA SYSTEM (Phase 1) ===
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    const TArray<UStrategySoldier*>& GetPOWRoster(EFactionType Faction) const;
 
-    UPROPERTY(VisibleAnywhere, Transient)
-    TArray<UStrategySoldier*> EnemyRoster;
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void CaptureAsPOW(EFactionType CapturingFaction, UStrategySoldier* Soldier);   // moves soldier to POW roster + frees slot
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier);               // removes permanently
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void ReleasePOW(UStrategySoldier* POW);  // future-proof (trade/recruit later)
+
+private:
+
+    // Exsisting Rosters
+    UPROPERTY(VisibleAnywhere, Transient) TArray<UStrategySoldier*> HumanRoster;
+    UPROPERTY(VisibleAnywhere, Transient) TArray<UStrategySoldier*> EnemyRoster;
+
+    // NEW POW rosters (separate, per faction)
+    UPROPERTY(VisibleAnywhere, Transient) TArray<UStrategySoldier*> HumanPOWRoster;
+    UPROPERTY(VisibleAnywhere, Transient) TArray<UStrategySoldier*> EnemyPOWRoster;
 };

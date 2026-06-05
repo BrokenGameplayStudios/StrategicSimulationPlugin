@@ -475,3 +475,11 @@ TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() cons
     }
     return Saves;
 }
+
+void UStrategyCampaignSubsystem::SetPOWChance(float NewCaptureChance, float NewKIAChance)
+{
+    POWCaptureChanceOnVictory = FMath::Clamp(NewCaptureChance, 0.0f, 1.0f);
+    KIAChanceOnVictory = FMath::Clamp(NewKIAChance, 0.0f, 1.0f);
+    UE_LOG(LogTemp, Display, TEXT("[POW/KIA] Debug chances updated → Capture: %.0f%% | KIA: %.0f%% on victory"),
+        POWCaptureChanceOnVictory * 100.0f, KIAChanceOnVictory * 100.0f);
+}

@@ -40,6 +40,13 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     bool bIsWounded = false;
 
+    // === NEW: POW / KIA flags (Phase 1) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "POW/KIA")
+    bool bIsPOW = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "POW/KIA")
+    bool bIsKIA = false;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     int32 DaysUntilRecovered = 0;
 

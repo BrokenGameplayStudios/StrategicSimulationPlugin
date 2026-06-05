@@ -176,3 +176,60 @@ UStrategySoldier* USoldierManagerSubsystem::GetCommander(EFactionType Faction) c
     }
     return nullptr;
 }
+
+// === NEW POW/KIA FUNCTIONS (Phase 1) ===
+
+const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetPOWRoster(EFactionType Faction) const
+{
+    return (Faction == EFactionType::Human) ? HumanPOWRoster : EnemyPOWRoster;
+}
+
+void USoldierManagerSubsystem::CaptureAsPOW(EFactionType CapturingFaction, UStrategySoldier* Soldier)
+{
+    if (!Soldier) return;
+
+    // Remove from original active roster
+    if (CapturingFaction == EFactionType::Human)
+    {
+        EnemyRoster.Remove(Soldier);
+        HumanPOWRoster.Add(Soldier);
+    }
+    else
+    {
+        HumanRoster.Remove(Soldier);
+        EnemyPOWRoster.Add(Soldier);
+    }
+
+    // Soldier->bIsPOW = true;                    // assume UStrategySoldier has this bool (added in next step)
+    Soldier->StationedBase = nullptr;          // no longer occupies a barracks slot
+
+    BroadcastSoldierListChanged(CapturingFaction == EFactionType::Human ? EFactionType::Human : EFactionType::Enemy);
+    BroadcastSoldierListChanged(CapturingFaction == EFactionType::Human ? EFactionType::Enemy : EFactionType::Human);
+
+    UE_LOG(LogTemp, Display, TEXT("[POW] %s captured enemy soldier '%s' as POW!"),
+        *UEnum::GetValueAsString(CapturingFaction), *Soldier->SoldierName);
+}
+
+void USoldierManagerSubsystem::MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier)
+{
+    if (!Soldier) return;
+
+    // Remove from active roster (KIA = gone)
+    if (Faction == EFactionType::Human)
+        HumanRoster.Remove(Soldier);
+    else
+        EnemyRoster.Remove(Soldier);
+
+    // KIA bodies can be recovered later via Autopsy (Phase 2)
+    Soldier->bIsKIA = true;   // future-proof flag
+
+   // BroadcastSoldierListChanged(Faction);
+     UE_LOG(LogTemp, Display, TEXT("[KIA] %s soldier '%s' marked KIA"), *UEnum::GetValueAsString(Faction), *Soldier->SoldierName);
+}
+
+void USoldierManagerSubsystem::ReleasePOW(UStrategySoldier* POW)
+{
+     if (!POW || !POW->bIsPOW) return;
+    // TODO: Phase 4 – release/trade/recruit logic
+     UE_LOG(LogTemp, Display, TEXT("[POW] POW '%s' released (placeholder)"), *POW->SoldierName);
+}

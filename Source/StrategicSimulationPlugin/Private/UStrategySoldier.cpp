@@ -7,6 +7,8 @@ UStrategySoldier::UStrategySoldier()
     CurrentStats.Health = 10;
     Status = ESoldierStatus::Healthy;
     bIsWounded = false;
+    bIsPOW = false;      // NEW
+    bIsKIA = false;      // NEW
     DaysUntilRecovered = 0;
 }
 
@@ -67,12 +69,14 @@ void UStrategySoldier::UpdateStatusFromHealth()
 
 void UStrategySoldier::PrintInfo() const
 {
-    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] %s | Class: %s | Health: %d | Status: %s | Wounded: %s | Days to recover: %d"),
+    UE_LOG(LogTemp, Display, TEXT("[SOLDIER] %s | Class: %s | Health: %d | Status: %s | Wounded: %s | POW: %s | KIA: %s | Days to recover: %d"),
         *SoldierName,
         ClassDefinition ? *ClassDefinition->ClassName.ToString() : TEXT("None"),
         CurrentStats.Health,
         *UEnum::GetValueAsString(Status),
         bIsWounded ? TEXT("Yes") : TEXT("No"),
+        bIsPOW ? TEXT("Yes") : TEXT("No"),
+        bIsKIA ? TEXT("Yes") : TEXT("No"),
         DaysUntilRecovered);
 }
 
