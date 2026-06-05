@@ -376,6 +376,10 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 }
 
 // === UPDATED TryRecruit — BALANCED across ALL bases (newest-first but spreads + backfills after KIA/POW) ===
+// This is the main fix for the daily trickle. Instead of queuing ONE soldier per day,
+// we now keep queuing until we run out of free production slots across ALL barracks
+// or run out of resources. Each facility (barracks) decides for itself whether it
+// can start production that day — exactly as you described (per-base controller).
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -424,44 +428,71 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 
     const FResourceStockpile& Cost = ClassDef->TrainingCost;
 
-    if (!ResourceMgr->CanAfford(Faction, Cost))
+    // === WAVE LOOP START ===
+    // This is the key change: we no longer return after one recruit.
+    // We keep going as long as we have open production slots in any barracks
+    // AND enough resources. This gives you the 6x6x4 = 144 troops in one day
+    // example you described (if resources allow).
+    int32 RecruitedThisDay = 0;
+    const int32 MaxPerDay = 999; // safety cap — can be turned into UPROPERTY later if you want
+
+    while (RecruitedThisDay < MaxPerDay)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s cannot afford soldier training (needs %d Money) — saving resources"),
-            *UEnum::GetValueAsString(Faction), Cost.Money);
-        return false;
-    }
+        // Find the best base: lowest stationed soldiers that has at least one barracks
+        // with a free production slot. This fixes the "stuck on last base" bug
+        // because we now correctly count soldiers PER BASE (the old GetStationedSoldiers()
+        // was returning the global roster every time).
+        const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+        UStrategyBase* BestBase = nullptr;
+        int32 LowestStationed = INT_MAX;
 
-    // === BALANCED RECRUITMENT: find the base with the FEWEST soldiers that has a free barracks slot ===
-    // This spreads soldiers evenly and automatically backfills after KIA/POW (old bases get priority when they drop below others)
-    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    UStrategyBase* BestBase = nullptr;
-    int32 LowestSoldiers = INT_MAX;
-
-    for (int32 i = Bases.Num() - 1; i >= 0; --i)   // still prefer newest for wave feel, but balance wins
-    {
-        UStrategyBase* Base = Bases[i];
-        if (!Base) continue;
-
-        int32 Stationed = Base->GetStationedSoldiers().Num();   // count stationed soldiers per base
-
-        for (UStrategyFacility* Barracks : Base->Facilities)
+        for (int32 i = Bases.Num() - 1; i >= 0; --i)   // newest-first priority (wave expansion feel)
         {
-            if (Barracks && Barracks->FacilityDefinition &&
-                Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters &&
-                Barracks->HasFreeProductionSlot())
+            UStrategyBase* Base = Bases[i];
+            if (!Base) continue;
+
+            // === CORRECT PER-BASE SOLDIER COUNT (this was the root of the stuck-on-last-base bug) ===
+            int32 Stationed = 0;
+            for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
             {
-                if (Stationed < LowestSoldiers)
+                if (Soldier && Soldier->StationedBase == Base)  // assumes your soldier has a UStrategyBase* StationedBase property
+                    Stationed++;
+            }
+
+            bool bHasFreeSlot = false;
+            for (UStrategyFacility* Barracks : Base->Facilities)
+            {
+                if (Barracks && Barracks->FacilityDefinition &&
+                    Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters &&
+                    Barracks->HasFreeProductionSlot())
                 {
-                    LowestSoldiers = Stationed;
-                    BestBase = Base;
+                    bHasFreeSlot = true;
+                    break;  // we only care that this base has at least one usable barracks
                 }
-                break; // one barracks per base is enough for consideration
+            }
+
+            if (bHasFreeSlot && Stationed < LowestStationed)
+            {
+                LowestStationed = Stationed;
+                BestBase = Base;
             }
         }
-    }
 
-    if (BestBase)
-    {
+        if (!BestBase)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] No base with free barracks slot found for %s"), *UEnum::GetValueAsString(Faction));
+            break;  // no more slots anywhere — wave is done
+        }
+
+        if (!ResourceMgr->CanAfford(Faction, Cost))
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] %s ran out of resources mid-wave — queued %d soldiers today"),
+                *UEnum::GetValueAsString(Faction), RecruitedThisDay);
+            break;
+        }
+
+        // Queue one soldier into this base's barracks and continue the wave
+        bool bQueued = false;
         for (UStrategyFacility* Barracks : BestBase->Facilities)
         {
             if (Barracks && Barracks->FacilityDefinition &&
@@ -470,28 +501,42 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
             {
                 if (Barracks->StartProduction(EProductionType::Soldier, ClassDef, ClassDef->TrainingDays))
                 {
+                    // Deduct cost
                     ResourceMgr->AddResources(Faction, FResourceStockpile{
                         -Cost.Money, -Cost.Metals, -Cost.Biologicals,
                         -Cost.Chemicals, -Cost.ExoticMaterial, -Cost.ResearchPoints });
 
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued %s training in %s (4 days) at base '%s'"),
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s WAVE RECRUIT — queued %s in %s at base '%s' (slots left: %d)"),
                         *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(),
                         *Barracks->FacilityDefinition->FacilityName.ToString(),
-                        *BestBase->BaseName.ToString());
+                        *BestBase->BaseName.ToString(),
+                        Barracks->GetAvailableProductionSlots());  // assuming you have this helper; if not, remove this line
 
-                    return true;
+                    RecruitedThisDay++;
+                    bQueued = true;
+                    break;
                 }
             }
         }
+
+        if (!bQueued)
+            break;  // safety — should never happen
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[RECRUIT] No free production slots in any barracks for %s"), *UEnum::GetValueAsString(Faction));
-    return false;
+    UE_LOG(LogTemp, Display, TEXT("[RECRUIT] %s wave complete — recruited %d soldiers today"),
+        *UEnum::GetValueAsString(Faction), RecruitedThisDay);
+
+    return RecruitedThisDay > 0;
 }
 
-// === UPDATED: Queues vehicle construction in Hanger using Production Slots ===
+// === FULL FUNCTION: UAIControllerSubsystem::TryBuildVehicle (WAVE VERSION) ===
+// Same wave logic as TryRecruit. Hangars now act as their own controllers —
+// multiple vehicles can be started in one day if multiple slots exist.
 bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
 {
+    if (!TargetBase)
+        return false;
+
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
     if (!Campaign) return false;
 
@@ -508,36 +553,55 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (!ResourceMgr) return false;
 
-    FResourceStockpile Res = ResourceMgr->GetResources(Faction);
+    // === WAVE LOOP START ===
+    int32 BuiltThisDay = 0;
+    const int32 MaxPerDay = 999;
 
-    if (!ResourceMgr->CanAfford(Faction, VehDef->BuildCost))
+    while (BuiltThisDay < MaxPerDay)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[AI] %s cannot afford vehicle '%s' (needs %d Money, %d Metals, %d Biologicals, %d Chemicals)"),
-            *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(),
-            VehDef->BuildCost.Money, VehDef->BuildCost.Metals, VehDef->BuildCost.Biologicals, VehDef->BuildCost.Chemicals);
-        return false;
-    }
-
-    for (UStrategyFacility* Hanger : TargetBase->Facilities)
-    {
-        if (Hanger && Hanger->FacilityDefinition && Hanger->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+        if (!ResourceMgr->CanAfford(Faction, VehDef->BuildCost))
         {
-            if (Hanger->HasFreeProductionSlot())
+            UE_LOG(LogTemp, Verbose, TEXT("[AI] %s ran out of resources mid-vehicle wave — built %d vehicles today"),
+                *UEnum::GetValueAsString(Faction), BuiltThisDay);
+            break;
+        }
+
+        bool bQueued = false;
+        for (UStrategyFacility* Hanger : TargetBase->Facilities)
+        {
+            if (Hanger && Hanger->FacilityDefinition &&
+                Hanger->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
+                Hanger->HasFreeProductionSlot())
             {
                 if (Hanger->StartProduction(EProductionType::Vehicle, VehDef, VehDef->ProductionDays))
                 {
-                    ResourceMgr->AddResources(Faction, { -VehDef->BuildCost.Money, -VehDef->BuildCost.Metals, -VehDef->BuildCost.Biologicals, -VehDef->BuildCost.Chemicals, 0, 0 });
+                    ResourceMgr->AddResources(Faction, {
+                        -VehDef->BuildCost.Money,
+                        -VehDef->BuildCost.Metals,
+                        -VehDef->BuildCost.Biologicals,
+                        -VehDef->BuildCost.Chemicals,
+                        0, 0 });
 
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s queued vehicle '%s' in hanger (%d days)"),
-                        *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(), VehDef->ProductionDays);
-                    return true;
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s WAVE VEHICLE — queued '%s' in hanger at base '%s' (slots left: %d)"),
+                        *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(),
+                        *TargetBase->BaseName.ToString(),
+                        Hanger->GetAvailableProductionSlots());
+
+                    BuiltThisDay++;
+                    bQueued = true;
+                    break;
                 }
             }
         }
+
+        if (!bQueued)
+            break;  // no more free hangar slots in this base
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s has operational hanger but no free production slot for vehicle"), *UEnum::GetValueAsString(Faction));
-    return false;
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s vehicle wave complete — built %d vehicles today"),
+        *UEnum::GetValueAsString(Faction), BuiltThisDay);
+
+    return BuiltThisDay > 0;
 }
 
 // === FIXED PURCHASE — 100% deterministic, same for both factions ===
