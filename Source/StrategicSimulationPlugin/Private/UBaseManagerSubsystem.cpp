@@ -76,7 +76,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] Initial Command Center is NOW OPERATIONAL in base '%s'"),
             *NewBase->BaseName.ToString());
 
-        // 2. Spawn the Commander (uses FIRST class in SoldierClassDatabase)
+        // 2. Spawn the Commander using the FIRST class in SoldierClassDatabase
         UStrategyCampaignSubsystem* CampaignSub = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
         USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
 
@@ -90,19 +90,19 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
                     if (CommanderClass)
                     {
-                        UStrategySoldier* Commander = NewObject<UStrategySoldier>(this);
-                        Commander->ClassDefinition = CommanderClass;   // correct property name
-                        Commander->SoldierName = (Faction == EFactionType::Human) ? TEXT("Sgt. Commander") : TEXT("Overlord Commander");
-                        Commander->StationedBase = NewBase;
+                        // Use the public RecruitSoldier function (correct API)
+                        UStrategySoldier* Commander = SoldierMgr->RecruitSoldier(Faction, CommanderClass, NewBase);
 
-                        // Add directly to roster (matches how the subsystem does it internally)
-                        if (Faction == EFactionType::Human)
-                            SoldierMgr->HumanRoster.Add(Commander);
-                        else
-                            SoldierMgr->EnemyRoster.Add(Commander);
+                        if (Commander)
+                        {
+                            // Override name for the leader
+                            Commander->SoldierName = (Faction == EFactionType::Human)
+                                ? FText::FromString("Sgt. Commander")
+                                : FText::FromString("Overlord Commander");
 
-                        UE_LOG(LogTemp, Display, TEXT("[COMMANDER] %s spawned Commander (%s) in initial base '%s'"),
-                            *UEnum::GetValueAsString(Faction), *CommanderClass->ClassName.ToString(), *NewBase->BaseName.ToString());
+                            UE_LOG(LogTemp, Display, TEXT("[COMMANDER] %s spawned Commander (%s) in initial base '%s'"),
+                                *UEnum::GetValueAsString(Faction), *CommanderClass->ClassName.ToString(), *NewBase->BaseName.ToString());
+                        }
                     }
                 }
             }
@@ -115,7 +115,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         return NewBase;
     }
 
-    // === NORMAL PAID EXPANSION (unchanged from your current code) ===
+    // === NORMAL PAID EXPANSION (unchanged) ===
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
 
