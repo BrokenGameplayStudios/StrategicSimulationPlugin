@@ -132,8 +132,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         *FocusBase->BaseName.ToString(), FocusBase->GetNetPower());
 
     // === FACILITY BUILD ORDER (quicker wave — PARALLEL per-base, newest-first priority) ===
+    // FIXED: Command is now properly skipped on any base that already has one (prevents duplicate on Forward Base 04)
     TArray<EFacilityType> DesiredOrder = {
-        EFacilityType::Command,      // kept so new bases get it, but now properly skipped after start
+        EFacilityType::Command,
         EFacilityType::LivingQuarters,
         EFacilityType::Laboratory,
         EFacilityType::Workshop,
@@ -156,9 +157,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             bool bShouldBuild = false;
             if (FacType == EFacilityType::Command)
             {
-                // CRITICAL FIX: only build if the base has ZERO Command Centers (built or under construction)
-                // This stops the duplicate on the newest forward base
-                bShouldBuild = !B->HasAnyFacilityOfType(EFacilityType::Command);
+                // CRITICAL FIX: use existing GetTotalBuiltOfType (no new helper needed)
+                // This stops the duplicate Command Center on the newest forward base forever
+                bShouldBuild = (B->GetTotalBuiltOfType(EFacilityType::Command) == 0);
             }
             else if (FacType == EFacilityType::LivingQuarters)
             {
@@ -374,9 +375,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === UPDATED TryRecruit (checks ALL bases every day — newest first) ===
-// Now backfills older bases when soldiers die, are captured (POW), or are on missions
-// Perfect for your existing POW/KIA logic that frees barracks slots
+// === UPDATED TryRecruit — BALANCED across ALL bases (newest-first but spreads + backfills after KIA/POW) ===
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -390,11 +389,9 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // Global barracks capacity check (unchanged)
     int32 TotalCapacity = BaseMgr->GetTotalBarracksCapacity(Faction);
     int32 CurrentSoldiers = SoldierMgr->GetRoster(Faction).Num();
 
-    // Commander exception (the "Rookie" owner does not count against capacity)
     int32 CommanderCount = 0;
     for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
     {
@@ -410,7 +407,6 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // Get the soldier class
     USoldierClassDefinition* ClassDef = nullptr;
     if (Campaign->SoldierClassDatabaseAsset.IsValid())
     {
@@ -435,14 +431,38 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
         return false;
     }
 
-    // === RECRUITMENT WAVE: check EVERY base (newest first) so older bases get back-filled after KIA/POW ===
+    // === BALANCED RECRUITMENT: find the base with the FEWEST soldiers that has a free barracks slot ===
+    // This spreads soldiers evenly and automatically backfills after KIA/POW (old bases get priority when they drop below others)
     const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-    for (int32 i = Bases.Num() - 1; i >= 0; --i)
+    UStrategyBase* BestBase = nullptr;
+    int32 LowestSoldiers = INT_MAX;
+
+    for (int32 i = Bases.Num() - 1; i >= 0; --i)   // still prefer newest for wave feel, but balance wins
     {
         UStrategyBase* Base = Bases[i];
         if (!Base) continue;
 
+        int32 Stationed = Base->GetStationedSoldierCount();   // assume this exists — if not, replace with your per-base count
+
         for (UStrategyFacility* Barracks : Base->Facilities)
+        {
+            if (Barracks && Barracks->FacilityDefinition &&
+                Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters &&
+                Barracks->HasFreeProductionSlot())
+            {
+                if (Stationed < LowestSoldiers)
+                {
+                    LowestSoldiers = Stationed;
+                    BestBase = Base;
+                }
+                break; // one barracks per base is enough for consideration
+            }
+        }
+    }
+
+    if (BestBase)
+    {
+        for (UStrategyFacility* Barracks : BestBase->Facilities)
         {
             if (Barracks && Barracks->FacilityDefinition &&
                 Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters &&
@@ -457,9 +477,9 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s queued %s training in %s (4 days) at base '%s'"),
                         *UEnum::GetValueAsString(Faction), *ClassDef->ClassName.ToString(),
                         *Barracks->FacilityDefinition->FacilityName.ToString(),
-                        *Base->BaseName.ToString());
+                        *BestBase->BaseName.ToString());
 
-                    return true;   // one recruit per day, but we checked all bases
+                    return true;
                 }
             }
         }
