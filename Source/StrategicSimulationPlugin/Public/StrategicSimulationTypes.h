@@ -98,17 +98,19 @@ enum class ETechTier : uint8
 UENUM(BlueprintType)
 enum class EFacilityType : uint8
 {
-    Command,
-    LivingQuarters,
-    Laboratory,
-    Workshop,
-    VehicleRepair, // Will be used for VehicleRepair bay
-    Storage,
-    Defense,
-    Hanger,
-    Medical,
-    PowerPlant,
-    Special
+    Command,            // Base Heart.
+    LivingQuarters,     // Holds / Generates Soldiers
+    Laboratory,         // Research
+    Workshop,           // Generate Items and Metal
+    VehicleRepair,      // Will be used for VehicleRepair bay
+    Storage,            // Provides more metal, TODO Perbaee ITEM Stockpile limits.
+    Defense,            // Special for attack protection
+    Hanger,             // Generates and holds vehicles.
+    Medical,            // Heals Soldiers
+    Containment,        // NEW - holds POWs, daily intel/research bonus per POW
+    Autopsy,            // NEW - processes KIA bodies → research/exotics
+    PowerPlant,         // Increase base power bandiwdth.
+    Special             // Special
 };
 
 UENUM(BlueprintType)

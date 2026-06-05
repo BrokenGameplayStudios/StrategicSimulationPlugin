@@ -145,7 +145,9 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         EFacilityType::Workshop,
         EFacilityType::Hanger,
         EFacilityType::Medical,
-        EFacilityType::VehicleRepair
+        EFacilityType::VehicleRepair,
+        EFacilityType::Containment,   // Phase 2
+        EFacilityType::Autopsy        // Phase 2
     };
 
     for (int32 i = AllBases.Num() - 1; i >= 0; --i)   // newest bases get first priority every day (true wave)
@@ -159,17 +161,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             bool bShouldBuild = false;
             if (FacType == EFacilityType::Command)
             {
-                // =====================================================================
-                // CRITICAL FIX FOR DUPLICATE COMMAND CENTERS (FB03 / FB04)
-                // =====================================================================
-                // PREVIOUS CODE (broken): bShouldBuild = (B->GetTotalBuiltOfType(EFacilityType::Command) == 0);
-                // 
-                // WHY IT WAS BROKEN:
-                // When BuildNewBase creates a forward base, it immediately adds a Command Center
-                // with bIsOperational = false (still under construction). GetTotalBuiltOfType
-                // ONLY counts operational facilities, so it always returned 0 on the newest base.
-                // Result: duplicate Command Center every single day on FB03 and FB04.
-                // 
                 // NEW CODE: Use HasAnyFacilityOfType (already exists in UStrategyBase)
                 // This counts BOTH built AND under-construction Command Centers → exactly ONE per base forever.
                 // No new helper functions needed.
@@ -180,6 +171,31 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 bool bCoreLayerDone = B->HasOperationalFacilityOfType(EFacilityType::Laboratory);
                 int32 CurrentBarracks = B->GetTotalBuiltOfType(EFacilityType::LivingQuarters);
                 bShouldBuild = (CurrentBarracks < 6) && (bCoreLayerDone || CurrentBarracks == 0);
+            }
+            // === NEW: Containment + Autopsy (Phase 2) ===
+            else if (FacType == EFacilityType::Containment || FacType == EFacilityType::Autopsy)
+            {
+                // Build when the faction is near soldier capacity (or already has POWs/KIA)
+                // This matches the original plan: AI builds them automatically once bases are full.
+                int32 TotalSoldiers = SoldierMgr ? SoldierMgr->GetRoster(Faction).Num() : 0;
+                int32 CurrentBarracksCapacity = B->GetTotalBuiltOfType(EFacilityType::LivingQuarters) * 6; // 6 soldiers per barracks
+                bool bNearMaxCapacity = (CurrentBarracksCapacity > 0) && (TotalSoldiers >= (CurrentBarracksCapacity * 0.8f));
+
+                bool bHasPOWOrKIA = false;
+                if (SoldierMgr)
+                {
+                    if (FacType == EFacilityType::Containment)
+                    {
+                        bHasPOWOrKIA = SoldierMgr->GetPOWRoster(Faction).Num() > 0;
+                    }
+                    else // Autopsy
+                    {
+                        // Phase 3 will add KIA tracking; for now we build when near max soldiers
+                        bHasPOWOrKIA = false;
+                    }
+                }
+
+                bShouldBuild = bNearMaxCapacity || bHasPOWOrKIA;
             }
             else
             {
@@ -623,6 +639,82 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 
     return bBoughtAnything;
 }
+
+// === FULL FUNCTION: UAIControllerSubsystem::TryBuildVehicle (WAVE VERSION) ===
+// Same wave logic as TryRecruit. Hangars now act as their own controllers —
+// multiple vehicles can be started in one day if multiple slots exist.
+bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
+{
+    if (!TargetBase)
+        return false;
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (!Campaign) return false;
+
+    UVehicleDatabase* VehicleDB = Campaign->VehicleDatabaseAsset.Get();
+    if (!VehicleDB || VehicleDB->AvailableVehicles.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AI] No vehicles available in database for %s"), *UEnum::GetValueAsString(Faction));
+        return false;
+    }
+
+    UVehicleDefinition* VehDef = VehicleDB->AvailableVehicles[0].Get();
+    if (!VehDef) return false;
+
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (!ResourceMgr) return false;
+
+    // === WAVE LOOP START ===
+    int32 BuiltThisDay = 0;
+    const int32 MaxPerDay = 999;
+
+    while (BuiltThisDay < MaxPerDay)
+    {
+        if (!ResourceMgr->CanAfford(Faction, VehDef->BuildCost))
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[AI] %s ran out of resources mid-vehicle wave — built %d vehicles today"),
+                *UEnum::GetValueAsString(Faction), BuiltThisDay);
+            break;
+        }
+
+        bool bQueued = false;
+        for (UStrategyFacility* Hanger : TargetBase->Facilities)
+        {
+            if (Hanger && Hanger->FacilityDefinition &&
+                Hanger->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
+                Hanger->HasFreeProductionSlot())
+            {
+                if (Hanger->StartProduction(EProductionType::Vehicle, VehDef, VehDef->ProductionDays))
+                {
+                    ResourceMgr->AddResources(Faction, {
+                        -VehDef->BuildCost.Money,
+                        -VehDef->BuildCost.Metals,
+                        -VehDef->BuildCost.Biologicals,
+                        -VehDef->BuildCost.Chemicals,
+                        0, 0 });
+
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s WAVE VEHICLE — queued '%s' in hanger at base '%s' (slots left: %d)"),
+                        *UEnum::GetValueAsString(Faction), *VehDef->VehicleName.ToString(),
+                        *TargetBase->BaseName.ToString(),
+                        Hanger->GetAvailableProductionSlots());
+
+                    BuiltThisDay++;
+                    bQueued = true;
+                    break;
+                }
+            }
+        }
+
+        if (!bQueued)
+            break;  // no more free hangar slots in this base
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s vehicle wave complete — built %d vehicles today"),
+        *UEnum::GetValueAsString(Faction), BuiltThisDay);
+
+    return BuiltThisDay > 0;
+}
+
 
 bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase)
 {
