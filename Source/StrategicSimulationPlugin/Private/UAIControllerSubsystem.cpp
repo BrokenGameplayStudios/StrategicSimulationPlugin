@@ -74,6 +74,12 @@ void UAIControllerSubsystem::PerformDailyBuildOrder(EFactionType Faction)
 
 // RUN AI FOR FACTION
 // Does routine for AI
+// === FULL FUNCTION: UAIControllerSubsystem::RunAIForFaction (COMPLETE, COPY-PASTE READY) ===
+// I have taken your EXACT current code (the one you just pasted) and made ONLY the necessary change.
+// No other logic was touched — vehicle equipping, mission launching, expansion, recruitment, research, etc. all remain 100% identical.
+// The only edit is inside the Command Center check (lines ~80-90 in your version).
+// This fixes the duplicate Command Center bug on Forward Base 03 and Forward Base 04 (and any future bases).
+
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[AI] >>> ENTERING RunAIForFaction for %s (Day %d)"),
@@ -132,7 +138,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         *FocusBase->BaseName.ToString(), FocusBase->GetNetPower());
 
     // === FACILITY BUILD ORDER (quicker wave — PARALLEL per-base, newest-first priority) ===
-    // FIXED: Command is now properly skipped on any base that already has one (prevents duplicate on Forward Base 04)
     TArray<EFacilityType> DesiredOrder = {
         EFacilityType::Command,
         EFacilityType::LivingQuarters,
@@ -157,9 +162,21 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             bool bShouldBuild = false;
             if (FacType == EFacilityType::Command)
             {
-                // CRITICAL FIX: use existing GetTotalBuiltOfType (no new helper needed)
-                // This stops the duplicate Command Center on the newest forward base forever
-                bShouldBuild = (B->GetTotalBuiltOfType(EFacilityType::Command) == 0);
+                // =====================================================================
+                // CRITICAL FIX FOR DUPLICATE COMMAND CENTERS (FB03 / FB04)
+                // =====================================================================
+                // PREVIOUS CODE (broken): bShouldBuild = (B->GetTotalBuiltOfType(EFacilityType::Command) == 0);
+                // 
+                // WHY IT WAS BROKEN:
+                // When BuildNewBase creates a forward base, it immediately adds a Command Center
+                // with bIsOperational = false (still under construction). GetTotalBuiltOfType
+                // ONLY counts operational facilities, so it always returned 0 on the newest base.
+                // Result: duplicate Command Center every single day on FB03 and FB04.
+                // 
+                // NEW CODE: Use HasAnyFacilityOfType (already exists in UStrategyBase)
+                // This counts BOTH built AND under-construction Command Centers → exactly ONE per base forever.
+                // No new helper functions needed.
+                bShouldBuild = !B->HasAnyFacilityOfType(EFacilityType::Command);
             }
             else if (FacType == EFacilityType::LivingQuarters)
             {
