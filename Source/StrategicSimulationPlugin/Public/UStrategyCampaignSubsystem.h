@@ -43,20 +43,20 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Campaign")
     void LoadCampaign(int32 SlotIndex = 1);
         
-    // === POW/KIA SETTINGS (Phase 1) ===
+    // === POW/KIA SETTINGS (Phase 1 + 3) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "POW/KIA|Settings")
-    float POWCaptureChanceOnVictory = 0.35f;     // 35% chance to capture enemy soldiers as POWs when you win
+    float POWCaptureChanceOnVictory = 0.35f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "POW/KIA|Settings")
-    float KIAChanceOnVictory = 0.25f;            // 25% chance enemy soldiers become KIA (recoverable later)
+    float KIAChanceOnVictory = 0.25f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "POW/KIA|Settings")
-    float EnemyPOWCaptureChanceOnDefeat = 0.20f; // when you lose, chance enemy captures YOUR troops as POWs
+    float EnemyPOWCaptureChanceOnDefeat = 0.20f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "POW/KIA|Settings")
-    float EnemyKIAChanceOnDefeat = 0.40f;        // when you lose, chance your troops become KIA
+    float EnemyKIAChanceOnDefeat = 0.40f;
 
-    // === POW/KIA DEBUG (cleaned up) ===
+    // === DEBUG COMMANDS (clean & clear) ===
     UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
     void SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory);
 

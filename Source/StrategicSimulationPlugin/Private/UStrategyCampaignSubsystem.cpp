@@ -477,8 +477,7 @@ TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() cons
 }
 
 // === CLEAN VICTORY-SIDE DEBUG (POW + KIA on win) ===
-UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-void SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory)
+void UStrategyCampaignSubsystem::SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory)
 {
     POWCaptureChanceOnVictory = FMath::Clamp(NewPOWCaptureChance, 0.0f, 1.0f);
     KIAChanceOnVictory = FMath::Clamp(NewKIAChanceOnVictory, 0.0f, 1.0f);
@@ -488,8 +487,7 @@ void SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory)
 }
 
 // === CLEAN DEFEAT-SIDE KIA DEBUG ===
-UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-void SetDefeatKIAChance(float NewEnemyKIAChanceOnDefeat)
+void UStrategyCampaignSubsystem::SetDefeatKIAChance(float NewEnemyKIAChanceOnDefeat)
 {
     EnemyKIAChanceOnDefeat = FMath::Clamp(NewEnemyKIAChanceOnDefeat, 0.0f, 1.0f);
     UE_LOG(LogTemp, Display, TEXT("[KIA] Defeat KIA chance updated → %.0f%%"), EnemyKIAChanceOnDefeat * 100.0f);
