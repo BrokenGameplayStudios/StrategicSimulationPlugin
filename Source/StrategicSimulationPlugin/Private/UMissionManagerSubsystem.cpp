@@ -154,6 +154,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     if (!Campaign || !SoldierMgr)
     {
         UE_LOG(LogTemp, Warning, TEXT("[MISSION] Could not get Campaign or SoldierMgr subsystems - POW/KIA logic skipped"));
+        return;
     }
 
     float FleetEffectiveness = CalculateFleetEffectiveness(Mission);
@@ -178,7 +179,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         break;
     }
 
-    // === Outcome roll (slightly lowered max success so failures happen for testing) ===
+    // === Outcome roll ===
     const int32 Roll = FMath::RandRange(1, 100);
     float SuccessChance = FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 40.0f, 85.0f);
 
@@ -194,7 +195,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->Outcome = Outcome;
 
-    // === Rewards ===
+    // === Rewards (unchanged) ===
     FResourceStockpile Reward;
     switch (Outcome)
     {
@@ -226,14 +227,14 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->ResourcesGained = Reward;
 
-    // === NEW: Faction setup for POW/KIA (Phase 1) ===
+    // === Faction setup ===
     EFactionType Attacker = Mission->AttackingFaction;
     EFactionType Defender = (Attacker == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-    // === Per-vehicle losses + POW/KIA (updated to use new data-driven system) ===
+    // === Per-vehicle losses + POW/KIA (loss side) ===
     int32 TotalVehiclesLost = 0;
-    TArray<UStrategySoldier*> AllLostSoldiers;   // KIA only (for mission stats)
-    int32 TotalCaptured = 0;                     // attacker's soldiers captured by defender
+    TArray<UStrategySoldier*> AllLostSoldiers;
+    int32 TotalCaptured = 0;
 
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
@@ -252,35 +253,28 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
                 bool bCaptured = false;
 
-                // Data-driven chances (keeps original intent but now pulls from settings)
                 if (Outcome == EMissionOutcome::Failure || Outcome == EMissionOutcome::CatastrophicFailure)
                 {
-                    bCaptured = (Campaign && SoldierMgr) ? (FMath::RandRange(0.0f, 1.0f) <= Campaign->EnemyPOWCaptureChanceOnDefeat) : false;
+                    bCaptured = (FMath::RandRange(0.0f, 1.0f) <= Campaign->EnemyPOWCaptureChanceOnDefeat);
                 }
                 else if (Outcome == EMissionOutcome::PartialSuccess)
                 {
-                    bCaptured = FMath::RandRange(0.0f, 1.0f) <= 0.40f;   // kept original partial-success behavior
+                    bCaptured = FMath::RandRange(0.0f, 1.0f) <= 0.40f;
                 }
-                else  // Success - rare defender counter-capture of your troops
+                else
                 {
                     bCaptured = FMath::RandRange(0.0f, 1.0f) <= 0.10f;
                 }
 
                 if (bCaptured)
                 {
-                    if (SoldierMgr)
-                    {
-                        SoldierMgr->CaptureAsPOW(Defender, Soldier);
-                    }
+                    SoldierMgr->CaptureAsPOW(Defender, Soldier);
                     TotalCaptured++;
                     UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s CAPTURED by opposing force!"), *Soldier->SoldierName);
                 }
                 else
                 {
-                    if (SoldierMgr)
-                    {
-                        SoldierMgr->MarkAsKIA(Attacker, Soldier);
-                    }
+                    SoldierMgr->MarkAsKIA(Attacker, Soldier);
                     AllLostSoldiers.Add(Soldier);
                     UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s KIA"), *Soldier->SoldierName);
                 }
@@ -309,12 +303,13 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
-    // === NEW: Victory-side POW/KIA (Phase 1) - capture or KIA enemy troops when you win ===
-    if ((Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess) && Campaign && SoldierMgr)
+    // === VICTORY-SIDE POW / KIA (INDEPENDENT ROLLS — FIXED) ===
+    if ((Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess))
     {
         int32 NumToProcess = FMath::RandRange(1, 4);
         for (int32 i = 0; i < NumToProcess; ++i)
         {
+            // Independent rolls — both POW and KIA can now happen on the same mission
             if (FMath::RandRange(0.0f, 1.0f) <= Campaign->POWCaptureChanceOnVictory)
             {
                 const TArray<UStrategySoldier*>& DefenderRoster = SoldierMgr->GetRoster(Defender);
@@ -328,7 +323,8 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                     }
                 }
             }
-            else if (FMath::RandRange(0.0f, 1.0f) <= Campaign->KIAChanceOnVictory)
+
+            if (FMath::RandRange(0.0f, 1.0f) <= Campaign->KIAChanceOnVictory)   // ← removed "else"
             {
                 const TArray<UStrategySoldier*>& DefenderRoster = SoldierMgr->GetRoster(Defender);
                 if (!DefenderRoster.IsEmpty())
@@ -344,7 +340,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
     }
 
-    // === Apply rewards to the ATTACKING faction ===
+    // === Apply rewards ===
     UResourceManagerSubsystem* ResourceMgr = GetResourceManager();
     if (ResourceMgr)
     {
