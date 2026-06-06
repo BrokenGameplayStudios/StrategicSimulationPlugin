@@ -547,54 +547,69 @@ void UBaseManagerSubsystem::AdvanceAllConstruction()
 
 void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
 {
-    const TArray<UStrategyBase*>& Bases = GetBases(Faction);
-    UE_LOG(LogTemp, Display, TEXT("=== BASE STATE FOR %s (%d bases) ==="),
-        *UEnum::GetValueAsString(Faction), Bases.Num());
-
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-
-    for (UStrategyBase* Base : Bases)
+    if (!SoldierMgr)
     {
-        if (!Base) continue;
+        UE_LOG(LogTemp, Warning, TEXT("[BASE STATE] Could not get SoldierMgr for POW/KIA counts"));
+        return;
+    }
+
+    int32 POWCount = SoldierMgr->GetPOWRoster(Faction).Num();
+    int32 KIACount = 0;  // Phase 3 will add real KIA bodies here
+
+    UE_LOG(LogTemp, Display, TEXT("=== BASE STATE FOR %s (%d bases) ==="),
+        *UEnum::GetValueAsString(Faction), GetBases(Faction).Num());
+
+    const TArray<UStrategyBase*>& Bases = GetBases(Faction);
+    for (UStrategyBase* B : Bases)
+    {
+        if (!B) continue;
+
+        // Count soldiers stationed at this specific base
+        int32 SoldiersStationed = 0;
+        for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
+        {
+            if (Soldier && Soldier->StationedBase == B)
+                SoldiersStationed++;
+        }
 
         UE_LOG(LogTemp, Display, TEXT("Base: %s | Net Power: %d"),
-            *Base->BaseName.ToString(), Base->GetNetPower());
+            *B->BaseName.ToString(), B->GetNetPower());
 
-        // Facilities summary
-        TMap<EFacilityType, int32> FacilityCounts;
-        for (UStrategyFacility* Fac : Base->Facilities)
+        FString FacilityList;
+        for (EFacilityType Type : {
+            EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
+                EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
+                EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy
+        })
         {
-            if (Fac && Fac->FacilityDefinition)
+            int32 Count = B->GetTotalBuiltOfType(Type);
+            if (Count > 0)
             {
-                FacilityCounts.FindOrAdd(Fac->FacilityDefinition->FacilityType)++;
+                FacilityList.Append(FString::Printf(TEXT("%d EFacilityType::%s, "), Count, *UEnum::GetValueAsString(Type)));
             }
         }
-
-        FString FacStr;
-        for (auto& Pair : FacilityCounts)
+        if (!FacilityList.IsEmpty())
         {
-            FacStr += FString::Printf(TEXT(" %d %s,"), Pair.Value, *UEnum::GetValueAsString(Pair.Key));
-        }
-        UE_LOG(LogTemp, Display, TEXT("  Facilities:%s"), *FacStr);
-
-        // === CORRECT PER-BASE SOLDIER COUNT ===
-        int32 Stationed = 0;
-        if (SoldierMgr)
-        {
-            for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
-            {
-                if (Soldier && Soldier->StationedBase == Base)   // or Soldier->HomeBase == Base if you use that name
-                    Stationed++;
-            }
+            FacilityList = FacilityList.LeftChop(2); // remove trailing comma+space
         }
 
-        UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d"), Stationed);
+        UE_LOG(LogTemp, Display, TEXT("  Facilities: %s"), *FacilityList);
+        UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d | POW Count: %d | Enemy KIA Recovered: %d"),
+            SoldiersStationed, POWCount, KIACount);
     }
 
     // === GLOBAL TOTALS ===
-    int32 CurrentSoldiers = SoldierMgr ? SoldierMgr->GetRoster(Faction).Num() : 0;
+    int32 TotalBarracksCapacity = 0;
+    for (UStrategyBase* B : Bases)
+    {
+        if (B)
+            TotalBarracksCapacity += B->GetTotalBuiltOfType(EFacilityType::LivingQuarters) * 6;
+    }
+
+    int32 TotalSoldiers = SoldierMgr->GetRoster(Faction).Num();
 
     UE_LOG(LogTemp, Display, TEXT("=== GLOBAL TOTALS ==="));
-    UE_LOG(LogTemp, Display, TEXT("Total Barracks Capacity: %d | Current Soldiers: %d"),
-        GetTotalBarracksCapacity(Faction), CurrentSoldiers);
+    UE_LOG(LogTemp, Display, TEXT("Total Barracks Capacity: %d | Current Soldiers: %d | Total POW Count: %d | Total Enemy KIA Recovered: %d"),
+        TotalBarracksCapacity, TotalSoldiers, POWCount, KIACount);
 }
