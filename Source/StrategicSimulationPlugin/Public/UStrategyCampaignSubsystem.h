@@ -58,10 +58,10 @@ public:
 
     // Debug / testing
     UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-    void SetPOWChance(float NewCaptureChance, float NewKIAChance);
+    void  SetVictoryChances(float NewCaptureChance, float NewKIAChance);
     
     UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-    void SetKIAChance(float NewKIAOnVictory, float NewKIAOnDefeat);
+    void SetDefeatKIAChance(float NewKIAOnVictory, float NewKIAOnDefeat);
 
     // Manager getters
     UFUNCTION(BlueprintCallable, Category = "Managers")

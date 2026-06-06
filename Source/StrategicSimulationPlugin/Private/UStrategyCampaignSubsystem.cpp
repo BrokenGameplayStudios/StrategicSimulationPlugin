@@ -476,21 +476,23 @@ TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() cons
     return Saves;
 }
 
-void UStrategyCampaignSubsystem::SetPOWChance(float NewCaptureChance, float NewKIAChance)
+// Clearer names + logs (victory side only)
+UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
+void SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory)
 {
-    POWCaptureChanceOnVictory = FMath::Clamp(NewCaptureChance, 0.0f, 1.0f);
-    KIAChanceOnVictory = FMath::Clamp(NewKIAChance, 0.0f, 1.0f);
-    UE_LOG(LogTemp, Display, TEXT("[POW/KIA] Debug chances updated → Capture: %.0f%% | KIA: %.0f%% on victory"),
+    POWCaptureChanceOnVictory = FMath::Clamp(NewPOWCaptureChance, 0.0f, 1.0f);
+    KIAChanceOnVictory = FMath::Clamp(NewKIAChanceOnVictory, 0.0f, 1.0f);
+
+    UE_LOG(LogTemp, Display, TEXT("[POW/KIA] Victory chances updated → POW Capture: %.0f%% | KIA on victory: %.0f%%"),
         POWCaptureChanceOnVictory * 100.0f, KIAChanceOnVictory * 100.0f);
 }
 
+// Defeat-side KIA only (clean)
 UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-void UStrategyCampaignSubsystem::SetKIAChance(float NewKIAOnVictory, float NewKIAOnDefeat)
+void SetDefeatKIAChance(float NewEnemyKIAChanceOnDefeat)
 {
-    KIAChanceOnVictory = FMath::Clamp(NewKIAOnVictory, 0.0f, 1.0f);
-    EnemyKIAChanceOnDefeat = FMath::Clamp(NewKIAOnDefeat, 0.0f, 1.0f);
-    UE_LOG(LogTemp, Display, TEXT("[KIA DEBUG] Chances updated → Victory KIA: %.0f%% | Defeat KIA: %.0f%%"),
-        KIAChanceOnVictory * 100.0f, EnemyKIAChanceOnDefeat * 100.0f);
+    EnemyKIAChanceOnDefeat = FMath::Clamp(NewEnemyKIAChanceOnDefeat, 0.0f, 1.0f);
+    UE_LOG(LogTemp, Display, TEXT("[KIA] Defeat KIA chance updated → %.0f%%"), EnemyKIAChanceOnDefeat * 100.0f);
 }
 
 UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
