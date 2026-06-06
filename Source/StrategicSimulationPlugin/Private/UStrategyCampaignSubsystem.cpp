@@ -476,7 +476,7 @@ TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() cons
     return Saves;
 }
 
-// Clearer names + logs (victory side only)
+// === CLEAN VICTORY-SIDE DEBUG (POW + KIA on win) ===
 UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
 void SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory)
 {
@@ -487,7 +487,7 @@ void SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory)
         POWCaptureChanceOnVictory * 100.0f, KIAChanceOnVictory * 100.0f);
 }
 
-// Defeat-side KIA only (clean)
+// === CLEAN DEFEAT-SIDE KIA DEBUG ===
 UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
 void SetDefeatKIAChance(float NewEnemyKIAChanceOnDefeat)
 {

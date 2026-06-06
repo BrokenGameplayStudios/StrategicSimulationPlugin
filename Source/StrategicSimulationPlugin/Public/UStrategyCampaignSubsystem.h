@@ -56,12 +56,12 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "POW/KIA|Settings")
     float EnemyKIAChanceOnDefeat = 0.40f;        // when you lose, chance your troops become KIA
 
-    // Debug / testing
+    // === POW/KIA DEBUG (cleaned up) ===
     UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-    void  SetVictoryChances(float NewCaptureChance, float NewKIAChance);
-    
+    void SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory);
+
     UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-    void SetDefeatKIAChance(float NewKIAOnVictory, float NewKIAOnDefeat);
+    void SetDefeatKIAChance(float NewEnemyKIAChanceOnDefeat);
 
     // Manager getters
     UFUNCTION(BlueprintCallable, Category = "Managers")
