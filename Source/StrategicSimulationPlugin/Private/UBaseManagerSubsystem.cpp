@@ -576,15 +576,22 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
             *B->BaseName.ToString(), B->GetNetPower());
 
         FString FacilityList;
-        for (EFacilityType Type : { EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
-            EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
-            EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy })
+        for (EFacilityType Type : {
+            EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
+                EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
+                EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy
+        })
         {
             int32 Count = B->GetTotalBuiltOfType(Type);
             if (Count > 0)
-                FacilityList.Append(FString::Printf(TEXT("%d EFacilityType::%s, "), Count, *UEnum::GetValueAsString(Type)));
+            {
+                FacilityList.Append(FString::Printf(TEXT("%d %s, "), Count, *UEnum::GetValueAsString(Type)));
+            }
         }
-        if (!FacilityList.IsEmpty()) FacilityList = FacilityList.LeftChop(2);
+        if (!FacilityList.IsEmpty())
+        {
+            FacilityList = FacilityList.LeftChop(2);
+        }
 
         UE_LOG(LogTemp, Display, TEXT("  Facilities: %s"), *FacilityList);
         UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d | POW Count: %d | KIA Bodies: %d"),
