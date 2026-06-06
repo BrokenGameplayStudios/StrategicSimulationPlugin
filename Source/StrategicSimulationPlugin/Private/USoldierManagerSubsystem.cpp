@@ -177,18 +177,22 @@ UStrategySoldier* USoldierManagerSubsystem::GetCommander(EFactionType Faction) c
     return nullptr;
 }
 
-// === NEW POW/KIA FUNCTIONS (Phase 1) ===
+// === POW/KIA FUNCTIONS (updated for Phase 3) ===
 
 const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetPOWRoster(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? HumanPOWRoster : EnemyPOWRoster;
 }
 
+const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetKIARoster(EFactionType Faction) const   // NEW
+{
+    return (Faction == EFactionType::Human) ? HumanKIARoster : EnemyKIARoster;
+}
+
 void USoldierManagerSubsystem::CaptureAsPOW(EFactionType CapturingFaction, UStrategySoldier* Soldier)
 {
     if (!Soldier) return;
 
-    // Remove from original active roster
     if (CapturingFaction == EFactionType::Human)
     {
         EnemyRoster.Remove(Soldier);
@@ -200,8 +204,8 @@ void USoldierManagerSubsystem::CaptureAsPOW(EFactionType CapturingFaction, UStra
         EnemyPOWRoster.Add(Soldier);
     }
 
-    // Soldier->bIsPOW = true;                    // assume UStrategySoldier has this bool (added in next step)
-    Soldier->StationedBase = nullptr;          // no longer occupies a barracks slot
+    Soldier->bIsPOW = true;
+    Soldier->StationedBase = nullptr;
 
     BroadcastSoldierListChanged(CapturingFaction == EFactionType::Human ? EFactionType::Human : EFactionType::Enemy);
     BroadcastSoldierListChanged(CapturingFaction == EFactionType::Human ? EFactionType::Enemy : EFactionType::Human);
@@ -210,26 +214,32 @@ void USoldierManagerSubsystem::CaptureAsPOW(EFactionType CapturingFaction, UStra
         *UEnum::GetValueAsString(CapturingFaction), *Soldier->SoldierName);
 }
 
-void USoldierManagerSubsystem::MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier)
+void USoldierManagerSubsystem::MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier)   // UPDATED
 {
     if (!Soldier) return;
 
-    // Remove from active roster (KIA = gone)
+    // Remove from active roster
     if (Faction == EFactionType::Human)
         HumanRoster.Remove(Soldier);
     else
         EnemyRoster.Remove(Soldier);
 
-    // KIA bodies can be recovered later via Autopsy (Phase 2)
-    Soldier->bIsKIA = true;   // future-proof flag
+    // Move to KIA roster (bodies stored for autopsy)
+    if (Faction == EFactionType::Human)
+        HumanKIARoster.Add(Soldier);
+    else
+        EnemyKIARoster.Add(Soldier);
 
-   // BroadcastSoldierListChanged(Faction);
-     UE_LOG(LogTemp, Display, TEXT("[KIA] %s soldier '%s' marked KIA"), *UEnum::GetValueAsString(Faction), *Soldier->SoldierName);
+    Soldier->bIsKIA = true;
+    Soldier->StationedBase = nullptr;
+
+    BroadcastSoldierListChanged(Faction);
+    UE_LOG(LogTemp, Display, TEXT("[KIA] %s soldier '%s' marked KIA and added to recovery roster"),
+        *UEnum::GetValueAsString(Faction), *Soldier->SoldierName);
 }
 
 void USoldierManagerSubsystem::ReleasePOW(UStrategySoldier* POW)
 {
-     if (!POW || !POW->bIsPOW) return;
-    // TODO: Phase 4 – release/trade/recruit logic
-     UE_LOG(LogTemp, Display, TEXT("[POW] POW '%s' released (placeholder)"), *POW->SoldierName);
+    if (!POW || !POW->bIsPOW) return;
+    UE_LOG(LogTemp, Display, TEXT("[POW] POW '%s' released (placeholder)"), *POW->SoldierName);
 }

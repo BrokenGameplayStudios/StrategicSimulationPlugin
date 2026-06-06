@@ -104,7 +104,13 @@ public:
     bool HasFreeProductionSlot() const;
 
     UFUNCTION(BlueprintCallable, Category = "Production")
-    int32 GetAvailableProductionSlots() const;
+    int32 GetAvailableProductionSlots() const;    
+    
+    UFUNCTION(BlueprintCallable, Category = "Containment")
+    void ProcessContainmentDaily();
+
+    UFUNCTION(BlueprintCallable, Category = "Autopsy")
+    void ProcessAutopsyDaily();
 
     // Construction (kept exactly as before)
     UFUNCTION(BlueprintCallable, Category = "Construction")

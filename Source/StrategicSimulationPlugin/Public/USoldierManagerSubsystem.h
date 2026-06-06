@@ -38,18 +38,21 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void Debug_PrintTeamRoster(EFactionType Faction) const;
 
-    // === NEW: POW/KIA SYSTEM (Phase 1) ===
+    // === POW / KIA (Phase 1 + 3) ===
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     const TArray<UStrategySoldier*>& GetPOWRoster(EFactionType Faction) const;
 
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void CaptureAsPOW(EFactionType CapturingFaction, UStrategySoldier* Soldier);   // moves soldier to POW roster + frees slot
+    const TArray<UStrategySoldier*>& GetKIARoster(EFactionType Faction) const;   // NEW
 
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier);               // removes permanently
+    void CaptureAsPOW(EFactionType CapturingFaction, UStrategySoldier* Soldier);
 
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void ReleasePOW(UStrategySoldier* POW);  // future-proof (trade/recruit later)
+    void MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier);   // now moves to KIA roster
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void ReleasePOW(UStrategySoldier* POW);
 
 private:
 
@@ -60,4 +63,8 @@ private:
     // NEW POW rosters (separate, per faction)
     UPROPERTY(VisibleAnywhere, Transient) TArray<UStrategySoldier*> HumanPOWRoster;
     UPROPERTY(VisibleAnywhere, Transient) TArray<UStrategySoldier*> EnemyPOWRoster;
+
+    // NEW: KIA bodies (stored until autopsied)
+    UPROPERTY(VisibleAnywhere, Transient) TArray<UStrategySoldier*> HumanKIARoster;
+    UPROPERTY(VisibleAnywhere, Transient) TArray<UStrategySoldier*> EnemyKIARoster;
 };

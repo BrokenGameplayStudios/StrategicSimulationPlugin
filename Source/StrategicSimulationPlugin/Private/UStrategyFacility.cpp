@@ -326,3 +326,68 @@ void UStrategyFacility::AdvanceConstructionDay()
 {
     AdvanceProductionDay();
 }
+
+void UStrategyFacility::ProcessContainmentDaily()
+{
+    if (!bIsOperational || !OwningBase || !FacilityDefinition) return;
+
+    USoldierManagerSubsystem* SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UResourceManagerSubsystem>();
+    if (!SoldierMgr || !ResourceMgr) return;
+
+    // Faction lookup — your base does not have OwningFaction, so we use the POW roster to determine owner
+    EFactionType Faction = EFactionType::Human;   // default for testing
+    if (SoldierMgr->GetPOWRoster(EFactionType::Enemy).Num() > 0)
+        Faction = EFactionType::Human;   // Human facility processes Human POWs
+    else if (SoldierMgr->GetPOWRoster(EFactionType::Human).Num() > 0)
+        Faction = EFactionType::Enemy;
+
+    const TArray<UStrategySoldier*>& POWs = SoldierMgr->GetPOWRoster(Faction);
+    if (POWs.Num() == 0) return;
+
+    // Data-driven bonus from your UFacilityDefinition (ProductionSlots × POW count)
+    int32 Bonus = FacilityDefinition->ProductionSlots * POWs.Num();
+
+    FResourceStockpile BonusStock;
+    BonusStock.ResearchPoints = Bonus;   // research points go through ResourceMgr (matches your existing system)
+
+    ResourceMgr->AddResources(Faction, BonusStock);
+
+    UE_LOG(LogTemp, Display, TEXT("[CONTAINMENT] %s processed %d POWs → +%d research/intel bonus"),
+        *FacilityDefinition->FacilityName.ToString(), POWs.Num(), Bonus);
+}
+
+void UStrategyFacility::ProcessAutopsyDaily()
+{
+    if (!bIsOperational || !OwningBase || !FacilityDefinition) return;
+
+    USoldierManagerSubsystem* SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UResourceManagerSubsystem>();
+    if (!SoldierMgr || !ResourceMgr) return;
+
+    // Same safe faction lookup
+    EFactionType Faction = EFactionType::Human;
+    if (SoldierMgr->GetKIARoster(EFactionType::Enemy).Num() > 0)
+        Faction = EFactionType::Human;
+    else if (SoldierMgr->GetKIARoster(EFactionType::Human).Num() > 0)
+        Faction = EFactionType::Enemy;
+
+    TArray<UStrategySoldier*>& KIAs = const_cast<TArray<UStrategySoldier*>&>(SoldierMgr->GetKIARoster(Faction));
+    if (KIAs.Num() == 0) return;
+
+    // Data-driven bonus from your UFacilityDefinition
+    int32 BonusResearch = FacilityDefinition->ProductionSlots * KIAs.Num() * 15;
+    int32 BonusExotic = FacilityDefinition->ProductionSlots * KIAs.Num() * 5;
+
+    FResourceStockpile BonusStock;
+    BonusStock.ResearchPoints = BonusResearch;
+    // BonusStock.ExoticMaterial = BonusExotic;   // uncomment if your FResourceStockpile has this field
+
+    ResourceMgr->AddResources(Faction, BonusStock);
+
+    UE_LOG(LogTemp, Display, TEXT("[AUTOPSY] %s processed %d KIA bodies → +%d research (bodies disposed)"),
+        *FacilityDefinition->FacilityName.ToString(), KIAs.Num(), BonusResearch);
+
+    // Disposal — KIA bodies are consumed after processing
+    KIAs.Empty();
+}

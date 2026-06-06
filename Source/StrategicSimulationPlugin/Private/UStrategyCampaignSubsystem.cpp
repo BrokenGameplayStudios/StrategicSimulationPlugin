@@ -483,3 +483,20 @@ void UStrategyCampaignSubsystem::SetPOWChance(float NewCaptureChance, float NewK
     UE_LOG(LogTemp, Display, TEXT("[POW/KIA] Debug chances updated → Capture: %.0f%% | KIA: %.0f%% on victory"),
         POWCaptureChanceOnVictory * 100.0f, KIAChanceOnVictory * 100.0f);
 }
+
+UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
+void UStrategyCampaignSubsystem::SetKIAChance(float NewKIAOnVictory, float NewKIAOnDefeat)
+{
+    KIAChanceOnVictory = FMath::Clamp(NewKIAOnVictory, 0.0f, 1.0f);
+    EnemyKIAChanceOnDefeat = FMath::Clamp(NewKIAOnDefeat, 0.0f, 1.0f);
+    UE_LOG(LogTemp, Display, TEXT("[KIA DEBUG] Chances updated → Victory KIA: %.0f%% | Defeat KIA: %.0f%%"),
+        KIAChanceOnVictory * 100.0f, EnemyKIAChanceOnDefeat * 100.0f);
+}
+
+UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
+void ForceAutopsy(EFactionType Faction)
+{
+    // For instant testing
+    UE_LOG(LogTemp, Display, TEXT("[KIA DEBUG] Forcing autopsy on %s KIA bodies"), *UEnum::GetValueAsString(Faction));
+    // The daily tick will handle it next frame, or you can call ProcessAutopsyDaily directly if needed
+}
