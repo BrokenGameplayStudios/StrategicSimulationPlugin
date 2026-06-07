@@ -75,16 +75,12 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
                     }
                 }
             }
-
-            // === POW / Prisoners Debug ===
-            if (Base->CapturedPrisoners.Num() > 0)
+                        
+            // === POW / KIA DEBUG (updated for per-base system) ===
+            if (Base->GetPOWCount() > 0 || Base->GetKIABodyCount() > 0)
             {
-                DebugText += FString::Printf(TEXT("  [PRISONERS] %d captured soldiers held here!\n"), Base->CapturedPrisoners.Num());
-                for (UStrategySoldier* Prisoner : Base->CapturedPrisoners)
-                {
-                    if (Prisoner)
-                        DebugText += FString::Printf(TEXT("    → %s (%s)\n"), *Prisoner->SoldierName, *Prisoner->ClassDefinition->ClassName.ToString());
-                }
+                DebugText += FString::Printf(TEXT("  [POW/KIA] %d POWs | %d KIA Bodies in this base\n"),
+                    Base->GetPOWCount(), Base->GetKIABodyCount());
             }
         }
 

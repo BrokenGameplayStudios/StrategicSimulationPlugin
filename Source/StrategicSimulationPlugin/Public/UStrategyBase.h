@@ -21,6 +21,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Base")
     FVector2D MapLocation;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ownership")
+    EFactionType OwningFaction = EFactionType::Human;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Facilities")
     TArray<UStrategyFacility*> Facilities;
 

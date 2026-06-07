@@ -342,7 +342,7 @@ void UStrategyFacility::ProcessContainmentDaily()
     FResourceStockpile BonusStock;
     BonusStock.ResearchPoints = Bonus;
 
-    ResourceMgr->AddResources(OwningBase->OwningFaction, BonusStock);   // use base's faction
+    ResourceMgr->AddResources(OwningBase->OwningFaction, BonusStock);   // we'll add OwningFaction below if missing
 
     UE_LOG(LogTemp, Display, TEXT("[CONTAINMENT] %s at base '%s' processed %d POWs → +%d research"),
         *FacilityDefinition->FacilityName.ToString(), *OwningBase->BaseName.ToString(), POWCount, Bonus);
@@ -359,17 +359,14 @@ void UStrategyFacility::ProcessAutopsyDaily()
     if (KIACount == 0) return;
 
     int32 BonusResearch = FacilityDefinition->ProductionSlots * KIACount * 15;
-    int32 BonusExotic = FacilityDefinition->ProductionSlots * KIACount * 5;
 
     FResourceStockpile BonusStock;
     BonusStock.ResearchPoints = BonusResearch;
-    // BonusStock.ExoticMaterial = BonusExotic; // uncomment when field exists
 
     ResourceMgr->AddResources(OwningBase->OwningFaction, BonusStock);
 
-    UE_LOG(LogTemp, Display, TEXT("[AUTOPSY] %s at base '%s' processed %d KIA bodies → +%d research"),
+    UE_LOG(LogTemp, Display, TEXT("[AUTOPSY] %s at base '%s' processed %d KIA bodies → +%d research (bodies disposed)"),
         *FacilityDefinition->FacilityName.ToString(), *OwningBase->BaseName.ToString(), KIACount, BonusResearch);
 
-    // Dispose bodies after processing
     OwningBase->StoredKIABodies.Empty();
 }
