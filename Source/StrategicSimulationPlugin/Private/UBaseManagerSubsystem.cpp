@@ -572,12 +572,21 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
                 SoldiersStationed++;
         }
 
-        // Soldiers currently on mission from this base
+        // Soldiers on mission FROM this base
         int32 SoldiersOnMission = 0;
-        for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
+        if (MissionMgr)
         {
-            if (Soldier && Soldier->CurrentMission != nullptr)
-                SoldiersOnMission++;
+            for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+            {
+                if (Mission && Mission->OriginBase == B)
+                {
+                    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+                    {
+                        if (Vehicle)
+                            SoldiersOnMission += Vehicle->CurrentPassengers.Num();
+                    }
+                }
+            }
         }
 
         // Vehicles parked in hangars at this base
@@ -588,7 +597,7 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
                 VehiclesStationed += Fac->ParkedVehicles.Num();
         }
 
-        // Vehicles currently on mission from this base
+        // Vehicles on mission FROM this base
         int32 VehiclesOnMission = 0;
         if (MissionMgr)
         {
