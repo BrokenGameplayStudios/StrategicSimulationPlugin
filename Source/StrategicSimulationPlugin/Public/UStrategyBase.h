@@ -52,6 +52,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     void ProcessAutopsy();       // called by facility
 
+    // Capacity helpers (used by AddPOW / AddKIABody)
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    int32 GetTotalContainmentSlots() const;
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    int32 GetTotalAutopsySlots() const;
+
     /** Per-base power tracking */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Power")
     int32 PowerProvided = 0;

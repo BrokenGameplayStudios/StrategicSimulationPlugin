@@ -205,16 +205,67 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
 void UStrategyBase::AddPOW(UStrategySoldier* Soldier)
 {
     if (!Soldier) return;
+
+    int32 CurrentPOW = ContainedPOWs.Num();
+    int32 MaxSlots = GetTotalContainmentSlots();
+
+    if (CurrentPOW >= MaxSlots)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[POW] Containment FULL at base '%s' (%d/%d) — soldier '%s' could not be stored!"),
+            *BaseName.ToString(), CurrentPOW, MaxSlots, *Soldier->SoldierName);
+        return;   // do not add if full
+    }
+
     ContainedPOWs.AddUnique(Soldier);
     Soldier->StationedBase = this;
-    UE_LOG(LogTemp, Display, TEXT("[POW] %s added to base '%s' Containment"), *Soldier->SoldierName, *BaseName.ToString());
+    Soldier->bIsPOW = true;
+
+    UE_LOG(LogTemp, Display, TEXT("[POW] %s added to base '%s' Containment (%d/%d)"),
+        *Soldier->SoldierName, *BaseName.ToString(), ContainedPOWs.Num(), MaxSlots);
 }
 
 void UStrategyBase::AddKIABody(UStrategySoldier* Soldier)
 {
     if (!Soldier) return;
+
+    int32 CurrentKIA = StoredKIABodies.Num();
+    int32 MaxSlots = GetTotalAutopsySlots();
+
+    if (CurrentKIA >= MaxSlots)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[KIA] Autopsy FULL at base '%s' (%d/%d) — body of '%s' could not be stored!"),
+            *BaseName.ToString(), CurrentKIA, MaxSlots, *Soldier->SoldierName);
+        return;
+    }
+
     StoredKIABodies.AddUnique(Soldier);
-    UE_LOG(LogTemp, Display, TEXT("[KIA] Body of %s added to base '%s' Autopsy"), *Soldier->SoldierName, *BaseName.ToString());
+    Soldier->bIsKIA = true;
+
+    UE_LOG(LogTemp, Display, TEXT("[KIA] Body of %s added to base '%s' Autopsy (%d/%d)"),
+        *Soldier->SoldierName, *BaseName.ToString(), StoredKIABodies.Num(), MaxSlots);
+}
+
+// Helper implementations
+int32 UStrategyBase::GetTotalContainmentSlots() const
+{
+    int32 Slots = 0;
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Containment && Fac->bIsOperational)
+            Slots += Fac->FacilityDefinition->ProductionSlots;
+    }
+    return Slots;
+}
+
+int32 UStrategyBase::GetTotalAutopsySlots() const
+{
+    int32 Slots = 0;
+    for (UStrategyFacility* Fac : Facilities)
+    {
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Autopsy && Fac->bIsOperational)
+            Slots += Fac->FacilityDefinition->ProductionSlots;
+    }
+    return Slots;
 }
 
 void UStrategyBase::ProcessContainment()
