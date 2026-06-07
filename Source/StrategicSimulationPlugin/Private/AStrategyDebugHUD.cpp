@@ -7,6 +7,7 @@
 #include "UStrategyBase.h"
 #include "UMissionGroup.h"
 #include "UMissionManagerSubsystem.h"
+#include "Engine/Canvas.h"
 
 AStrategyDebugHUD::AStrategyDebugHUD()
 {
@@ -16,13 +17,12 @@ AStrategyDebugHUD::AStrategyDebugHUD()
 void AStrategyDebugHUD::BeginPlay()
 {
     Super::BeginPlay();
-    ToggleDebugHUD();   // keep your original behavior
+    ToggleDebugHUD();
 }
 
 void AStrategyDebugHUD::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
-
     if (!bDebugVisible || !GEngine) return;
 
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -52,7 +52,7 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
             if (!Base) continue;
             DebugText += FString::Printf(TEXT("HUMAN BASE '%s':\n"), *Base->BaseName.ToString());
 
-            // Vehicles in hangars
+            // Vehicles
             for (UStrategyFacility* Fac : Base->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -80,7 +80,7 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
                 }
             }
 
-            // POW / KIA
+            // === POW / KIA DEBUG (per-base) ===
             if (Base->GetPOWCount() > 0 || Base->GetKIABodyCount() > 0)
             {
                 DebugText += FString::Printf(TEXT("  [POW/KIA] %d POWs | %d KIA Bodies in this base\n"),
@@ -88,7 +88,7 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
             }
         }
 
-        // Enemy bases (same info)
+        // Enemy bases
         for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
         {
             if (!Base) continue;
@@ -183,7 +183,7 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
 {
     if (!Base || !Canvas) return;
 
-    FVector2D ScreenPos = GetScreenPosition(Base->BaseLocation);
+    FVector2D ScreenPos = GetScreenPosition(Base->Location);   // ← your actual property
     Canvas->DrawCircle(ScreenPos, 18.0f, 32, Color, 3.0f);
     Canvas->DrawText(GEngine->GetSmallFont(), Base->BaseName.ToString(), ScreenPos.X + 25, ScreenPos.Y - 10, 1.0f, 1.0f, Color);
 }
@@ -192,17 +192,15 @@ void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
 {
     if (!Mission || !Mission->OriginBase || !Canvas) return;
 
-    FVector2D Start = GetScreenPosition(Mission->OriginBase->BaseLocation);
-    FVector2D End = Start + FVector2D(120.0f, 40.0f); // temporary direction (we'll improve once we have real targets)
+    FVector2D Start = GetScreenPosition(Mission->OriginBase->Location);
+    FVector2D End = Start + FVector2D(120.0f, 40.0f); // temporary direction
 
     Canvas->DrawLine(Start, End, 3.0f, FLinearColor::Yellow);
-    FString Info = FString::Printf(TEXT("%s (%d days left)"), *UEnum::GetValueAsString(Mission->MissionType), Mission->RemainingDays);
+    FString Info = FString::Printf(TEXT("%s"), *UEnum::GetValueAsString(Mission->MissionType));
     Canvas->DrawText(GEngine->GetSmallFont(), Info, End.X + 10, End.Y, 0.8f, 0.8f, FLinearColor::Yellow);
 }
 
 FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& WorldPos) const
 {
-    // Your BaseLocation is already in 1920x1080 space, so just return it.
-    // If you ever change the coordinate system, scale here.
-    return WorldPos;
+    return WorldPos; // already in 1920x1080 space
 }
