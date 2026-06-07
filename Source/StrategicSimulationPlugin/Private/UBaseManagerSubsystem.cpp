@@ -548,6 +548,7 @@ void UBaseManagerSubsystem::AdvanceAllConstruction()
 void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
 {
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
     if (!SoldierMgr)
     {
         UE_LOG(LogTemp, Warning, TEXT("[BASE STATE] Could not get SoldierMgr"));
@@ -563,6 +564,7 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
     {
         if (!B) continue;
 
+        // Soldiers stationed at this base
         int32 SoldiersStationed = 0;
         for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
         {
@@ -570,6 +572,7 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
                 SoldiersStationed++;
         }
 
+        // Vehicles parked in hangars at this base
         int32 VehiclesStationed = 0;
         for (UStrategyFacility* Fac : B->Facilities)
         {
