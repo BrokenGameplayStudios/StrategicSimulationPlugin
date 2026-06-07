@@ -4,6 +4,9 @@
 #include "UTimeManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
+#include "UStrategyBase.h"
+#include "UMissionGroup.h"
+#include "UMissionManagerSubsystem.h"
 
 AStrategyDebugHUD::AStrategyDebugHUD()
 {
@@ -13,12 +16,13 @@ AStrategyDebugHUD::AStrategyDebugHUD()
 void AStrategyDebugHUD::BeginPlay()
 {
     Super::BeginPlay();
-    ToggleDebugHUD();
+    ToggleDebugHUD();   // keep your original behavior
 }
 
 void AStrategyDebugHUD::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+
     if (!bDebugVisible || !GEngine) return;
 
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -48,7 +52,7 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
             if (!Base) continue;
             DebugText += FString::Printf(TEXT("HUMAN BASE '%s':\n"), *Base->BaseName.ToString());
 
-            // Vehicles
+            // Vehicles in hangars
             for (UStrategyFacility* Fac : Base->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -75,8 +79,8 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
                     }
                 }
             }
-                        
-            // === POW / KIA DEBUG (updated for per-base system) ===
+
+            // POW / KIA
             if (Base->GetPOWCount() > 0 || Base->GetKIABodyCount() > 0)
             {
                 DebugText += FString::Printf(TEXT("  [POW/KIA] %d POWs | %d KIA Bodies in this base\n"),
@@ -90,7 +94,6 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
             if (!Base) continue;
             DebugText += FString::Printf(TEXT("ENEMY BASE '%s':\n"), *Base->BaseName.ToString());
 
-            // Vehicles
             for (UStrategyFacility* Fac : Base->Facilities)
             {
                 if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
@@ -118,11 +121,10 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
                 }
             }
 
-            // === POW / Prisoners Debug ===
             if (Base->GetPOWCount() > 0)
             {
                 DebugText += FString::Printf(TEXT("  [PRISONERS] %d captured soldiers held here!\n"), Base->GetPOWCount());
-                for (UStrategySoldier* Prisoner : Base->ContainedPOWs   )
+                for (UStrategySoldier* Prisoner : Base->ContainedPOWs)
                 {
                     if (Prisoner)
                         DebugText += FString::Printf(TEXT("    → %s (%s)\n"), *Prisoner->SoldierName, *Prisoner->ClassDefinition->ClassName.ToString());
@@ -138,4 +140,69 @@ void AStrategyDebugHUD::ToggleDebugHUD()
 {
     bDebugVisible = !bDebugVisible;
     UE_LOG(LogTemp, Display, TEXT("Debug HUD %s"), bDebugVisible ? TEXT("ENABLED") : TEXT("DISABLED"));
+}
+
+void AStrategyDebugHUD::ToggleStrategyMap()
+{
+    bShowStrategyMap = !bShowStrategyMap;
+    UE_LOG(LogTemp, Display, TEXT("[DEBUG HUD] Strategy Map %s"), bShowStrategyMap ? TEXT("ENABLED") : TEXT("DISABLED"));
+}
+
+void AStrategyDebugHUD::DrawHUD()
+{
+    Super::DrawHUD();
+
+    if (!bShowStrategyMap || !Canvas) return;
+
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    if (!BaseMgr) return;
+
+    // Draw all Human bases
+    for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
+        DrawBase(Base, FLinearColor::Blue);
+
+    // Draw all Enemy bases
+    for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
+        DrawBase(Base, FLinearColor::Red);
+
+    // Draw active missions as lines
+    if (MissionMgr)
+    {
+        for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+            DrawMission(Mission);
+    }
+
+    // Legend
+    Canvas->DrawText(GEngine->GetSmallFont(), TEXT("BLUE = Human Bases"), 50, 50, 1.0f, 1.0f, FLinearColor::Blue);
+    Canvas->DrawText(GEngine->GetSmallFont(), TEXT("RED  = Enemy Bases"), 50, 80, 1.0f, 1.0f, FLinearColor::Red);
+    Canvas->DrawText(GEngine->GetSmallFont(), TEXT("Yellow lines = Active Missions"), 50, 110, 1.0f, 1.0f, FLinearColor::Yellow);
+}
+
+void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
+{
+    if (!Base || !Canvas) return;
+
+    FVector2D ScreenPos = GetScreenPosition(Base->BaseLocation);
+    Canvas->DrawCircle(ScreenPos, 18.0f, 32, Color, 3.0f);
+    Canvas->DrawText(GEngine->GetSmallFont(), Base->BaseName.ToString(), ScreenPos.X + 25, ScreenPos.Y - 10, 1.0f, 1.0f, Color);
+}
+
+void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
+{
+    if (!Mission || !Mission->OriginBase || !Canvas) return;
+
+    FVector2D Start = GetScreenPosition(Mission->OriginBase->BaseLocation);
+    FVector2D End = Start + FVector2D(120.0f, 40.0f); // temporary direction (we'll improve once we have real targets)
+
+    Canvas->DrawLine(Start, End, 3.0f, FLinearColor::Yellow);
+    FString Info = FString::Printf(TEXT("%s (%d days left)"), *UEnum::GetValueAsString(Mission->MissionType), Mission->RemainingDays);
+    Canvas->DrawText(GEngine->GetSmallFont(), Info, End.X + 10, End.Y, 0.8f, 0.8f, FLinearColor::Yellow);
+}
+
+FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& WorldPos) const
+{
+    // Your BaseLocation is already in 1920x1080 space, so just return it.
+    // If you ever change the coordinate system, scale here.
+    return WorldPos;
 }
