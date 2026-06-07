@@ -550,7 +550,7 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
     if (!SoldierMgr)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[BASE STATE] Could not get SoldierMgr for POW/KIA counts"));
+        UE_LOG(LogTemp, Warning, TEXT("[BASE STATE] Could not get SoldierMgr"));
         return;
     }
 
@@ -558,6 +558,7 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
         *UEnum::GetValueAsString(Faction), GetBases(Faction).Num());
 
     const TArray<UStrategyBase*>& Bases = GetBases(Faction);
+
     for (UStrategyBase* B : Bases)
     {
         if (!B) continue;
@@ -597,15 +598,21 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
 
     // === GLOBAL TOTALS ===
     int32 TotalBarracksCapacity = 0;
+    int32 TotalPOW = 0;
+    int32 TotalKIA = 0;
     for (UStrategyBase* B : Bases)
     {
         if (B)
+        {
             TotalBarracksCapacity += B->GetTotalBuiltOfType(EFacilityType::LivingQuarters) * 6;
+            TotalPOW += B->GetPOWCount();
+            TotalKIA += B->GetKIABodyCount();
+        }
     }
 
     int32 TotalSoldiers = SoldierMgr->GetRoster(Faction).Num();
 
     UE_LOG(LogTemp, Display, TEXT("=== GLOBAL TOTALS ==="));
     UE_LOG(LogTemp, Display, TEXT("Total Barracks Capacity: %d | Current Soldiers: %d | Total POW Count: %d | Total KIA Bodies: %d"),
-        TotalBarracksCapacity, TotalSoldiers, SoldierMgr->GetPOWCount(Faction), SoldierMgr->GetKIACount(Faction));
+        TotalBarracksCapacity, TotalSoldiers, TotalPOW, TotalKIA);
 }
