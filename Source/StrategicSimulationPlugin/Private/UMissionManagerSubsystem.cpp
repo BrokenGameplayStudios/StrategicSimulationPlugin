@@ -303,37 +303,38 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
-    // === VICTORY-SIDE POW / KIA (INDEPENDENT ROLLS — FIXED) ===
+    // === VICTORY-SIDE POW / KIA (now assigned to OriginBase) ===
     if ((Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess))
     {
         int32 NumToProcess = FMath::RandRange(1, 4);
         for (int32 i = 0; i < NumToProcess; ++i)
         {
-            // Independent rolls — both POW and KIA can now happen on the same mission
             if (FMath::RandRange(0.0f, 1.0f) <= Campaign->POWCaptureChanceOnVictory)
             {
                 const TArray<UStrategySoldier*>& DefenderRoster = SoldierMgr->GetRoster(Defender);
                 if (!DefenderRoster.IsEmpty())
                 {
-                    int32 RandIdx = FMath::RandRange(0, DefenderRoster.Num() - 1);
-                    UStrategySoldier* Victim = DefenderRoster[RandIdx];
+                    UStrategySoldier* Victim = DefenderRoster[FMath::RandRange(0, DefenderRoster.Num() - 1)];
                     if (Victim && !Victim->bIsPOW)
                     {
                         SoldierMgr->CaptureAsPOW(Attacker, Victim);
+                        if (Mission->OriginBase)
+                            Mission->OriginBase->AddPOW(Victim);   // ← per-base
                     }
                 }
             }
 
-            if (FMath::RandRange(0.0f, 1.0f) <= Campaign->KIAChanceOnVictory)   // ← removed "else"
+            if (FMath::RandRange(0.0f, 1.0f) <= Campaign->KIAChanceOnVictory)
             {
                 const TArray<UStrategySoldier*>& DefenderRoster = SoldierMgr->GetRoster(Defender);
                 if (!DefenderRoster.IsEmpty())
                 {
-                    int32 RandIdx = FMath::RandRange(0, DefenderRoster.Num() - 1);
-                    UStrategySoldier* Victim = DefenderRoster[RandIdx];
+                    UStrategySoldier* Victim = DefenderRoster[FMath::RandRange(0, DefenderRoster.Num() - 1)];
                     if (Victim)
                     {
-                        SoldierMgr->MarkAsKIA(Defender, Victim);
+                        SoldierMgr->MarkAsKIA(Attacker, Victim);
+                        if (Mission->OriginBase)
+                            Mission->OriginBase->AddKIABody(Victim);   // ← per-base
                     }
                 }
             }

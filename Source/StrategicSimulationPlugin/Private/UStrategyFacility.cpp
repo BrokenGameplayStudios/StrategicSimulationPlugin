@@ -331,63 +331,45 @@ void UStrategyFacility::ProcessContainmentDaily()
 {
     if (!bIsOperational || !OwningBase || !FacilityDefinition) return;
 
-    USoldierManagerSubsystem* SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UResourceManagerSubsystem>();
-    if (!SoldierMgr || !ResourceMgr) return;
+    if (!ResourceMgr) return;
 
-    // Faction lookup — your base does not have OwningFaction, so we use the POW roster to determine owner
-    EFactionType Faction = EFactionType::Human;   // default for testing
-    if (SoldierMgr->GetPOWRoster(EFactionType::Enemy).Num() > 0)
-        Faction = EFactionType::Human;   // Human facility processes Human POWs
-    else if (SoldierMgr->GetPOWRoster(EFactionType::Human).Num() > 0)
-        Faction = EFactionType::Enemy;
+    int32 POWCount = OwningBase->GetPOWCount();
+    if (POWCount == 0) return;
 
-    const TArray<UStrategySoldier*>& POWs = SoldierMgr->GetPOWRoster(Faction);
-    if (POWs.Num() == 0) return;
-
-    // Data-driven bonus from your UFacilityDefinition (ProductionSlots × POW count)
-    int32 Bonus = FacilityDefinition->ProductionSlots * POWs.Num();
+    int32 Bonus = FacilityDefinition->ProductionSlots * POWCount;
 
     FResourceStockpile BonusStock;
-    BonusStock.ResearchPoints = Bonus;   // research points go through ResourceMgr (matches your existing system)
+    BonusStock.ResearchPoints = Bonus;
 
-    ResourceMgr->AddResources(Faction, BonusStock);
+    ResourceMgr->AddResources(OwningBase->OwningFaction, BonusStock);   // use base's faction
 
-    UE_LOG(LogTemp, Display, TEXT("[CONTAINMENT] %s processed %d POWs → +%d research/intel bonus"),
-        *FacilityDefinition->FacilityName.ToString(), POWs.Num(), Bonus);
+    UE_LOG(LogTemp, Display, TEXT("[CONTAINMENT] %s at base '%s' processed %d POWs → +%d research"),
+        *FacilityDefinition->FacilityName.ToString(), *OwningBase->BaseName.ToString(), POWCount, Bonus);
 }
 
 void UStrategyFacility::ProcessAutopsyDaily()
 {
     if (!bIsOperational || !OwningBase || !FacilityDefinition) return;
 
-    USoldierManagerSubsystem* SoldierMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<USoldierManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UResourceManagerSubsystem>();
-    if (!SoldierMgr || !ResourceMgr) return;
+    if (!ResourceMgr) return;
 
-    // Same safe faction lookup
-    EFactionType Faction = EFactionType::Human;
-    if (SoldierMgr->GetKIARoster(EFactionType::Enemy).Num() > 0)
-        Faction = EFactionType::Human;
-    else if (SoldierMgr->GetKIARoster(EFactionType::Human).Num() > 0)
-        Faction = EFactionType::Enemy;
+    int32 KIACount = OwningBase->GetKIABodyCount();
+    if (KIACount == 0) return;
 
-    TArray<UStrategySoldier*>& KIAs = const_cast<TArray<UStrategySoldier*>&>(SoldierMgr->GetKIARoster(Faction));
-    if (KIAs.Num() == 0) return;
-
-    // Data-driven bonus from your UFacilityDefinition
-    int32 BonusResearch = FacilityDefinition->ProductionSlots * KIAs.Num() * 15;
-    int32 BonusExotic = FacilityDefinition->ProductionSlots * KIAs.Num() * 5;
+    int32 BonusResearch = FacilityDefinition->ProductionSlots * KIACount * 15;
+    int32 BonusExotic = FacilityDefinition->ProductionSlots * KIACount * 5;
 
     FResourceStockpile BonusStock;
     BonusStock.ResearchPoints = BonusResearch;
-    // BonusStock.ExoticMaterial = BonusExotic;   // uncomment if your FResourceStockpile has this field
+    // BonusStock.ExoticMaterial = BonusExotic; // uncomment when field exists
 
-    ResourceMgr->AddResources(Faction, BonusStock);
+    ResourceMgr->AddResources(OwningBase->OwningFaction, BonusStock);
 
-    UE_LOG(LogTemp, Display, TEXT("[AUTOPSY] %s processed %d KIA bodies → +%d research (bodies disposed)"),
-        *FacilityDefinition->FacilityName.ToString(), KIAs.Num(), BonusResearch);
+    UE_LOG(LogTemp, Display, TEXT("[AUTOPSY] %s at base '%s' processed %d KIA bodies → +%d research"),
+        *FacilityDefinition->FacilityName.ToString(), *OwningBase->BaseName.ToString(), KIACount, BonusResearch);
 
-    // Disposal — KIA bodies are consumed after processing
-    KIAs.Empty();
+    // Dispose bodies after processing
+    OwningBase->StoredKIABodies.Empty();
 }

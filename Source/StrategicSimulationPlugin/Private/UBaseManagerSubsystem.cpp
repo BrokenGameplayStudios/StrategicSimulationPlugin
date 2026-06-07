@@ -595,8 +595,7 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
 
         UE_LOG(LogTemp, Display, TEXT("  Facilities: %s"), *FacilityList);
         UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d | POW Count: %d | KIA Bodies: %d"),
-            SoldiersStationed, POWCount, KIACount);
-    }
+            SoldiersStationed, B->GetPOWCount(), B->GetKIABodyCount());
 
     int32 TotalBarracksCapacity = 0;
     for (UStrategyBase* B : Bases)

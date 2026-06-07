@@ -24,9 +24,30 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Facilities")
     TArray<UStrategyFacility*> Facilities;
 
-    /** NEW: POW / Prisoners System — captured enemy soldiers held at this base */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Base|Prisoners")
-    TArray<UStrategySoldier*> CapturedPrisoners;
+    // === POW / KIA STORAGE (per-base) ===
+    UPROPERTY(VisibleAnywhere, Transient, Category = "POW/KIA")
+    TArray<UStrategySoldier*> ContainedPOWs;     // POWs held in this base's Containment
+
+    UPROPERTY(VisibleAnywhere, Transient, Category = "POW/KIA")
+    TArray<UStrategySoldier*> StoredKIABodies;   // Enemy KIA bodies in this base's Autopsy
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    int32 GetPOWCount() const { return ContainedPOWs.Num(); }
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    int32 GetKIABodyCount() const { return StoredKIABodies.Num(); }
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void AddPOW(UStrategySoldier* Soldier);
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void AddKIABody(UStrategySoldier* Soldier);
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void ProcessContainment();   // called by facility
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void ProcessAutopsy();       // called by facility
 
     /** Per-base power tracking */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Power")

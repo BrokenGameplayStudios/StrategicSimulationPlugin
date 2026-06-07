@@ -201,3 +201,32 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
 
     return true;
 }
+
+void UStrategyBase::AddPOW(UStrategySoldier* Soldier)
+{
+    if (!Soldier) return;
+    ContainedPOWs.AddUnique(Soldier);
+    Soldier->StationedBase = this;
+    UE_LOG(LogTemp, Display, TEXT("[POW] %s added to base '%s' Containment"), *Soldier->SoldierName, *BaseName.ToString());
+}
+
+void UStrategyBase::AddKIABody(UStrategySoldier* Soldier)
+{
+    if (!Soldier) return;
+    StoredKIABodies.AddUnique(Soldier);
+    UE_LOG(LogTemp, Display, TEXT("[KIA] Body of %s added to base '%s' Autopsy"), *Soldier->SoldierName, *BaseName.ToString());
+}
+
+void UStrategyBase::ProcessContainment()
+{
+    // Called by Containment facility daily
+    if (ContainedPOWs.Num() == 0) return;
+    // Bonus logic moved to facility (we just provide the list)
+}
+
+void UStrategyBase::ProcessAutopsy()
+{
+    // Called by Autopsy facility daily
+    if (StoredKIABodies.Num() == 0) return;
+    // Bodies will be disposed after processing
+}
