@@ -600,6 +600,7 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
     int32 TotalBarracksCapacity = 0;
     int32 TotalPOW = 0;
     int32 TotalKIA = 0;
+
     for (UStrategyBase* B : Bases)
     {
         if (B)
