@@ -570,6 +570,13 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
                 SoldiersStationed++;
         }
 
+        int32 VehiclesStationed = 0;
+        for (UStrategyFacility* Fac : B->Facilities)
+        {
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+                VehiclesStationed += Fac->ParkedVehicles.Num();
+        }
+
         UE_LOG(LogTemp, Display, TEXT("Base: %s | Net Power: %d"),
             *B->BaseName.ToString(), B->GetNetPower());
 
@@ -592,12 +599,13 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
         }
 
         UE_LOG(LogTemp, Display, TEXT("  Facilities: %s"), *FacilityList);
-        UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d | POW Count: %d | KIA Bodies: %d"),
-            SoldiersStationed, B->GetPOWCount(), B->GetKIABodyCount());
+        UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d | Vehicles stationed: %d | POW Count: %d | KIA Bodies: %d"),
+            SoldiersStationed, VehiclesStationed, B->GetPOWCount(), B->GetKIABodyCount());
     }
 
     // === GLOBAL TOTALS ===
     int32 TotalBarracksCapacity = 0;
+    int32 TotalSoldiers = SoldierMgr->GetRoster(Faction).Num();
     int32 TotalPOW = 0;
     int32 TotalKIA = 0;
 
@@ -610,8 +618,6 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
             TotalKIA += B->GetKIABodyCount();
         }
     }
-
-    int32 TotalSoldiers = SoldierMgr->GetRoster(Faction).Num();
 
     UE_LOG(LogTemp, Display, TEXT("=== GLOBAL TOTALS ==="));
     UE_LOG(LogTemp, Display, TEXT("Total Barracks Capacity: %d | Current Soldiers: %d | Total POW Count: %d | Total KIA Bodies: %d"),

@@ -74,12 +74,6 @@ void UAIControllerSubsystem::PerformDailyBuildOrder(EFactionType Faction)
 
 // RUN AI FOR FACTION
 // Does routine for AI
-// === FULL FUNCTION: UAIControllerSubsystem::RunAIForFaction (COMPLETE, COPY-PASTE READY) ===
-// I have taken your EXACT current code (the one you just pasted) and made ONLY the necessary change.
-// No other logic was touched — vehicle equipping, mission launching, expansion, recruitment, research, etc. all remain 100% identical.
-// The only edit is inside the Command Center check (lines ~80-90 in your version).
-// This fixes the duplicate Command Center bug on Forward Base 03 and Forward Base 04 (and any future bases).
-
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[AI] >>> ENTERING RunAIForFaction for %s (Day %d)"),
@@ -161,9 +155,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             bool bShouldBuild = false;
             if (FacType == EFacilityType::Command)
             {
-                // NEW CODE: Use HasAnyFacilityOfType (already exists in UStrategyBase)
-                // This counts BOTH built AND under-construction Command Centers → exactly ONE per base forever.
-                // No new helper functions needed.
                 bShouldBuild = !B->HasAnyFacilityOfType(EFacilityType::Command);
             }
             else if (FacType == EFacilityType::LivingQuarters)
@@ -175,10 +166,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             // === NEW: Containment + Autopsy (Phase 2) ===
             else if (FacType == EFacilityType::Containment || FacType == EFacilityType::Autopsy)
             {
-                // Build when the faction is near soldier capacity (or already has POWs/KIA)
-                // This matches the original plan: AI builds them automatically once bases are full.
                 int32 TotalSoldiers = SoldierMgr ? SoldierMgr->GetRoster(Faction).Num() : 0;
-                int32 CurrentBarracksCapacity = B->GetTotalBuiltOfType(EFacilityType::LivingQuarters) * 6; // 6 soldiers per barracks
+                int32 CurrentBarracksCapacity = B->GetTotalBuiltOfType(EFacilityType::LivingQuarters) * 6;
                 bool bNearMaxCapacity = (CurrentBarracksCapacity > 0) && (TotalSoldiers >= (CurrentBarracksCapacity * 0.8f));
 
                 bool bHasPOWOrKIA = false;
@@ -188,9 +177,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                     {
                         bHasPOWOrKIA = SoldierMgr->GetPOWRoster(Faction).Num() > 0;
                     }
-                    else // Autopsy
+                    else
                     {
-                        // Phase 3 will add KIA tracking; for now we build when near max soldiers
                         bHasPOWOrKIA = false;
                     }
                 }
@@ -222,7 +210,27 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === FULL VEHICLE / MISSION / AMMO LOGIC (unchanged) ===
+    // === FULL VEHICLE / MISSION / AMMO LOGIC — FIXED: Missions now launch from a base that actually has parked vehicles ===
+    // Find a base with parked vehicles (prefer non-Command Center if possible)
+    UStrategyBase* MissionLaunchBase = nullptr;
+    for (UStrategyBase* B : AllBases)
+    {
+        if (B->HasOperationalFacilityOfType(EFacilityType::Hanger))
+        {
+            for (UStrategyFacility* Fac : B->Facilities)
+            {
+                if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger && Fac->ParkedVehicles.Num() > 0)
+                {
+                    MissionLaunchBase = B;
+                    break;
+                }
+            }
+            if (MissionLaunchBase) break;
+        }
+    }
+    if (!MissionLaunchBase) MissionLaunchBase = FocusBase; // fallback to old behavior
+
+    // === VEHICLE BUILD (unchanged) ===
     if (FocusBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
     {
         UStrategyBase* TargetBase = GetBaseWithFewestVehicles(Faction);
@@ -236,10 +244,11 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    if (FocusBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
+    // === MISSION LAUNCH (now from correct base) ===
+    if (MissionLaunchBase->HasOperationalFacilityOfType(EFacilityType::Hanger))
     {
         bool bHasParkedVehicles = false;
-        for (UStrategyFacility* Fac : FocusBase->Facilities)
+        for (UStrategyFacility* Fac : MissionLaunchBase->Facilities)
         {
             if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
             {
@@ -273,7 +282,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                         }
                     }
 
-                    for (UStrategyFacility* Fac : FocusBase->Facilities)
+                    for (UStrategyFacility* Fac : MissionLaunchBase->Facilities)
                     {
                         if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                         {
@@ -311,7 +320,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 EMissionType ChosenType = static_cast<EMissionType>(FMath::RandRange(0, 2));
 
                 TArray<UStrategyVehicle*> AvailableVehicles;
-                for (UStrategyFacility* Fac : FocusBase->Facilities)
+                for (UStrategyFacility* Fac : MissionLaunchBase->Facilities)
                 {
                     if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                         AvailableVehicles.Append(Fac->ParkedVehicles);
@@ -319,17 +328,17 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
                 if (AvailableVehicles.Num() > 0)
                 {
-                    if (UMissionGroup* Mission = MissionMgr->StartMission(FocusBase, AvailableVehicles, 15, TArray<UStrategySoldier*>(), ChosenType, Faction))
+                    if (UMissionGroup* Mission = MissionMgr->StartMission(MissionLaunchBase, AvailableVehicles, 15, TArray<UStrategySoldier*>(), ChosenType, Faction))
                     {
                         UE_LOG(LogTemp, Display, TEXT("[AI] %s AI launched %s mission from base '%s' with %d vehicles"),
-                            *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(ChosenType), *FocusBase->BaseName.ToString(), AvailableVehicles.Num());
+                            *UEnum::GetValueAsString(Faction), *UEnum::GetValueAsString(ChosenType), *MissionLaunchBase->BaseName.ToString(), AvailableVehicles.Num());
                     }
                 }
             }
         }
         else
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting"), *FocusBase->BaseName.ToString());
+            UE_LOG(LogTemp, Verbose, TEXT("[AI] Hanger exists in '%s' but no parked vehicles yet — waiting"), *MissionLaunchBase->BaseName.ToString());
         }
     }
 
