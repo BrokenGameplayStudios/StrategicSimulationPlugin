@@ -281,3 +281,59 @@ void UStrategyBase::ProcessAutopsy()
     if (StoredKIABodies.Num() == 0) return;
     // Bodies will be disposed after processing
 }
+
+TArray<UStrategySoldier*> UStrategyBase::GetContainedPOWs() const
+{
+    return ContainedPOWs;
+}
+
+void UStrategyBase::ReleasePOW(UStrategySoldier* POW)
+{
+    if (!POW || !ContainedPOWs.Contains(POW))
+        return;
+
+    ContainedPOWs.Remove(POW);
+
+    // === Give player a resource bonus for releasing the POW ===
+    UResourceManagerSubsystem* ResourceMgr = GetWorld()->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (ResourceMgr)
+    {
+        FResourceStockpile Bonus;
+        Bonus.Money = 1200;   // tweak these numbers as you like
+        Bonus.ResearchPoints = 600;
+        // Bonus.Metals     = 200;    // optional
+
+        ResourceMgr->AddResources(OwningFaction, Bonus);
+
+        UE_LOG(LogTemp, Display, TEXT("[POW] Released %s from base '%s' Containment — +1200 Money +600 Research"),
+            *POW->SoldierName, *BaseName.ToString());
+    }
+
+    // POW is now gone (player got the benefit)
+    POW->ConditionalBeginDestroy();
+}
+
+void UStrategyBase::ProcessKIABody(UStrategySoldier* Body)
+{
+    if (!Body || !StoredKIABodies.Contains(Body)) return;
+
+    StoredKIABodies.Remove(Body);
+
+    // === Give research / intel bonus via ResourceManager (correct subsystem) ===
+    UResourceManagerSubsystem* ResourceMgr = GetWorld()->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (ResourceMgr)
+    {
+        FResourceStockpile Bonus;
+        Bonus.ResearchPoints = 800;     // ← tweak this number as you like
+        // Bonus.ExoticMaterial = 50;   // example: add exotics if you want
+        // Bonus.Money = 200;           // example: small cash bonus
+
+        ResourceMgr->AddResources(OwningFaction, Bonus);
+
+        UE_LOG(LogTemp, Display, TEXT("[KIA] Autopsied %s at base '%s' — +800 Research Points granted"),
+            *Body->SoldierName, *BaseName.ToString());
+    }
+
+    // Body is now fully processed and deleted
+    Body->ConditionalBeginDestroy();
+}

@@ -52,6 +52,19 @@ public:
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     void ProcessAutopsy();       // called by facility
 
+    // ====================== POW / KIA UI HELPERS ======================
+    /** Returns all POWs currently held in this base's Containment */
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    TArray<UStrategySoldier*> GetContainedPOWs() const;
+
+    /** Releases a POW back into the regular roster (they become a normal stationed soldier again) */
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void ReleasePOW(UStrategySoldier* POW);
+
+    /** Processes a KIA body in Autopsy (gives research bonus then removes the body) */
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
+    void ProcessKIABody(UStrategySoldier* Body);
+
     // Capacity helpers (used by AddPOW / AddKIABody)
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     int32 GetTotalContainmentSlots() const;
