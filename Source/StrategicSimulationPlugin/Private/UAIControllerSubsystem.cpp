@@ -355,7 +355,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         BaseMgr->DebugPrintFullBaseState(Faction);
     }
 
-    // === EXPANSION — TRUE WAVE ===
+    // === EXPANSION — TRUE WAVE (fixed to check per-base vehicle ownership) ===
     if (AllBases.Num() < MaxBases)
     {
         bool bAllBasesHaveVehicle = true;
@@ -372,13 +372,29 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 {
                     if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                     {
-                        if (Fac->ParkedVehicles.Num() > 0) { bThisBaseHasVehicle = true; break; }
+                        if (Fac->ParkedVehicles.Num() > 0)
+                        {
+                            bThisBaseHasVehicle = true;
+                            break;
+                        }
                     }
                 }
-                if (!bThisBaseHasVehicle)
+            }
+
+            // Check vehicles on mission from this base
+            if (!bThisBaseHasVehicle)
+            {
+                UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+                if (MissionMgr)
                 {
-                    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
-                    if (MissionMgr && MissionMgr->ActiveMissions.Num() > 0) bThisBaseHasVehicle = true;
+                    for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+                    {
+                        if (Mission && Mission->OriginBase == B && Mission->VehiclesInFleet.Num() > 0)
+                        {
+                            bThisBaseHasVehicle = true;
+                            break;
+                        }
+                    }
                 }
             }
 
