@@ -153,7 +153,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     if (!Campaign || !SoldierMgr)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[MISSION] Could not get Campaign or SoldierMgr subsystems - POW/KIA logic skipped"));
+        UE_LOG(LogTemp, Warning, TEXT("[MISSION] Could not get subsystems - POW/KIA logic skipped"));
         return;
     }
 
@@ -227,11 +227,10 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->ResourcesGained = Reward;
 
-    // === Faction setup ===
     EFactionType Attacker = Mission->AttackingFaction;
     EFactionType Defender = (Attacker == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-    // === Per-vehicle losses + POW/KIA (loss side) ===
+    // === Per-vehicle losses + POW/KIA ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
     int32 TotalCaptured = 0;
@@ -254,17 +253,11 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                 bool bCaptured = false;
 
                 if (Outcome == EMissionOutcome::Failure || Outcome == EMissionOutcome::CatastrophicFailure)
-                {
                     bCaptured = (FMath::RandRange(0.0f, 1.0f) <= Campaign->EnemyPOWCaptureChanceOnDefeat);
-                }
                 else if (Outcome == EMissionOutcome::PartialSuccess)
-                {
                     bCaptured = FMath::RandRange(0.0f, 1.0f) <= 0.40f;
-                }
                 else
-                {
                     bCaptured = FMath::RandRange(0.0f, 1.0f) <= 0.10f;
-                }
 
                 if (bCaptured)
                 {
@@ -293,18 +286,29 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
         else
         {
+            // === SURVIVING VEHICLE — RETURN TO HANGER ===
             int32 Damage = (Outcome == EMissionOutcome::CatastrophicFailure) ? 60 :
                 (Outcome == EMissionOutcome::Failure) ? 35 : 15;
             Vehicle->ApplyDamage(Damage);
+
+            // Return to home hangar
+            if (Vehicle->HomeHanger)
+            {
+                Vehicle->CurrentHanger = Vehicle->HomeHanger;
+                Vehicle->HomeHanger->ParkedVehicles.AddUnique(Vehicle);
+            }
             Vehicle->CurrentMission = nullptr;
+
+            UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' returned to hanger at base '%s'"),
+                *Vehicle->VehicleDefinition->VehicleName.ToString(), *Mission->OriginBase->BaseName.ToString());
         }
     }
 
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
-    // === VICTORY-SIDE POW / KIA (now assigned to OriginBase) ===
-    if ((Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess))
+    // === VICTORY-SIDE POW / KIA (per-base) ===
+    if (Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess)
     {
         int32 NumToProcess = FMath::RandRange(1, 4);
         for (int32 i = 0; i < NumToProcess; ++i)
@@ -319,7 +323,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                     {
                         SoldierMgr->CaptureAsPOW(Attacker, Victim);
                         if (Mission->OriginBase)
-                            Mission->OriginBase->AddPOW(Victim);   // ← per-base
+                            Mission->OriginBase->AddPOW(Victim);
                     }
                 }
             }
@@ -334,7 +338,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                     {
                         SoldierMgr->MarkAsKIA(Attacker, Victim);
                         if (Mission->OriginBase)
-                            Mission->OriginBase->AddKIABody(Victim);   // ← per-base
+                            Mission->OriginBase->AddKIABody(Victim);
                     }
                 }
             }
@@ -348,7 +352,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         ResourceMgr->AddResources(Mission->AttackingFaction, Reward);
     }
 
-    // === Clean up surviving soldiers ===
+    // === Clean up surviving soldiers (passengers already emptied above) ===
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         Vehicle->CurrentPassengers.Empty();

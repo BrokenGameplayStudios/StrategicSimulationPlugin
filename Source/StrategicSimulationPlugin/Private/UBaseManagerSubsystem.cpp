@@ -572,12 +572,31 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
                 SoldiersStationed++;
         }
 
+        // Soldiers currently on mission from this base
+        int32 SoldiersOnMission = 0;
+        for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
+        {
+            if (Soldier && Soldier->CurrentMission != nullptr)
+                SoldiersOnMission++;
+        }
+
         // Vehicles parked in hangars at this base
         int32 VehiclesStationed = 0;
         for (UStrategyFacility* Fac : B->Facilities)
         {
             if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                 VehiclesStationed += Fac->ParkedVehicles.Num();
+        }
+
+        // Vehicles currently on mission from this base
+        int32 VehiclesOnMission = 0;
+        if (MissionMgr)
+        {
+            for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+            {
+                if (Mission && Mission->OriginBase == B)
+                    VehiclesOnMission += Mission->VehiclesInFleet.Num();
+            }
         }
 
         UE_LOG(LogTemp, Display, TEXT("Base: %s | Net Power: %d"),
@@ -604,6 +623,9 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
         UE_LOG(LogTemp, Display, TEXT("  Facilities: %s"), *FacilityList);
         UE_LOG(LogTemp, Display, TEXT("  Soldiers stationed: %d | Vehicles stationed: %d | POW Count: %d | KIA Bodies: %d"),
             SoldiersStationed, VehiclesStationed, B->GetPOWCount(), B->GetKIABodyCount());
+
+        UE_LOG(LogTemp, Display, TEXT("  Soldiers on mission: %d | Vehicles on mission: %d"),
+            SoldiersOnMission, VehiclesOnMission);
     }
 
     // === GLOBAL TOTALS ===
