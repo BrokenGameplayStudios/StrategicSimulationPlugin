@@ -119,10 +119,10 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
             }
 
             // === POW / Prisoners Debug ===
-            if (Base->CapturedPrisoners.Num() > 0)
+            if (Base->GetPOWCount() > 0)
             {
-                DebugText += FString::Printf(TEXT("  [PRISONERS] %d captured soldiers held here!\n"), Base->CapturedPrisoners.Num());
-                for (UStrategySoldier* Prisoner : Base->CapturedPrisoners)
+                DebugText += FString::Printf(TEXT("  [PRISONERS] %d captured soldiers held here!\n"), Base->GetPOWCount());
+                for (UStrategySoldier* Prisoner : Base->ContainedPOWs   )
                 {
                     if (Prisoner)
                         DebugText += FString::Printf(TEXT("    → %s (%s)\n"), *Prisoner->SoldierName, *Prisoner->ClassDefinition->ClassName.ToString());
