@@ -195,7 +195,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->Outcome = Outcome;
 
-    // === Rewards (unchanged) ===
+    // === Rewards ===
     FResourceStockpile Reward;
     switch (Outcome)
     {
@@ -230,7 +230,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     EFactionType Attacker = Mission->AttackingFaction;
     EFactionType Defender = (Attacker == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-    // === Per-vehicle losses + POW/KIA ===
+    // === Per-vehicle losses + POW/KIA + RETURN LOGIC ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
     int32 TotalCaptured = 0;
@@ -296,18 +296,17 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
             {
                 Vehicle->CurrentHanger = Vehicle->HomeHanger;
                 Vehicle->HomeHanger->ParkedVehicles.AddUnique(Vehicle);
+                UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' returned to hanger at base '%s'"),
+                    *Vehicle->VehicleDefinition->VehicleName.ToString(), *Mission->OriginBase->BaseName.ToString());
             }
             Vehicle->CurrentMission = nullptr;
-
-            UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' returned to hanger at base '%s'"),
-                *Vehicle->VehicleDefinition->VehicleName.ToString(), *Mission->OriginBase->BaseName.ToString());
         }
     }
 
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
-    // === VICTORY-SIDE POW / KIA (per-base) ===
+    // === VICTORY-SIDE POW / KIA ===
     if (Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess)
     {
         int32 NumToProcess = FMath::RandRange(1, 4);
@@ -352,7 +351,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         ResourceMgr->AddResources(Mission->AttackingFaction, Reward);
     }
 
-    // === Clean up surviving soldiers (passengers already emptied above) ===
+    // === Clean up surviving soldiers ===
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         Vehicle->CurrentPassengers.Empty();
