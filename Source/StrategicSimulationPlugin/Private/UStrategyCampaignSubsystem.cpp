@@ -307,11 +307,11 @@ void UStrategyCampaignSubsystem::StartSimulation()
         {
             if (UVehicleDefinition* Veh = SoftVeh.Get())
             {
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d soldiers | Max Mission Days: %d | Attack: %d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Production: %d days"),
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d soldiers | Max Range: %.0f | Attack: %d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Production: %d days"),
                     *Veh->VehicleName.ToString(),
                     *UEnum::GetValueAsString(Veh->VehicleType),
                     Veh->SoldierCapacity,
-                    Veh->MaxMissionDurationDays,
+                    Veh->MaxRange,
                     Veh->AttackPower,
                     Veh->BuildCost.Money,
 					Veh->BuildCost.Metals,

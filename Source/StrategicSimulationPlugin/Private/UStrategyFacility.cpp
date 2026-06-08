@@ -187,7 +187,6 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     FProductionJob Job = ActiveProductionJobs[Index];
 
     // CRITICAL FIX: Remove the job BEFORE any completion logic runs
-    // This is what finally frees the production slot for the next tick
     ActiveProductionJobs.RemoveAt(Index);
 
     UE_LOG(LogTemp, Verbose, TEXT("[PRODUCTION] Job removed — slots now free: %d (was %d) in %s"),
@@ -238,7 +237,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
             NewVehicle->HomeHanger = this;
             NewVehicle->HomeBase = UseBase;
             NewVehicle->CurrentHealth = VehDef->MaxHealth;
-            NewVehicle->RemainingFuelDays = 30;
+            NewVehicle->CurrentRangeLeft = VehDef->MaxRange;   // ← NEW: proper range setup
 
             ParkedVehicles.Add(NewVehicle);
 

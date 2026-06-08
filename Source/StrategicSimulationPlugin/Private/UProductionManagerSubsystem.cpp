@@ -93,7 +93,8 @@ void UProductionManagerSubsystem::CompleteSoldierJob(const FProductionJob& Job, 
 void UProductionManagerSubsystem::CompleteVehicleJob(const FProductionJob& Job, UStrategyFacility* Facility)
 {
     UVehicleDefinition* VehDef = Cast<UVehicleDefinition>(Job.TargetAsset);
-    if (!VehDef || !Facility || Facility->FacilityDefinition->FacilityType != EFacilityType::Hanger) return;
+    if (!VehDef || !Facility || Facility->FacilityDefinition->FacilityType != EFacilityType::Hanger)
+        return;
 
     UObject* Outer = GetGameInstance() ? static_cast<UObject*>(GetGameInstance()) : static_cast<UObject*>(Facility);
 
@@ -103,12 +104,15 @@ void UProductionManagerSubsystem::CompleteVehicleJob(const FProductionJob& Job, 
     NewVehicle->HomeHanger = Facility;
     NewVehicle->HomeBase = Facility->OwningBase;
     NewVehicle->CurrentHealth = VehDef->MaxHealth;
-    NewVehicle->RemainingFuelDays = 30;
+    NewVehicle->CurrentRangeLeft = VehDef->MaxRange;   // ← NEW: proper range setup
 
     Facility->ParkedVehicles.Add(NewVehicle);
 
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s added to hanger '%s' (now %d parked)"),
-        *VehDef->VehicleName.ToString(), *Facility->FacilityDefinition->FacilityName.ToString(), Facility->ParkedVehicles.Num());
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s added to hanger '%s' (MaxRange: %.0f, now %d parked)"),
+        *VehDef->VehicleName.ToString(),
+        *Facility->FacilityDefinition->FacilityName.ToString(),
+        NewVehicle->GetMaxRange(),
+        Facility->ParkedVehicles.Num());
 }
 
 void UProductionManagerSubsystem::CompleteFacilityJob(const FProductionJob& Job, UStrategyFacility* Facility)

@@ -152,36 +152,41 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
 
     if (!Campaign || !SoldierMgr)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[MISSION] Could not get subsystems - POW/KIA logic skipped"));
         return;
-    }
 
     float FleetEffectiveness = CalculateFleetEffectiveness(Mission);
 
-    // === Mission type path ===
-    switch (Mission->MissionType)
-    {
-    case EMissionType::Interception:
-        UE_LOG(LogTemp, Display, TEXT("[MISSION] Interception mission — direct air battle"));
-        break;
+    bool bIsRecon = (Mission->MissionType == EMissionType::Recon);
 
-    case EMissionType::Defensive:
-    case EMissionType::Offensive:
-        if (FMath::RandRange(1, 100) <= 30)
+    // === Mission type logging ===
+    if (bIsRecon)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[RECON] Recon mission launched from base '%s'"), *Mission->OriginBase->BaseName.ToString());
+    }
+    else
+    {
+        switch (Mission->MissionType)
         {
-            UE_LOG(LogTemp, Display, TEXT("[MISSION] %s mission — intercepted in transit!"), *UEnum::GetValueAsString(Mission->MissionType));
+        case EMissionType::Interception:
+            UE_LOG(LogTemp, Display, TEXT("[MISSION] Interception mission — direct air battle"));
+            break;
+        case EMissionType::Defensive:
+        case EMissionType::Offensive:
+            if (FMath::RandRange(1, 100) <= 30)
+            {
+                UE_LOG(LogTemp, Display, TEXT("[MISSION] %s mission — intercepted in transit!"), *UEnum::GetValueAsString(Mission->MissionType));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Display, TEXT("[MISSION] %s mission — reached target location"), *UEnum::GetValueAsString(Mission->MissionType));
+            }
+            break;
         }
-        else
-        {
-            UE_LOG(LogTemp, Display, TEXT("[MISSION] %s mission — reached target location"), *UEnum::GetValueAsString(Mission->MissionType));
-        }
-        break;
     }
 
-    // === Outcome roll ===
+    // === Outcome roll (Recon is intentionally safer) ===
     const int32 Roll = FMath::RandRange(1, 100);
-    float SuccessChance = FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 40.0f, 85.0f);
+    float SuccessChance = bIsRecon ? 75.0f : FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 40.0f, 85.0f);
 
     EMissionOutcome Outcome;
     if (Roll <= SuccessChance)
@@ -197,32 +202,43 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     // === Rewards ===
     FResourceStockpile Reward;
-    switch (Outcome)
+    if (bIsRecon)
     {
-    case EMissionOutcome::Success:
-        Reward.Money = FMath::RandRange(1200, 2500);
-        Reward.Metals = FMath::RandRange(800, 1600);
-        Reward.Biologicals = FMath::RandRange(300, 700);
-        Reward.Chemicals = FMath::RandRange(200, 500);
-        break;
-    case EMissionOutcome::PartialSuccess:
-        Reward.Money = FMath::RandRange(600, 1400);
-        Reward.Metals = FMath::RandRange(400, 900);
-        Reward.Biologicals = FMath::RandRange(150, 400);
-        Reward.Chemicals = FMath::RandRange(100, 300);
-        break;
-    case EMissionOutcome::Failure:
-        Reward.Money = FMath::RandRange(100, 600);
-        Reward.Metals = FMath::RandRange(100, 400);
-        Reward.Biologicals = FMath::RandRange(50, 150);
-        Reward.Chemicals = FMath::RandRange(30, 100);
-        break;
-    case EMissionOutcome::CatastrophicFailure:
-        Reward.Money = FMath::RandRange(-800, -200);
-        Reward.Metals = FMath::RandRange(-300, -50);
-        Reward.Biologicals = FMath::RandRange(-150, -20);
-        Reward.Chemicals = FMath::RandRange(-100, -10);
-        break;
+        // Recon gives intel instead of combat loot
+        Reward.ResearchPoints = FMath::RandRange(400, 900);
+        Reward.Money = FMath::RandRange(300, 700);
+        UE_LOG(LogTemp, Display, TEXT("[RECON] Success — gained intel and discovered new map location"));
+    }
+    else
+    {
+        // Your original reward logic
+        switch (Outcome)
+        {
+        case EMissionOutcome::Success:
+            Reward.Money = FMath::RandRange(1200, 2500);
+            Reward.Metals = FMath::RandRange(800, 1600);
+            Reward.Biologicals = FMath::RandRange(300, 700);
+            Reward.Chemicals = FMath::RandRange(200, 500);
+            break;
+        case EMissionOutcome::PartialSuccess:
+            Reward.Money = FMath::RandRange(600, 1400);
+            Reward.Metals = FMath::RandRange(400, 900);
+            Reward.Biologicals = FMath::RandRange(150, 400);
+            Reward.Chemicals = FMath::RandRange(100, 300);
+            break;
+        case EMissionOutcome::Failure:
+            Reward.Money = FMath::RandRange(100, 600);
+            Reward.Metals = FMath::RandRange(100, 400);
+            Reward.Biologicals = FMath::RandRange(50, 150);
+            Reward.Chemicals = FMath::RandRange(30, 100);
+            break;
+        case EMissionOutcome::CatastrophicFailure:
+            Reward.Money = FMath::RandRange(-800, -200);
+            Reward.Metals = FMath::RandRange(-300, -50);
+            Reward.Biologicals = FMath::RandRange(-150, -20);
+            Reward.Chemicals = FMath::RandRange(-100, -10);
+            break;
+        }
     }
 
     Mission->ResourcesGained = Reward;
@@ -230,7 +246,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     EFactionType Attacker = Mission->AttackingFaction;
     EFactionType Defender = (Attacker == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-    // === Per-vehicle losses + POW/KIA + RETURN LOGIC ===
+    // === Vehicle & Soldier losses + return logic (unchanged except Recon safety) ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
     int32 TotalCaptured = 0;
@@ -239,9 +255,9 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     {
         if (!Vehicle) continue;
 
-        float VehicleSurvivalChance = FleetEffectiveness * 0.7f + (Vehicle->CurrentHealth / 2.0f);
+        float SurvivalChance = bIsRecon ? 90.0f : (FleetEffectiveness * 0.7f + (Vehicle->CurrentHealth / 2.0f));
 
-        if (FMath::RandRange(1, 100) > VehicleSurvivalChance)
+        if (FMath::RandRange(1, 100) > SurvivalChance)
         {
             TotalVehiclesLost++;
             UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' DESTROYED"), *Vehicle->VehicleDefinition->VehicleName.ToString());
@@ -251,7 +267,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                 if (!Soldier) continue;
 
                 bool bCaptured = false;
-
                 if (Outcome == EMissionOutcome::Failure || Outcome == EMissionOutcome::CatastrophicFailure)
                     bCaptured = (FMath::RandRange(0.0f, 1.0f) <= Campaign->EnemyPOWCaptureChanceOnDefeat);
                 else if (Outcome == EMissionOutcome::PartialSuccess)
@@ -263,18 +278,15 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                 {
                     SoldierMgr->CaptureAsPOW(Defender, Soldier);
                     TotalCaptured++;
-                    UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s CAPTURED by opposing force!"), *Soldier->SoldierName);
                 }
                 else
                 {
                     SoldierMgr->MarkAsKIA(Attacker, Soldier);
                     AllLostSoldiers.Add(Soldier);
-                    UE_LOG(LogTemp, Warning, TEXT("[MISSION]   → Soldier %s KIA"), *Soldier->SoldierName);
                 }
             }
 
             Vehicle->CurrentPassengers.Empty();
-
             if (Vehicle->CurrentHanger)
                 Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
 
@@ -286,18 +298,15 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
         else
         {
-            // === SURVIVING VEHICLE — RETURN TO HANGER ===
+            // Surviving vehicle returns home
             int32 Damage = (Outcome == EMissionOutcome::CatastrophicFailure) ? 60 :
-                (Outcome == EMissionOutcome::Failure) ? 35 : 15;
+                (Outcome == EMissionOutcome::Failure) ? 35 : (bIsRecon ? 5 : 15);
             Vehicle->ApplyDamage(Damage);
 
-            // Return to home hangar
             if (Vehicle->HomeHanger)
             {
                 Vehicle->CurrentHanger = Vehicle->HomeHanger;
                 Vehicle->HomeHanger->ParkedVehicles.AddUnique(Vehicle);
-                UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' returned to hanger at base '%s'"),
-                    *Vehicle->VehicleDefinition->VehicleName.ToString(), *Mission->OriginBase->BaseName.ToString());
             }
             Vehicle->CurrentMission = nullptr;
         }
@@ -306,10 +315,10 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
-    // === VICTORY-SIDE POW / KIA ===
+    // === Victory-side POW/KIA (Recon has lower chance) ===
     if (Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess)
     {
-        int32 NumToProcess = FMath::RandRange(1, 4);
+        int32 NumToProcess = bIsRecon ? FMath::RandRange(0, 2) : FMath::RandRange(1, 4);
         for (int32 i = 0; i < NumToProcess; ++i)
         {
             if (FMath::RandRange(0.0f, 1.0f) <= Campaign->POWCaptureChanceOnVictory)
@@ -351,7 +360,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         ResourceMgr->AddResources(Mission->AttackingFaction, Reward);
     }
 
-    // === Clean up surviving soldiers ===
+    // Clean up
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         Vehicle->CurrentPassengers.Empty();
