@@ -53,6 +53,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
     void ActivateLiveMovementForVehicles(const TArray<UStrategyVehicle*>& Vehicles, EMissionType MissionType);
 
+    // ===========================================================================
+    // NEW: Live movement integration (keep all vehicles updated)
+    // ===========================================================================
+    UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
+    void UpdateAllLiveVehicles();
+
 private:
     /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
     float CalculateFleetEffectiveness(const UMissionGroup* Mission) const;

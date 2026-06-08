@@ -20,6 +20,7 @@ void UMissionManagerSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[MISSION] Day %d — SimulateOneDay() called (ActiveMissions: %d)"), NewDay, ActiveMissions.Num());
     SimulateOneDay();
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Day %d passed — all live vehicles updated"), NewDay);
 }
 
 void UMissionManagerSubsystem::SimulateOneDay()
@@ -48,6 +49,10 @@ void UMissionManagerSubsystem::SimulateOneDay()
     {
         ActiveMissions.Remove(Mission);
     }
+
+    // NEW: Keep live movement positions and radar pings up-to-date every day
+    UpdateAllLiveVehicles();
+    UE_LOG(LogTemp, Verbose, TEXT("[MISSION] Simulated one day — %d active missions remaining"), ActiveMissions.Num())
 }
 
 // ===========================================================================
@@ -87,6 +92,27 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(const TArray<UStr
 
         UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Activated live movement for %s (target: %.0f,%.0f)"),
             *Vehicle->VehicleDefinition->VehicleName.ToString(), TargetLocation.X, TargetLocation.Y);
+    }
+}
+
+// ===========================================================================
+// NEW: Update every vehicle that is on a live mission
+// ===========================================================================
+void UMissionManagerSubsystem::UpdateAllLiveVehicles()
+{
+    float CurrentHours = GetCurrentGameHours();
+
+    for (UMissionGroup* Mission : ActiveMissions)
+    {
+        if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
+
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (Vehicle)
+            {
+                Vehicle->UpdatePositionAndPings(CurrentHours);
+            }
+        }
     }
 }
 
