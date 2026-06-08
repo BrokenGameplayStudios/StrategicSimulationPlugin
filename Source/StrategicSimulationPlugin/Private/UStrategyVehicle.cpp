@@ -7,9 +7,19 @@
 
 UStrategyVehicle::UStrategyVehicle()
 {
-    RemainingFuelDays = 0;
+    CurrentRangeLeft = 0.0f;
     CurrentHealth = 100;
     DamageState = EVehicleDamageState::Undamaged;
+}
+
+float UStrategyVehicle::GetMaxRange() const
+{
+    return VehicleDefinition ? VehicleDefinition->MaxRange : 800.0f;
+}
+
+bool UStrategyVehicle::HasEnoughRangeForMission(float RequiredDistance) const
+{
+    return CurrentRangeLeft >= RequiredDistance;
 }
 
 void UStrategyVehicle::ApplyDamage(int32 DamageAmount)

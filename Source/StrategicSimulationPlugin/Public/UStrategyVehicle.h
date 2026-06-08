@@ -27,7 +27,6 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     UStrategyFacility* CurrentHanger;
 
-    /** Permanent reserved hanger slot — belongs to this vehicle until it is destroyed */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     UStrategyFacility* HomeHanger = nullptr;
 
@@ -37,53 +36,51 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     TArray<class UStrategySoldier*> CurrentPassengers;
 
-    /** === NEW: Vehicle Hardpoint System (Phase 6.2) === */
-/** Weapons currently equipped (launcher systems). Respects MaxWeaponSlots from definition. */
+    // === Hardpoint System ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Vehicle|Hardpoints")
     TArray<TSoftObjectPtr<UItemDefinition>> EquippedWeapons;
 
-    /** Defense systems (ECM, armor plating, etc.). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Vehicle|Hardpoints")
     TArray<TSoftObjectPtr<UItemDefinition>> EquippedDefenseSystems;
 
-    /** Parallel array — ammo count for each equipped weapon (launcher). */
     UPROPERTY(VisibleAnywhere, BlueprintReadWrite, SaveGame, Category = "Vehicle|Hardpoints")
     TArray<int32> WeaponAmmoCounts;
 
-    /** Maximum number of weapons this vehicle can carry (pulled from VehicleDefinition) */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     int32 GetMaxWeaponSlots() const;
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     int32 GetMaxDefenseSlots() const;
 
-    /** Returns true if there is room to equip another weapon. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     bool CanEquipWeapon(UItemDefinition* Weapon) const;
 
-    /** Equips a weapon (launcher) if possible and initializes ammo. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     bool EquipWeapon(UItemDefinition* Weapon);
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     bool EquipDefenseSystem(UItemDefinition* DefenseItem);
 
-    /** Returns currently equipped weapons (valid only). */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     TArray<UItemDefinition*> GetEquippedWeapons() const;
 
-    /** Total offensive rating used by mission simulation (base AttackPower + equipped weapons + ammo bonus). */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Stats")
     int32 GetVehicleOffensiveRating() const;
 
-    /** Total defensive rating (armor + defense systems). */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Stats")
     int32 GetVehicleDefensiveRating() const;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
-    int32 RemainingFuelDays;
+    // === NEW: Range / Fuel System ===
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Range")
+    float CurrentRangeLeft = 0.0f;
 
-    // === Vehicle Damage & Repair System ===
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Range")
+    float GetMaxRange() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Range")
+    bool HasEnoughRangeForMission(float RequiredDistance) const;
+
+    // === Damage & Repair ===
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Damage & Repair")
     EVehicleDamageState DamageState = EVehicleDamageState::Undamaged;
 
