@@ -28,110 +28,35 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
     if (!Campaign) return;
 
-    FString DebugText = FString::Printf(TEXT(
-        "=== STRATEGIC SIMULATION DEBUG ===\n"
-        "DAY: %d\n"
-        "Human Net Power: %d\n"
-        "Enemy Net Power: %d\n"
-        "Human Soldiers: %d | Enemy Soldiers: %d\n\n"),
-        Campaign->GetTimeManager()->GetCurrentDay(),
-        Campaign->GetBaseManager()->GetNetPower(EFactionType::Human),
-        Campaign->GetBaseManager()->GetNetPower(EFactionType::Enemy),
-        Campaign->GetSoldierManager()->GetRoster(EFactionType::Human).Num(),
-        Campaign->GetSoldierManager()->GetRoster(EFactionType::Enemy).Num());
-
-    // === Vehicle Weapon System Debug + POWs ===
     UBaseManagerSubsystem* BaseMgr = Campaign->GetBaseManager();
-    if (BaseMgr)
-    {
-        DebugText += FString::Printf(TEXT("=== VEHICLE HARDPOINTS & LOADOUT + PRISONERS ===\n"));
+    UResourceManagerSubsystem* ResourceMgr = Campaign->GetResourceManager();
+    if (!BaseMgr || !ResourceMgr) return;
 
-        // Human bases
-        for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
-        {
-            if (!Base) continue;
-            DebugText += FString::Printf(TEXT("HUMAN BASE '%s':\n"), *Base->BaseName.ToString());
+    FString DebugText = FString::Printf(TEXT("=== STRATEGIC SIMULATION DEBUG ===\nDAY: %d\n\n"),
+        Campaign->GetTimeManager()->GetCurrentDay());
 
-            // Vehicles
-            for (UStrategyFacility* Fac : Base->Facilities)
-            {
-                if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-                {
-                    for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
-                    {
-                        if (!Vehicle) continue;
-                        DebugText += FString::Printf(TEXT("  %s [%d/%d weapons] Offensive:%d Defense:%d\n"),
-                            *Vehicle->VehicleDefinition->VehicleName.ToString(),
-                            Vehicle->GetEquippedWeapons().Num(),
-                            Vehicle->GetMaxWeaponSlots(),
-                            Vehicle->GetVehicleOffensiveRating(),
-                            Vehicle->GetVehicleDefensiveRating());
+    // === HUMAN RESOURCES ===
+    FResourceStockpile HumanRes = ResourceMgr->GetResources(EFactionType::Human);
+    DebugText += FString::Printf(TEXT("[AI] EFactionType::Human AI — Day %d decision - Bases: %d | 💰%d | 🛠️%d | 🧬%d | ⚗️%d | 🌌%d | 📚%d\n"),
+        Campaign->GetTimeManager()->GetCurrentDay(),
+        BaseMgr->GetBases(EFactionType::Human).Num(),
+        HumanRes.Money, HumanRes.Metals, HumanRes.Biologicals,
+        HumanRes.Chemicals, HumanRes.ExoticMaterial, HumanRes.ResearchPoints);
 
-                        for (int32 i = 0; i < Vehicle->GetEquippedWeapons().Num(); ++i)
-                        {
-                            if (UItemDefinition* Weapon = Vehicle->EquippedWeapons[i].Get())
-                            {
-                                int32 Ammo = Vehicle->WeaponAmmoCounts.IsValidIndex(i) ? Vehicle->WeaponAmmoCounts[i] : 0;
-                                DebugText += FString::Printf(TEXT("    → %s (Ammo: %d/%d)\n"),
-                                    *Weapon->ItemName.ToString(), Ammo, Weapon->MaxAmmo);
-                            }
-                        }
-                    }
-                }
-            }
+    // === ENEMY RESOURCES ===
+    FResourceStockpile EnemyRes = ResourceMgr->GetResources(EFactionType::Enemy);
+    DebugText += FString::Printf(TEXT("[AI] EFactionType::Enemy AI — Day %d decision - Bases: %d | 💰%d | 🛠️%d | 🧬%d | ⚗️%d | 🌌%d | 📚%d\n"),
+        Campaign->GetTimeManager()->GetCurrentDay(),
+        BaseMgr->GetBases(EFactionType::Enemy).Num(),
+        EnemyRes.Money, EnemyRes.Metals, EnemyRes.Biologicals,
+        EnemyRes.Chemicals, EnemyRes.ExoticMaterial, EnemyRes.ResearchPoints);
 
-            // === POW / KIA DEBUG (per-base) ===
-            if (Base->GetPOWCount() > 0 || Base->GetKIABodyCount() > 0)
-            {
-                DebugText += FString::Printf(TEXT("  [POW/KIA] %d POWs | %d KIA Bodies in this base\n"),
-                    Base->GetPOWCount(), Base->GetKIABodyCount());
-            }
-        }
+    DebugText += TEXT("\n");
 
-        // Enemy bases
-        for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
-        {
-            if (!Base) continue;
-            DebugText += FString::Printf(TEXT("ENEMY BASE '%s':\n"), *Base->BaseName.ToString());
-
-            for (UStrategyFacility* Fac : Base->Facilities)
-            {
-                if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-                {
-                    for (UStrategyVehicle* Vehicle : Fac->ParkedVehicles)
-                    {
-                        if (!Vehicle) continue;
-                        DebugText += FString::Printf(TEXT("  %s [%d/%d weapons] Offensive:%d Defense:%d\n"),
-                            *Vehicle->VehicleDefinition->VehicleName.ToString(),
-                            Vehicle->GetEquippedWeapons().Num(),
-                            Vehicle->GetMaxWeaponSlots(),
-                            Vehicle->GetVehicleOffensiveRating(),
-                            Vehicle->GetVehicleDefensiveRating());
-
-                        for (int32 i = 0; i < Vehicle->GetEquippedWeapons().Num(); ++i)
-                        {
-                            if (UItemDefinition* Weapon = Vehicle->EquippedWeapons[i].Get())
-                            {
-                                int32 Ammo = Vehicle->WeaponAmmoCounts.IsValidIndex(i) ? Vehicle->WeaponAmmoCounts[i] : 0;
-                                DebugText += FString::Printf(TEXT("    → %s (Ammo: %d/%d)\n"),
-                                    *Weapon->ItemName.ToString(), Ammo, Weapon->MaxAmmo);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (Base->GetPOWCount() > 0)
-            {
-                DebugText += FString::Printf(TEXT("  [PRISONERS] %d captured soldiers held here!\n"), Base->GetPOWCount());
-                for (UStrategySoldier* Prisoner : Base->ContainedPOWs)
-                {
-                    if (Prisoner)
-                        DebugText += FString::Printf(TEXT("    → %s (%s)\n"), *Prisoner->SoldierName, *Prisoner->ClassDefinition->ClassName.ToString());
-                }
-            }
-        }
-    }
+    // === BASE STATES (clean log-style) ===
+    DebugText += BaseMgr->GetBaseStateDebugString(EFactionType::Human);
+    DebugText += TEXT("\n");
+    DebugText += BaseMgr->GetBaseStateDebugString(EFactionType::Enemy);
 
     GEngine->AddOnScreenDebugMessage(999, 0.0f, FColor::Cyan, DebugText);
 }
@@ -158,15 +83,14 @@ void AStrategyDebugHUD::DrawHUD()
     UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
     if (!BaseMgr) return;
 
-    // Draw all Human bases
+    // Draw bases
     for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
         DrawBase(Base, FLinearColor::Blue);
 
-    // Draw all Enemy bases
     for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
         DrawBase(Base, FLinearColor::Red);
 
-    // Draw active missions as lines
+    // Draw active missions
     if (MissionMgr)
     {
         for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
@@ -174,33 +98,38 @@ void AStrategyDebugHUD::DrawHUD()
     }
 
     // Legend
-    Canvas->DrawText(GEngine->GetSmallFont(), TEXT("BLUE = Human Bases"), 50, 50, 1.0f, 1.0f, FLinearColor::Blue);
-    Canvas->DrawText(GEngine->GetSmallFont(), TEXT("RED  = Enemy Bases"), 50, 80, 1.0f, 1.0f, FLinearColor::Red);
-    Canvas->DrawText(GEngine->GetSmallFont(), TEXT("Yellow lines = Active Missions"), 50, 110, 1.0f, 1.0f, FLinearColor::Yellow);
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE = Human Bases"), 50, 50, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("RED  = Enemy Bases"), 50, 80, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Missions"), 50, 110, 1.0f, 1.0f, FFontRenderInfo());
 }
 
 void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
 {
     if (!Base || !Canvas) return;
 
-    FVector2D ScreenPos = GetScreenPosition(Base->Location);   // ← your actual property
-    Canvas->DrawCircle(ScreenPos, 18.0f, 32, Color, 3.0f);
-    Canvas->DrawText(GEngine->GetSmallFont(), Base->BaseName.ToString(), ScreenPos.X + 25, ScreenPos.Y - 10, 1.0f, 1.0f, Color);
+    // <<< CHANGE THIS TO YOUR ACTUAL POSITION MEMBER NAME >>>
+    // Look in UStrategyBase.h for the FVector2D member (common names: Location, BaseLocation, Position, WorldLocation)
+    FVector2D ScreenPos = GetScreenPosition(Base->MapLocation);   // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+
+    Canvas->K2_DrawBox(ScreenPos - FVector2D(10, 10), FVector2D(20, 20), 2.0f, Color);
+
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(Base->BaseName.ToString()), ScreenPos.X + 25, ScreenPos.Y - 10, 1.0f, 1.0f, FFontRenderInfo());
 }
 
 void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
 {
     if (!Mission || !Mission->OriginBase || !Canvas) return;
 
-    FVector2D Start = GetScreenPosition(Mission->OriginBase->Location);
+    FVector2D Start = GetScreenPosition(Mission->OriginBase->MapLocation);
     FVector2D End = Start + FVector2D(120.0f, 40.0f); // temporary direction
 
-    Canvas->DrawLine(Start, End, 3.0f, FLinearColor::Yellow);
+    Canvas->K2_DrawLine(Start, End, 3.0f, FLinearColor::Yellow);
+
     FString Info = FString::Printf(TEXT("%s"), *UEnum::GetValueAsString(Mission->MissionType));
-    Canvas->DrawText(GEngine->GetSmallFont(), Info, End.X + 10, End.Y, 0.8f, 0.8f, FLinearColor::Yellow);
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(Info), End.X + 10, End.Y, 0.8f, 0.8f, FFontRenderInfo());
 }
 
 FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& WorldPos) const
 {
-    return WorldPos; // already in 1920x1080 space
+    return (WorldPos * MapScale) + MapOffset;
 }

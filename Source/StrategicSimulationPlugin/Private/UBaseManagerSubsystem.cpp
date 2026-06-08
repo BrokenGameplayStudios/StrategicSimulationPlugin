@@ -657,3 +657,92 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
     UE_LOG(LogTemp, Display, TEXT("Total Barracks Capacity: %d | Current Soldiers: %d | Total POW Count: %d | Total KIA Bodies: %d"),
         TotalBarracksCapacity, TotalSoldiers, TotalPOW, TotalKIA);
 }
+
+FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) const
+{
+    FString Output = FString::Printf(TEXT("=== BASE STATE FOR %s (%d bases) ===\n"),
+        *UEnum::GetValueAsString(Faction), GetBases(Faction).Num());
+
+    USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+
+    const TArray<UStrategyBase*>& Bases = GetBases(Faction);
+
+    for (UStrategyBase* B : Bases)
+    {
+        if (!B) continue;
+
+        // Soldiers stationed
+        int32 SoldiersStationed = 0;
+        for (UStrategySoldier* S : SoldierMgr->GetRoster(Faction))
+            if (S && S->StationedBase == B) SoldiersStationed++;
+
+        // Vehicles stationed
+        int32 VehiclesStationed = 0;
+        for (UStrategyFacility* Fac : B->Facilities)
+            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+                VehiclesStationed += Fac->ParkedVehicles.Num();
+
+        // Vehicles on mission from this base
+        int32 VehiclesOnMission = 0;
+        if (MissionMgr)
+            for (UMissionGroup* M : MissionMgr->ActiveMissions)
+                if (M && M->OriginBase == B)
+                    VehiclesOnMission += M->VehiclesInFleet.Num();
+
+        // Soldiers on mission from this base
+        int32 SoldiersOnMission = 0;
+        if (MissionMgr)
+        {
+            for (UMissionGroup* M : MissionMgr->ActiveMissions)
+            {
+                if (M && M->OriginBase == B)
+                {
+                    for (UStrategyVehicle* V : M->VehiclesInFleet)
+                        SoldiersOnMission += V->CurrentPassengers.Num();
+                }
+            }
+        }
+
+        FString FacilityList;
+        for (EFacilityType Type : { EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
+            EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
+            EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy })
+        {
+            int32 Count = B->GetTotalBuiltOfType(Type);
+            if (Count > 0)
+                FacilityList.Append(FString::Printf(TEXT("%d %s, "), Count, *UEnum::GetValueAsString(Type).Mid(1))); // remove E
+        }
+        if (!FacilityList.IsEmpty())
+            FacilityList = FacilityList.LeftChop(2);
+
+        Output += FString::Printf(TEXT("Base: %s | Net Power: %d\n"), *B->BaseName.ToString(), B->GetNetPower());
+        Output += FString::Printf(TEXT("  Facilities: %s\n"), *FacilityList);
+        Output += FString::Printf(TEXT("  Soldiers stationed: %d | Vehicles stationed: %d | POW Count: %d | KIA Bodies: %d\n"),
+            SoldiersStationed, VehiclesStationed, B->GetPOWCount(), B->GetKIABodyCount());
+        Output += FString::Printf(TEXT("  Soldiers on mission: %d | Vehicles on mission: %d\n\n"),
+            SoldiersOnMission, VehiclesOnMission);
+    }
+
+    // Global totals
+    int32 TotalBarracks = 0;
+    int32 TotalSoldiers = SoldierMgr ? SoldierMgr->GetRoster(Faction).Num() : 0;
+    int32 TotalPOW = 0;
+    int32 TotalKIA = 0;
+
+    for (UStrategyBase* B : Bases)
+    {
+        if (B)
+        {
+            TotalBarracks += B->GetTotalBuiltOfType(EFacilityType::LivingQuarters) * 6;
+            TotalPOW += B->GetPOWCount();
+            TotalKIA += B->GetKIABodyCount();
+        }
+    }
+
+    Output += FString::Printf(TEXT("=== GLOBAL TOTALS ===\n"));
+    Output += FString::Printf(TEXT("Total Barracks Capacity: %d | Current Soldiers: %d | Total POW Count: %d | Total KIA Bodies: %d\n"),
+        TotalBarracks, TotalSoldiers, TotalPOW, TotalKIA);
+
+    return Output;
+}

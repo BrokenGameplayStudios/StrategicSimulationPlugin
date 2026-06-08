@@ -21,11 +21,16 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map")
     bool bShowStrategyMap = false;
 
-    /** Toggle the text debug panel */
+    // Easy tuning for the visual map
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map")
+    float MapScale = 0.85f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map")
+    FVector2D MapOffset = FVector2D(100.0f, 100.0f);
+
     UFUNCTION(Exec)
     void ToggleDebugHUD();
 
-    /** Toggle the graphical strategy map */
     UFUNCTION(Exec)
     void ToggleStrategyMap();
 

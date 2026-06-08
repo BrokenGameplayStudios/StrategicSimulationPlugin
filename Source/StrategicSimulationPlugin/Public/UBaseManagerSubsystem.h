@@ -80,6 +80,8 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Debug|UI")
     void DebugPrintFullBaseState(EFactionType Faction) const;
+        
+    FString GetBaseStateDebugString(EFactionType Faction) const;
 
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Bases")
