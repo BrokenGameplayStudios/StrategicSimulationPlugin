@@ -50,7 +50,47 @@ void UMissionManagerSubsystem::SimulateOneDay()
     }
 }
 
-// Updated signature with AttackingFaction (default Enemy for backward compatibility with AI)
+// ===========================================================================
+// NEW HELPER: GetCurrentGameHours (used by live movement)
+// ===========================================================================
+float UMissionManagerSubsystem::GetCurrentGameHours() const
+{
+    UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>();
+    if (!TimeMgr)
+        return 0.0f;
+
+    // Simple but accurate enough for our live system: total days * 24 + current hour
+    FDateTime CurrentDate = TimeMgr->GetCurrentGameDate();
+    return (TimeMgr->GetTotalSimulationDays() * 24.0f) + CurrentDate.GetHour();
+}
+
+// ===========================================================================
+// NEW: Activate live movement on every vehicle in the fleet
+// ===========================================================================
+void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(const TArray<UStrategyVehicle*>& Vehicles, EMissionType MissionType)
+{
+    float CurrentHours = GetCurrentGameHours();
+
+    for (UStrategyVehicle* Vehicle : Vehicles)
+    {
+        if (!Vehicle || !Vehicle->HomeBase) continue;
+
+        // For now we pick a random target somewhere on the 1920x1080 map
+        // (later we'll replace this with zone-based targets)
+        FVector2D TargetLocation(
+            FMath::RandRange(200.0f, 1720.0f),
+            FMath::RandRange(200.0f, 880.0f)
+        );
+
+        // Launch the live scouting system (3-hour search time at target is a good default)
+        Vehicle->LaunchScoutingMission(TargetLocation, CurrentHours, 3.0f);
+
+        UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Activated live movement for %s (target: %.0f,%.0f)"),
+            *Vehicle->VehicleDefinition->VehicleName.ToString(), TargetLocation.X, TargetLocation.Y);
+    }
+}
+
+// Updated StartMission — now also activates the new live movement system
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction /*= EFactionType::Enemy*/)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
@@ -63,7 +103,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->Status = EMissionStatus::InProgress;
     NewMission->Outcome = EMissionOutcome::Success;
     NewMission->MissionType = MissionType;
-    NewMission->AttackingFaction = AttackingFaction;   // ← IMPORTANT
+    NewMission->AttackingFaction = AttackingFaction;
 
     ActiveMissions.Add(NewMission);
 
@@ -73,7 +113,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         TArray<UStrategySoldier*> SoldiersToUse = SoldiersToAssign;
         if (SoldiersToUse.Num() == 0)
         {
-            SoldiersToUse = SoldierMgr->GetRoster(AttackingFaction);  // respect the correct faction
+            SoldiersToUse = SoldierMgr->GetRoster(AttackingFaction);
         }
 
         int32 SoldierIndex = 0;
@@ -116,6 +156,9 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
     UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission for faction %s with %d vehicles from base '%s' (duration: %d days)"),
         *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString(), DurationDays);
+
+    // === NEW: Activate live movement + radar pings for every vehicle ===
+    ActivateLiveMovementForVehicles(Vehicles, MissionType);
 
     return NewMission;
 }

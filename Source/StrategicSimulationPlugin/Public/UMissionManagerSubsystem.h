@@ -20,7 +20,7 @@ class STRATEGICSIMULATIONPLUGIN_API UMissionManagerSubsystem : public UGameInsta
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-	// Update: Added SoldiersToAssign parameter to StartMission for better soldier management and assignment during mission launch
+    // Update: Added SoldiersToAssign parameter to StartMission for better soldier management and assignment during mission launch
     UFUNCTION(BlueprintCallable, Category = "Mission")
     UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType = EMissionType::Offensive, EFactionType AttackingFaction = EFactionType::Enemy);
 
@@ -43,6 +43,15 @@ public:
     /** Helper getters (required by the .cpp) */
     UResourceManagerSubsystem* GetResourceManager() const;
     USoldierManagerSubsystem* GetSoldierManager() const;
+
+    // ===========================================================================
+    // NEW: Live movement integration
+    // ===========================================================================
+    UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
+    float GetCurrentGameHours() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
+    void ActivateLiveMovementForVehicles(const TArray<UStrategyVehicle*>& Vehicles, EMissionType MissionType);
 
 private:
     /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
