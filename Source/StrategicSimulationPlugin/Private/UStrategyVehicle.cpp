@@ -10,6 +10,16 @@ UStrategyVehicle::UStrategyVehicle()
     CurrentRangeLeft = 0.0f;
     CurrentHealth = 100;
     DamageState = EVehicleDamageState::Undamaged;
+
+    // NEW movement/radar defaults
+    CurrentPosition = FVector2D::ZeroVector;
+    CurrentWaypoints.Empty();
+    LaunchGameTimeHours = 0.0f;
+    TotalTravelTimeHours = 0.0f;
+    LastPingGameTimeHours = 0.0f;
+    CruiseSpeedPixelsPerHour = 250.0f;
+    PingIntervalHours = 0.5f;
+    PingRadiusPixels = 120.0f;
 }
 
 float UStrategyVehicle::GetMaxRange() const
@@ -90,7 +100,6 @@ bool UStrategyVehicle::EquipWeapon(UItemDefinition* Weapon)
     if (!CanEquipWeapon(Weapon)) return false;
 
     EquippedWeapons.Add(Weapon);
-    // Initialize ammo to MaxAmmo from the launcher definition
     WeaponAmmoCounts.Add(Weapon->MaxAmmo);
 
     UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s equipped weapon '%s' (ammo: %d)"),
@@ -128,9 +137,8 @@ int32 UStrategyVehicle::GetVehicleOffensiveRating() const
         if (UItemDefinition* Weapon = EquippedWeapons[i].Get())
         {
             Rating += Weapon->VehicleDamageBonus;
-            // Small ammo bonus if partially loaded
             if (WeaponAmmoCounts.IsValidIndex(i) && Weapon->MaxAmmo > 0)
-                Rating += (WeaponAmmoCounts[i] * 5); // tune later
+                Rating += (WeaponAmmoCounts[i] * 5);
         }
     }
     return Rating;
@@ -145,4 +153,97 @@ int32 UStrategyVehicle::GetVehicleDefensiveRating() const
             Rating += Def->VehicleDefenseBonus;
     }
     return Rating;
+}
+
+// ===========================================================================
+// NEW LIVE MOVEMENT + RADAR PING FUNCTIONS (full implementations)
+// ===========================================================================
+
+void UStrategyVehicle::LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget)
+{
+    if (!HomeBase)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[VEHICLE] LaunchScoutingMission failed — no HomeBase!"));
+        return;
+    }
+
+    CurrentPosition = HomeBase->MapLocation;
+    CurrentWaypoints.Empty();
+    CurrentWaypoints.Add(HomeBase->MapLocation);      // start at base
+    CurrentWaypoints.Add(TargetLocation);              // fly to target
+    CurrentWaypoints.Add(HomeBase->MapLocation);       // return to base
+
+    LaunchGameTimeHours = CurrentGameHours;
+    LastPingGameTimeHours = CurrentGameHours;
+
+    float DistOutbound = FVector2D::Distance(HomeBase->MapLocation, TargetLocation);
+    float TravelTimeHours = (DistOutbound * 2.0f) / CruiseSpeedPixelsPerHour;
+    TotalTravelTimeHours = TravelTimeHours + SearchHoursAtTarget;
+
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s launched scouting mission to (%.0f,%.0f) — total travel time %.1f hours (search %.1f hrs)"),
+        *VehicleDefinition->VehicleName.ToString(), TargetLocation.X, TargetLocation.Y, TotalTravelTimeHours, SearchHoursAtTarget);
+}
+
+void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
+{
+    if (CurrentMission == nullptr || TotalTravelTimeHours <= 0.0f) return;
+
+    float Elapsed = CurrentGameHours - LaunchGameTimeHours;
+    float Progress = FMath::Clamp(Elapsed / TotalTravelTimeHours, 0.0f, 1.0f);
+
+    CurrentPosition = GetPositionOnPath(Progress);
+
+    // Periodic radar pings (overlapping OK, works at any time scale)
+    while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
+    {
+        LastPingGameTimeHours += PingIntervalHours;
+        PerformRadarPing();
+    }
+
+    if (Progress >= 1.0f)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base at (%.0f,%.0f)"),
+            *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
+
+        CurrentMission = nullptr;           // let MissionManager clean up the old daily system
+        CurrentWaypoints.Empty();
+        TotalTravelTimeHours = 0.0f;
+        CurrentPosition = HomeBase ? HomeBase->MapLocation : CurrentPosition;
+    }
+}
+
+void UStrategyVehicle::PerformRadarPing()
+{
+    // Simple discovery roll (tune chance later with zones/vehicle type)
+    if (FMath::FRand() < 0.22f)  // ~22% per ping for visible testing
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RADAR PING SUCCESS] %s detected CONTACT at (%.0f, %.0f)!"),
+            *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
+
+        // TODO (next step): Fire your UStrategyEventDispatcher or OnStrategicEvent here
+        // e.g. OnStrategicEvent.Broadcast(...);
+    }
+    // else silent ping (no log spam during fast sims)
+}
+
+FVector2D UStrategyVehicle::GetPositionOnPath(float Progress) const
+{
+    if (CurrentWaypoints.Num() < 2) return CurrentPosition;
+
+    float SegmentProgress = Progress * (CurrentWaypoints.Num() - 1);
+    int32 SegmentIdx = FMath::FloorToInt(SegmentProgress);
+    float Frac = SegmentProgress - SegmentIdx;
+
+    if (SegmentIdx >= CurrentWaypoints.Num() - 1) SegmentIdx = CurrentWaypoints.Num() - 2;
+
+    FVector2D A = CurrentWaypoints[SegmentIdx];
+    FVector2D B = CurrentWaypoints[SegmentIdx + 1];
+    return FMath::Lerp(A, B, Frac);
+}
+
+bool UStrategyVehicle::IsMissionComplete(float CurrentGameHours) const
+{
+    if (TotalTravelTimeHours <= 0.0f) return true;
+    float Elapsed = CurrentGameHours - LaunchGameTimeHours;
+    return Elapsed >= TotalTravelTimeHours;
 }

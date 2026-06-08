@@ -98,4 +98,46 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void UpdateDamageStateFromHealth();
+
+    // ===========================================================================
+    // === NEW: LIVE MOVEMENT + RADAR PING SYSTEM (X-COM style geoscape) ===
+    // ===========================================================================
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    FVector2D CurrentPosition;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    TArray<FVector2D> CurrentWaypoints;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    float LaunchGameTimeHours = 0.0f;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    float TotalTravelTimeHours = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Live Movement")
+    float CruiseSpeedPixelsPerHour = 250.0f;  // pixels per game hour — tweak per vehicle type later
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
+    float LastPingGameTimeHours = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar", meta = (ClampMin = "0.1", ClampMax = "4.0"))
+    float PingIntervalHours = 0.5f;  // every 30 game minutes by default
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar")
+    float PingRadiusPixels = 120.0f;  // area one ping can scan (future zone checks)
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
+    void LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget = 3.0f);
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
+    void UpdatePositionAndPings(float CurrentGameHours);
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
+    void PerformRadarPing();
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
+    FVector2D GetPositionOnPath(float Progress) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
+    bool IsMissionComplete(float CurrentGameHours) const;
 };
