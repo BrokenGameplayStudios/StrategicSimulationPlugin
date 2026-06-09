@@ -241,13 +241,6 @@ void UStrategyVehicle::PerformRadarPing()
                         UE_LOG(LogTemp, Display, TEXT("[SITE DISCOVERED] %s found site at (%.0f, %.0f)"),
                             *UEnum::GetValueAsString(VehicleFaction), Site->Location.X, Site->Location.Y);
 
-                        // Draw colored square
-                        FVector WorldLoc(Site->Location.X, Site->Location.Y, 80.0f);
-                        DrawDebugBox(World, WorldLoc, FVector(28.0f, 28.0f, 8.0f),
-                            FQuat::Identity,
-                            (VehicleFaction == EFactionType::Human) ? FColor(0, 220, 255) : FColor(255, 100, 100),
-                            false, -1.0f, 0, 6.0f);
-
                         break; // one site per ping
                     }
                 }
