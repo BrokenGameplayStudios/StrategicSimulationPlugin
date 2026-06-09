@@ -202,35 +202,32 @@ void AStrategyDebugHUD::DrawDiscoveredSites()
     UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (!BaseManager) return;
 
-    // Live count
-    FString CountText = FString::Printf(TEXT("Discovered Sites (Human): %d"), BaseManager->DiscoveredSitesHuman.Num());
+    // Live counts for both factions
+    int32 HumanCount = BaseManager->DiscoveredSitesHuman.Num();
+    int32 EnemyCount = BaseManager->DiscoveredSitesEnemy.Num();
+
+    FString CountText = FString::Printf(TEXT("Discovered Sites — Human: %d | Enemy: %d"), HumanCount, EnemyCount);
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(CountText), 50.0f, 220.0f, 1.0f, 1.0f, FFontRenderInfo());
 
-    // Human sites = SMALL light-blue squares (half size, thin lines)
+    // Human sites = small light-blue squares
     for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesHuman)
     {
         if (!Site) continue;
-
         FVector2D ScreenPos = GetScreenPosition(Site->Location);
-
-        float HalfSize = 6.0f;           // half the previous size
+        float HalfSize = 6.0f;
         Canvas->K2_DrawBox(ScreenPos - FVector2D(HalfSize, HalfSize),
-            FVector2D(HalfSize * 2.0f, HalfSize * 2.0f),
-            1.0f,                                // 1-pixel thin border
-            FLinearColor(0.0f, 0.85f, 1.0f));   // bright light blue
+            FVector2D(HalfSize * 2, HalfSize * 2),
+            1.0f, FLinearColor(0.0f, 0.85f, 1.0f));
     }
 
-    // Enemy sites (light red) - same small/thin style
+    // Enemy sites = small light-red squares
     for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesEnemy)
     {
         if (!Site) continue;
-
         FVector2D ScreenPos = GetScreenPosition(Site->Location);
-
         float HalfSize = 6.0f;
         Canvas->K2_DrawBox(ScreenPos - FVector2D(HalfSize, HalfSize),
-            FVector2D(HalfSize * 2.0f, HalfSize * 2.0f),
-            1.0f,
-            FLinearColor(1.0f, 0.4f, 0.4f));
+            FVector2D(HalfSize * 2, HalfSize * 2),
+            1.0f, FLinearColor(1.0f, 0.4f, 0.4f));
     }
 }

@@ -217,9 +217,6 @@ void UStrategyVehicle::PerformRadarPing()
 {
     if (FMath::FRand() < 0.22f)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[RADAR PING SUCCESS] %s detected CONTACT at (%.0f, %.0f)!"),
-            *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
-
         if (UWorld* World = GetWorld())
         {
             if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
