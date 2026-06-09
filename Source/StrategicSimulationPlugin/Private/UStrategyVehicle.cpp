@@ -219,6 +219,51 @@ void UStrategyVehicle::PerformRadarPing()
     {
         UE_LOG(LogTemp, Warning, TEXT("[RADAR PING SUCCESS] %s detected CONTACT at (%.0f, %.0f)!"),
             *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
+
+        if (UWorld* World = GetWorld())
+        {
+            if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+            {
+                // Use the vehicle's current mission to get the correct faction (works for Human and Enemy)
+                EFactionType VehicleFaction = EFactionType::Human;
+                if (CurrentMission && CurrentMission->AttackingFaction != EFactionType::Human)
+                {
+                    VehicleFaction = CurrentMission->AttackingFaction;
+                }
+
+                // Simple duplicate check
+                TArray<UStrategySiteDefinition*>& Sites = (VehicleFaction == EFactionType::Human)
+                    ? BaseManager->DiscoveredSitesHuman
+                    : BaseManager->DiscoveredSitesEnemy;
+
+                bool bAlreadyExists = false;
+                for (UStrategySiteDefinition* Existing : Sites)
+                {
+                    if (FVector2D::Distance(Existing->Location, CurrentPosition) < 80.0f)
+                    {
+                        bAlreadyExists = true;
+                        break;
+                    }
+                }
+
+                if (!bAlreadyExists)
+                {
+                    UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
+                        VehicleFaction,
+                        CurrentPosition,
+                        EStrategySiteType::PotentialBase
+                    );
+
+                    if (NewSite)
+                    {
+                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s discovered new site! Total %s sites: %d"),
+                            *UEnum::GetValueAsString(VehicleFaction),
+                            *UEnum::GetValueAsString(VehicleFaction),
+                            Sites.Num());
+                    }
+                }
+            }
+        }
     }
 }
 
