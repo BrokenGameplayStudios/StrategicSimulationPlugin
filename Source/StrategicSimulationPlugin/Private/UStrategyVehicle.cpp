@@ -217,55 +217,8 @@ void UStrategyVehicle::PerformRadarPing()
 {
     if (FMath::FRand() < 0.22f)
     {
-        if (UWorld* World = GetWorld())
-        {
-            if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
-            {
-                // Debug: let's see what's happening with HomeBase
-                EFactionType VehicleFaction = EFactionType::Human;
-                if (HomeBase)
-                {
-                    VehicleFaction = HomeBase->OwningFaction;
-                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] HomeBase valid → %s"), *UEnum::GetValueAsString(VehicleFaction));
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("[VEHICLE FACTION] HomeBase is NULL → defaulting to Human"));
-                }
-
-                // Prevent duplicates
-                bool bAlreadyExists = false;
-                TArray<UStrategySiteDefinition*>& SitesArray = (VehicleFaction == EFactionType::Human)
-                    ? BaseManager->DiscoveredSitesHuman
-                    : BaseManager->DiscoveredSitesEnemy;
-
-                for (UStrategySiteDefinition* Existing : SitesArray)
-                {
-                    if (FVector2D::Distance(Existing->Location, CurrentPosition) < 80.0f)
-                    {
-                        bAlreadyExists = true;
-                        break;
-                    }
-                }
-
-                if (!bAlreadyExists)
-                {
-                    UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
-                        VehicleFaction,
-                        CurrentPosition,
-                        EStrategySiteType::PotentialBase
-                    );
-
-                    if (NewSite)
-                    {
-                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s discovered new site! Total %s sites: %d"),
-                            *UEnum::GetValueAsString(VehicleFaction),
-                            *UEnum::GetValueAsString(VehicleFaction),
-                            SitesArray.Num());
-                    }
-                }
-            }
-        }
+        UE_LOG(LogTemp, Warning, TEXT("[RADAR PING SUCCESS] %s detected CONTACT at (%.0f, %.0f)!"),
+            *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
     }
 }
 

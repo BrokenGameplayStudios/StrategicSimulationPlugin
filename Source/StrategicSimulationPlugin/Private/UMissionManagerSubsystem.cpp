@@ -255,28 +255,43 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     bool bIsRecon = (Mission->MissionType == EMissionType::Recon);
 
     // === Mission type logging ===
+
+    // === Rewards ===
+    FResourceStockpile Reward;
+    
     if (bIsRecon)
     {
-        UE_LOG(LogTemp, Display, TEXT("[RECON] Recon mission launched from base '%s'"), *Mission->OriginBase->BaseName.ToString());
-    }
-    else
-    {
-        switch (Mission->MissionType)
+        // Recon gives intel instead of combat loot
+        Reward.ResearchPoints = FMath::RandRange(400, 900);
+        Reward.Money = FMath::RandRange(300, 700);
+        UE_LOG(LogTemp, Display, TEXT("[RECON] Success — gained intel and discovered new map location"));
+
+        // === Register the site using the MISSION'S correct faction ===
+        if (Mission->VehiclesInFleet.Num() > 0)
         {
-        case EMissionType::Interception:
-            UE_LOG(LogTemp, Display, TEXT("[MISSION] Interception mission — direct air battle"));
-            break;
-        case EMissionType::Defensive:
-        case EMissionType::Offensive:
-            if (FMath::RandRange(1, 100) <= 30)
+            UStrategyVehicle* FirstVehicle = Mission->VehiclesInFleet[0];
+            if (FirstVehicle && FirstVehicle->HomeBase)
             {
-                UE_LOG(LogTemp, Display, TEXT("[MISSION] %s mission — intercepted in transit!"), *UEnum::GetValueAsString(Mission->MissionType));
+                EFactionType CorrectFaction = FirstVehicle->HomeBase->OwningFaction;
+
+                if (UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+                {
+                    FVector2D SiteLocation = FirstVehicle->CurrentPosition;
+
+                    UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
+                        CorrectFaction,           // This will now be Enemy when enemy launches the mission
+                        SiteLocation,
+                        EStrategySiteType::PotentialBase
+                    );
+
+                    if (NewSite)
+                    {
+                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s recon mission discovered site at (%.0f, %.0f)"),
+                            *UEnum::GetValueAsString(CorrectFaction),
+                            SiteLocation.X, SiteLocation.Y);
+                    }
+                }
             }
-            else
-            {
-                UE_LOG(LogTemp, Display, TEXT("[MISSION] %s mission — reached target location"), *UEnum::GetValueAsString(Mission->MissionType));
-            }
-            break;
         }
     }
 
@@ -297,7 +312,9 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->Outcome = Outcome;
 
     // === Rewards ===
+       // === Rewards ===
     FResourceStockpile Reward;
+
     if (bIsRecon)
     {
         // Recon gives intel instead of combat loot
@@ -305,18 +322,20 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         Reward.Money = FMath::RandRange(300, 700);
         UE_LOG(LogTemp, Display, TEXT("[RECON] Success — gained intel and discovered new map location"));
 
-        // === NEW: Actually register a discovered site using the correct faction ===
+        // === Register the site using the MISSION'S correct faction ===
         if (Mission->VehiclesInFleet.Num() > 0)
         {
             UStrategyVehicle* FirstVehicle = Mission->VehiclesInFleet[0];
-            if (FirstVehicle)
+            if (FirstVehicle && FirstVehicle->HomeBase)
             {
-                FVector2D SiteLocation = FirstVehicle->CurrentPosition;
+                EFactionType CorrectFaction = FirstVehicle->HomeBase->OwningFaction;
 
                 if (UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
                 {
+                    FVector2D SiteLocation = FirstVehicle->CurrentPosition;
+
                     UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
-                        Mission->AttackingFaction,      // This is correct for BOTH Human and Enemy
+                        CorrectFaction,
                         SiteLocation,
                         EStrategySiteType::PotentialBase
                     );
@@ -324,7 +343,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
                     if (NewSite)
                     {
                         UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s recon mission discovered site at (%.0f, %.0f)"),
-                            *UEnum::GetValueAsString(Mission->AttackingFaction),
+                            *UEnum::GetValueAsString(CorrectFaction),
                             SiteLocation.X, SiteLocation.Y);
                     }
                 }
@@ -333,7 +352,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     }
     else
     {
-        // Your original reward logic
+        // Your original reward logic for non-recon missions
         switch (Outcome)
         {
         case EMissionOutcome::Success:
