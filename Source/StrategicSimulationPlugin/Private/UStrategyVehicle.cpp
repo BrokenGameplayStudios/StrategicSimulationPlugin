@@ -215,30 +215,44 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 
 void UStrategyVehicle::PerformRadarPing()
 {
-    // Simple discovery roll (tune chance later with zones/vehicle type)
-    if (FMath::FRand() < 0.22f)  // ~22% per ping for visible testing
+    if (FMath::FRand() < 0.22f)
     {
         UE_LOG(LogTemp, Warning, TEXT("[RADAR PING SUCCESS] %s detected CONTACT at (%.0f, %.0f)!"),
             *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
 
-        // === NEW: Register the site with the Base Manager ===
         if (UWorld* World = GetWorld())
         {
             if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
             {
-                // For now we mark every successful ping as a PotentialBase
-                // (we can add distance checks / scoring later)
-                UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
-                    EFactionType::Human,        // change to Enemy if you ever want AI vehicles to discover too
-                    CurrentPosition,
-                    EStrategySiteType::PotentialBase
-                );
-
-                // Optional: draw a permanent debug sphere so you can see the discovered sites on the map
-                if (NewSite)
+                // Quick duplicate check so we don't spam the same spot
+                bool bAlreadyExists = false;
+                for (UStrategySiteDefinition* Existing : BaseManager->DiscoveredSitesHuman)
                 {
-                    DrawDebugSphere(World, FVector(NewSite->Location.X, NewSite->Location.Y, 100.0f),
-                        80.0f, 12, FColor::Cyan, true, 60.0f, 0, 4.0f);
+                    if (FVector2D::Distance(Existing->Location, CurrentPosition) < 80.0f)
+                    {
+                        bAlreadyExists = true;
+                        break;
+                    }
+                }
+
+                if (!bAlreadyExists)
+                {
+                    UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
+                        EFactionType::Human,
+                        CurrentPosition,
+                        EStrategySiteType::PotentialBase
+                    );
+
+                    if (NewSite)
+                    {
+                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] New potential base site registered! Total Human sites: %d"),
+                            BaseManager->DiscoveredSitesHuman.Num());
+
+                        // Small light-blue square (visible with your Debug HUD)
+                        FVector WorldLoc(NewSite->Location.X, NewSite->Location.Y, 60.0f);
+                        DrawDebugBox(World, WorldLoc, FVector(28.0f, 28.0f, 8.0f),
+                            FQuat::Identity, FColor(0, 180, 255), false, -1.0f, 0, 4.0f);
+                    }
                 }
             }
         }
