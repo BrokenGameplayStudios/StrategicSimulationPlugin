@@ -202,27 +202,35 @@ void AStrategyDebugHUD::DrawDiscoveredSites()
     UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (!BaseManager) return;
 
-    // Live count (cyan text, same style as your legend)
+    // Live count
     FString CountText = FString::Printf(TEXT("Discovered Sites (Human): %d"), BaseManager->DiscoveredSitesHuman.Num());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(CountText), 50.0f, 220.0f, 1.0f, 1.0f, FFontRenderInfo());
 
-    // Human sites = small light-blue squares (exactly like DrawBase, but smaller)
+    // Human sites = SMALL light-blue squares (half size, thin lines)
     for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesHuman)
     {
         if (!Site) continue;
 
         FVector2D ScreenPos = GetScreenPosition(Site->Location);
 
-        // Small square (24x24 pixels, centered)
-        Canvas->K2_DrawBox(ScreenPos - FVector2D(12.0f, 12.0f), FVector2D(24.0f, 24.0f), 3.0f, FLinearColor(0.0f, 0.85f, 1.0f));  // bright cyan-blue
+        float HalfSize = 6.0f;           // half the previous size
+        Canvas->K2_DrawBox(ScreenPos - FVector2D(HalfSize, HalfSize),
+            FVector2D(HalfSize * 2.0f, HalfSize * 2.0f),
+            1.0f,                                // 1-pixel thin border
+            FLinearColor(0.0f, 0.85f, 1.0f));   // bright light blue
     }
 
-    // Enemy sites = small light-red squares (for future AI discovery)
+    // Enemy sites (light red) - same small/thin style
     for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesEnemy)
     {
         if (!Site) continue;
 
         FVector2D ScreenPos = GetScreenPosition(Site->Location);
-        Canvas->K2_DrawBox(ScreenPos - FVector2D(12.0f, 12.0f), FVector2D(24.0f, 24.0f), 3.0f, FLinearColor(1.0f, 0.4f, 0.4f));
+
+        float HalfSize = 6.0f;
+        Canvas->K2_DrawBox(ScreenPos - FVector2D(HalfSize, HalfSize),
+            FVector2D(HalfSize * 2.0f, HalfSize * 2.0f),
+            1.0f,
+            FLinearColor(1.0f, 0.4f, 0.4f));
     }
 }
