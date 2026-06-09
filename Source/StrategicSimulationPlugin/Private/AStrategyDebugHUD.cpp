@@ -197,26 +197,32 @@ FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& WorldPos) const
 
 void AStrategyDebugHUD::DrawDiscoveredSites()
 {
-    if (!GetWorld()) return;
+    if (!Canvas || !GetWorld()) return;
 
     UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (!BaseManager) return;
 
-    // Human sites = light blue squares
+    // Live count (cyan text, same style as your legend)
+    FString CountText = FString::Printf(TEXT("Discovered Sites (Human): %d"), BaseManager->DiscoveredSitesHuman.Num());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(CountText), 50.0f, 220.0f, 1.0f, 1.0f, FFontRenderInfo());
+
+    // Human sites = small light-blue squares (exactly like DrawBase, but smaller)
     for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesHuman)
     {
         if (!Site) continue;
-        FVector WorldLoc(Site->Location.X, Site->Location.Y, 60.0f);
-        DrawDebugBox(GetWorld(), WorldLoc, FVector(28.0f, 28.0f, 8.0f),
-            FQuat::Identity, FColor(0, 180, 255), false, -1.0f, 0, 4.0f);
+
+        FVector2D ScreenPos = GetScreenPosition(Site->Location);
+
+        // Small square (24x24 pixels, centered)
+        Canvas->K2_DrawBox(ScreenPos - FVector2D(12.0f, 12.0f), FVector2D(24.0f, 24.0f), 3.0f, FLinearColor(0.0f, 0.85f, 1.0f));  // bright cyan-blue
     }
 
-    // Enemy sites = light red squares (ready for when AI vehicles start discovering)
+    // Enemy sites = small light-red squares (for future AI discovery)
     for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesEnemy)
     {
         if (!Site) continue;
-        FVector WorldLoc(Site->Location.X, Site->Location.Y, 60.0f);
-        DrawDebugBox(GetWorld(), WorldLoc, FVector(28.0f, 28.0f, 8.0f),
-            FQuat::Identity, FColor(255, 80, 80), false, -1.0f, 0, 4.0f);
+
+        FVector2D ScreenPos = GetScreenPosition(Site->Location);
+        Canvas->K2_DrawBox(ScreenPos - FVector2D(12.0f, 12.0f), FVector2D(24.0f, 24.0f), 3.0f, FLinearColor(1.0f, 0.4f, 0.4f));
     }
 }
