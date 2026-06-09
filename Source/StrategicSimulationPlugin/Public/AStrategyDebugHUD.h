@@ -48,7 +48,8 @@ protected:
 private:
     void DrawBase(UStrategyBase* Base, FLinearColor Color);
     void DrawMission(UMissionGroup* Mission);
-    void DrawVehicle(UStrategyVehicle* Vehicle);   // NEW
+    void DrawVehicle(UStrategyVehicle* Vehicle);   // NEW    
+    void DrawDiscoveredSites();
 
     ::FVector2D GetScreenPosition(const ::FVector2D& WorldPos) const;
 };

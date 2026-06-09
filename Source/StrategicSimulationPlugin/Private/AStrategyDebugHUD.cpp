@@ -3,6 +3,7 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "UTimeManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
+#include "StrategicSiteDefinition.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategyBase.h"
 #include "UMissionGroup.h"
@@ -110,6 +111,8 @@ void AStrategyDebugHUD::DrawHUD()
                     DrawVehicle(Vehicle);
             }
         }
+
+        DrawDiscoveredSites();
     }
 
     // Legend (updated)
@@ -190,4 +193,30 @@ void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
 FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& WorldPos) const
 {
     return (WorldPos * MapScale) + MapOffset;
+}
+
+void AStrategyDebugHUD::DrawDiscoveredSites()
+{
+    if (!GetWorld()) return;
+
+    UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseManager) return;
+
+    // Human sites = light blue squares
+    for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesHuman)
+    {
+        if (!Site) continue;
+        FVector WorldLoc(Site->Location.X, Site->Location.Y, 60.0f);
+        DrawDebugBox(GetWorld(), WorldLoc, FVector(28.0f, 28.0f, 8.0f),
+            FQuat::Identity, FColor(0, 180, 255), false, -1.0f, 0, 4.0f);
+    }
+
+    // Enemy sites = light red squares (ready for when AI vehicles start discovering)
+    for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesEnemy)
+    {
+        if (!Site) continue;
+        FVector WorldLoc(Site->Location.X, Site->Location.Y, 60.0f);
+        DrawDebugBox(GetWorld(), WorldLoc, FVector(28.0f, 28.0f, 8.0f),
+            FQuat::Identity, FColor(255, 80, 80), false, -1.0f, 0, 4.0f);
+    }
 }
