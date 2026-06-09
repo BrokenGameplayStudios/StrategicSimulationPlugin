@@ -224,9 +224,16 @@ void UStrategyVehicle::PerformRadarPing()
         {
             if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
             {
-                // Quick duplicate check so we don't spam the same spot
+                // Get the vehicle's real faction from its home base
+                EFactionType VehicleFaction = (HomeBase != nullptr) ? HomeBase->OwningFaction : EFactionType::Human;
+
+                // Prevent duplicate sites at almost the same location
                 bool bAlreadyExists = false;
-                for (UStrategySiteDefinition* Existing : BaseManager->DiscoveredSitesHuman)
+                TArray<UStrategySiteDefinition*>& SitesArray = (VehicleFaction == EFactionType::Human)
+                    ? BaseManager->DiscoveredSitesHuman
+                    : BaseManager->DiscoveredSitesEnemy;
+
+                for (UStrategySiteDefinition* Existing : SitesArray)
                 {
                     if (FVector2D::Distance(Existing->Location, CurrentPosition) < 80.0f)
                     {
@@ -238,20 +245,17 @@ void UStrategyVehicle::PerformRadarPing()
                 if (!bAlreadyExists)
                 {
                     UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
-                        EFactionType::Human,
+                        VehicleFaction,
                         CurrentPosition,
                         EStrategySiteType::PotentialBase
                     );
 
                     if (NewSite)
                     {
-                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] New potential base site registered! Total Human sites: %d"),
-                            BaseManager->DiscoveredSitesHuman.Num());
-
-                        // Small light-blue square (visible with your Debug HUD)
-                        FVector WorldLoc(NewSite->Location.X, NewSite->Location.Y, 60.0f);
-                        DrawDebugBox(World, WorldLoc, FVector(28.0f, 28.0f, 8.0f),
-                            FQuat::Identity, FColor(0, 180, 255), false, -1.0f, 0, 4.0f);
+                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s discovered new site! Total %s sites: %d"),
+                            *UEnum::GetValueAsString(VehicleFaction),
+                            *UEnum::GetValueAsString(VehicleFaction),
+                            SitesArray.Num());
                     }
                 }
             }
