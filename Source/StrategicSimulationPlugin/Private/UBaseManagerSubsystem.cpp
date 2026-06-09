@@ -773,3 +773,39 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
 
     return NewSite;
 }
+
+void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistanceBetweenSites)
+{
+    AllPotentialSites.Empty();
+
+    if (!GetWorld()) return;
+
+    for (int32 i = 0; i < NumSites; ++i)
+    {
+        FVector2D NewLoc(FMath::RandRange(-2200.0f, 2200.0f), FMath::RandRange(-2200.0f, 2200.0f));
+
+        // Avoid clustering
+        bool bTooClose = false;
+        for (UStrategySiteDefinition* Existing : AllPotentialSites)
+        {
+            if (FVector2D::Distance(Existing->Location, NewLoc) < MinDistanceBetweenSites)
+            {
+                bTooClose = true;
+                break;
+            }
+        }
+        if (bTooClose) continue;
+
+        UStrategySiteDefinition* NewSite = NewObject<UStrategySiteDefinition>();
+        NewSite->Location = NewLoc;
+        NewSite->SiteType = EStrategySiteType::PotentialBase;
+        NewSite->SiteName = FString::Printf(TEXT("Potential Base %d"), i + 1);
+
+        AllPotentialSites.Add(NewSite);
+
+        // White debug sphere so you can see all sites from the start
+        DrawDebugSphere(GetWorld(), FVector(NewLoc.X, NewLoc.Y, 100.0f), 55.0f, 12, FColor::White, true, -1.0f, 0, 3.0f);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Generated %d potential base sites at game start (min distance %.0f)"), AllPotentialSites.Num(), MinDistanceBetweenSites);
+}

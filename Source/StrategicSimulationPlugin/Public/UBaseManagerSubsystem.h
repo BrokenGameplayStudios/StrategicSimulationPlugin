@@ -70,6 +70,14 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Expansion")
     TArray<UStrategySiteDefinition*> DiscoveredSitesEnemy;
 
+    /** All potential base sites on the map (generated at game start) - neutral until discovered */
+    UPROPERTY(BlueprintReadOnly, Category = "Expansion")
+    TArray<UStrategySiteDefinition*> AllPotentialSites;
+
+    /** Generate initial potential base sites at game start (callable with different parameters later) */
+    UFUNCTION(BlueprintCallable, Category = "Expansion")
+    void GenerateInitialSites(int32 NumSites = 25, float MinDistanceBetweenSites = 350.0f);
+
     /** Called by vehicles during recon when they find something good */
     UFUNCTION(BlueprintCallable, Category = "Expansion")
     UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type = EStrategySiteType::PotentialBase, float OptionalScore = 0.0f);

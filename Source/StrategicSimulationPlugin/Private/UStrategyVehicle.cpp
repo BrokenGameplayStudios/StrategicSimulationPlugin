@@ -224,53 +224,31 @@ void UStrategyVehicle::PerformRadarPing()
         {
             if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
             {
-                // PRIORITY 1: Use the mission's faction (this is the reliable one for enemy vehicles)
-                EFactionType VehicleFaction = EFactionType::Human;
+                EFactionType VehicleFaction = HomeBase ? HomeBase->OwningFaction : EFactionType::Human;
 
-                if (CurrentMission)
+                for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
                 {
-                    VehicleFaction = CurrentMission->AttackingFaction;
-                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] Using CurrentMission → %s"), *UEnum::GetValueAsString(VehicleFaction));
-                }
-                else if (HomeBase)
-                {
-                    VehicleFaction = HomeBase->OwningFaction;
-                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] Using HomeBase → %s"), *UEnum::GetValueAsString(VehicleFaction));
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("[VEHICLE FACTION] No mission or HomeBase → defaulting to Human"));
-                }
+                    if (!Site || Site->bHasBeenUsed) continue;
 
-                // Duplicate check per faction
-                TArray<UStrategySiteDefinition*>& SitesArray = (VehicleFaction == EFactionType::Human)
-                    ? BaseManager->DiscoveredSitesHuman
-                    : BaseManager->DiscoveredSitesEnemy;
-
-                bool bAlreadyExists = false;
-                for (UStrategySiteDefinition* Existing : SitesArray)
-                {
-                    if (FVector2D::Distance(Existing->Location, CurrentPosition) < 80.0f)
+                    if (FVector2D::Distance(Site->Location, CurrentPosition) < 250.0f) // radar range
                     {
-                        bAlreadyExists = true;
-                        break;
-                    }
-                }
+                        // Discover for this faction
+                        if (VehicleFaction == EFactionType::Human)
+                            BaseManager->DiscoveredSitesHuman.AddUnique(Site);
+                        else
+                            BaseManager->DiscoveredSitesEnemy.AddUnique(Site);
 
-                if (!bAlreadyExists)
-                {
-                    UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
-                        VehicleFaction,
-                        CurrentPosition,
-                        EStrategySiteType::PotentialBase
-                    );
+                        UE_LOG(LogTemp, Display, TEXT("[SITE DISCOVERED] %s found site at (%.0f, %.0f)"),
+                            *UEnum::GetValueAsString(VehicleFaction), Site->Location.X, Site->Location.Y);
 
-                    if (NewSite)
-                    {
-                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s discovered new site! Total %s sites: %d"),
-                            *UEnum::GetValueAsString(VehicleFaction),
-                            *UEnum::GetValueAsString(VehicleFaction),
-                            SitesArray.Num());
+                        // Draw colored square
+                        FVector WorldLoc(Site->Location.X, Site->Location.Y, 80.0f);
+                        DrawDebugBox(World, WorldLoc, FVector(28.0f, 28.0f, 8.0f),
+                            FQuat::Identity,
+                            (VehicleFaction == EFactionType::Human) ? FColor(0, 220, 255) : FColor(255, 100, 100),
+                            false, -1.0f, 0, 6.0f);
+
+                        break; // one site per ping
                     }
                 }
             }
