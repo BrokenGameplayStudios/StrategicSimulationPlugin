@@ -4,6 +4,8 @@
 #include "UMissionGroup.h"
 #include "UFacilityDefinition.h"
 #include "UItemDefinition.h"
+#include "UBaseManagerSubsystem.h"
+#include "StrategicSiteDefinition.h"
 
 UStrategyVehicle::UStrategyVehicle()
 {
@@ -219,10 +221,28 @@ void UStrategyVehicle::PerformRadarPing()
         UE_LOG(LogTemp, Warning, TEXT("[RADAR PING SUCCESS] %s detected CONTACT at (%.0f, %.0f)!"),
             *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
 
-        // TODO (next step): Fire your UStrategyEventDispatcher or OnStrategicEvent here
-        // e.g. OnStrategicEvent.Broadcast(...);
+        // === NEW: Register the site with the Base Manager ===
+        if (UWorld* World = GetWorld())
+        {
+            if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+            {
+                // For now we mark every successful ping as a PotentialBase
+                // (we can add distance checks / scoring later)
+                UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
+                    EFactionType::Human,        // change to Enemy if you ever want AI vehicles to discover too
+                    CurrentPosition,
+                    EStrategySiteType::PotentialBase
+                );
+
+                // Optional: draw a permanent debug sphere so you can see the discovered sites on the map
+                if (NewSite)
+                {
+                    DrawDebugSphere(World, FVector(NewSite->Location.X, NewSite->Location.Y, 100.0f),
+                        80.0f, 12, FColor::Cyan, true, 60.0f, 0, 4.0f);
+                }
+            }
+        }
     }
-    // else silent ping (no log spam during fast sims)
 }
 
 FVector2D UStrategyVehicle::GetPositionOnPath(float Progress) const
