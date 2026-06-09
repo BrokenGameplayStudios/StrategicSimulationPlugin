@@ -224,20 +224,31 @@ void UStrategyVehicle::PerformRadarPing()
         {
             if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
             {
-                // Use the vehicle's current mission to get the correct faction (works for Human and Enemy)
+                // Robust faction lookup - prefer the mission's faction when on a mission
                 EFactionType VehicleFaction = EFactionType::Human;
-                if (CurrentMission && CurrentMission->AttackingFaction != EFactionType::Human)
+
+                if (CurrentMission)
                 {
                     VehicleFaction = CurrentMission->AttackingFaction;
+                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] Using CurrentMission → %s"), *UEnum::GetValueAsString(VehicleFaction));
+                }
+                else if (HomeBase)
+                {
+                    VehicleFaction = HomeBase->OwningFaction;
+                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] Using HomeBase → %s"), *UEnum::GetValueAsString(VehicleFaction));
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[VEHICLE FACTION] No mission or HomeBase → defaulting to Human"));
                 }
 
-                // Simple duplicate check
-                TArray<UStrategySiteDefinition*>& Sites = (VehicleFaction == EFactionType::Human)
+                // Duplicate check per faction
+                TArray<UStrategySiteDefinition*>& SitesArray = (VehicleFaction == EFactionType::Human)
                     ? BaseManager->DiscoveredSitesHuman
                     : BaseManager->DiscoveredSitesEnemy;
 
                 bool bAlreadyExists = false;
-                for (UStrategySiteDefinition* Existing : Sites)
+                for (UStrategySiteDefinition* Existing : SitesArray)
                 {
                     if (FVector2D::Distance(Existing->Location, CurrentPosition) < 80.0f)
                     {
@@ -259,7 +270,7 @@ void UStrategyVehicle::PerformRadarPing()
                         UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s discovered new site! Total %s sites: %d"),
                             *UEnum::GetValueAsString(VehicleFaction),
                             *UEnum::GetValueAsString(VehicleFaction),
-                            Sites.Num());
+                            SitesArray.Num());
                     }
                 }
             }
