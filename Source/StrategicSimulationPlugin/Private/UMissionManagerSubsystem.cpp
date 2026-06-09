@@ -96,9 +96,9 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(const TArray<UStr
 }
 
 // ===========================================================================
-// Updated StartMission — now uses very short duration for live missions
+// Updated StartMission — consistent short duration + better logging
 // ===========================================================================
-UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction /*= EFactionType::Enemy*/)
+UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
 
@@ -107,8 +107,8 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->VehiclesInFleet = Vehicles;
     NewMission->StartDay = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay();
 
-    // === NEW: Live missions use 1-day duration (the live system will resolve them early) ===
-    NewMission->DurationDays = (MissionType == EMissionType::Recon || MissionType == EMissionType::Offensive) ? 1 : DurationDays;
+    // === LIVE MISSION TUNING: 1-day duration for the old system, live system resolves early ===
+    NewMission->DurationDays = 1;   // old SimulateOneDay() just keeps it alive one day max
 
     NewMission->Status = EMissionStatus::InProgress;
     NewMission->Outcome = EMissionOutcome::Success;
@@ -164,10 +164,9 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission for faction %s with %d vehicles from base '%s' (duration: %d days)"),
-        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString(), NewMission->DurationDays);
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission for faction %s with %d vehicles from base '%s' (live system active)"),
+        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString());
 
-    // === Activate live movement (unchanged) ===
     ActivateLiveMovementForVehicles(Vehicles, MissionType);
 
     return NewMission;
@@ -215,27 +214,27 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles()
     }
 }
 
+// ===========================================================================
+// Updated LaunchMissionFromBase — now forces short live missions for both factions
+// ===========================================================================
 UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType)
 {
     if (!OriginBase) return nullptr;
 
+    // Get all parked vehicles in this base's hangars
     TArray<UStrategyVehicle*> AvailableVehicles;
-    for (UStrategyFacility* Fac : OriginBase->Facilities)
+    for (UStrategyFacility* Facility : OriginBase->Facilities)
     {
-        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+        if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
-            AvailableVehicles.Append(Fac->ParkedVehicles);
+            AvailableVehicles.Append(Facility->ParkedVehicles);
         }
     }
 
-    if (AvailableVehicles.Num() == 0)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[MISSION] No vehicles available in base '%s'"), *OriginBase->BaseName.ToString());
-        return nullptr;
-    }
+    if (AvailableVehicles.Num() == 0) return nullptr;
 
-    // AI missions default to Enemy faction
-    return StartMission(OriginBase, AvailableVehicles, DurationDays, TArray<UStrategySoldier*>(), MissionType, EFactionType::Enemy);
+    // Use the main StartMission path (this is what forces the live system)
+    return StartMission(OriginBase, AvailableVehicles, DurationDays, {}, MissionType, OriginBase->OwningFaction);
 }
 
 void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)

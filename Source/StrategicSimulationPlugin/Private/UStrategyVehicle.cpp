@@ -17,7 +17,7 @@ UStrategyVehicle::UStrategyVehicle()
     LaunchGameTimeHours = 0.0f;
     TotalTravelTimeHours = 0.0f;
     LastPingGameTimeHours = 0.0f;
-    CruiseSpeedPixelsPerHour = 250.0f;
+    CruiseSpeedPixelsPerHour = 180.0f;
     PingIntervalHours = 0.5f;
     PingRadiusPixels = 120.0f;
 }
@@ -156,32 +156,31 @@ int32 UStrategyVehicle::GetVehicleDefensiveRating() const
 }
 
 // ===========================================================================
-// NEW LIVE MOVEMENT + RADAR PING FUNCTIONS (full implementations)
+// Updated LaunchScoutingMission — now uses realistic scale + 1 hour at target
 // ===========================================================================
-
 void UStrategyVehicle::LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget)
 {
-    if (!HomeBase)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[VEHICLE] LaunchScoutingMission failed — no HomeBase!"));
-        return;
-    }
+    if (!HomeBase) return;
 
     CurrentPosition = HomeBase->MapLocation;
     CurrentWaypoints.Empty();
-    CurrentWaypoints.Add(HomeBase->MapLocation);      // start at base
-    CurrentWaypoints.Add(TargetLocation);              // fly to target
-    CurrentWaypoints.Add(HomeBase->MapLocation);       // return to base
+    CurrentWaypoints.Add(HomeBase->MapLocation);
+    CurrentWaypoints.Add(TargetLocation);
+    CurrentWaypoints.Add(HomeBase->MapLocation);
 
     LaunchGameTimeHours = CurrentGameHours;
     LastPingGameTimeHours = CurrentGameHours;
 
     float DistOutbound = FVector2D::Distance(HomeBase->MapLocation, TargetLocation);
     float TravelTimeHours = (DistOutbound * 2.0f) / CruiseSpeedPixelsPerHour;
+
+    // === TUNABLE: 1 hour at location (as you requested) + travel time ===
     TotalTravelTimeHours = TravelTimeHours + SearchHoursAtTarget;
 
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s launched scouting mission to (%.0f,%.0f) — total travel time %.1f hours (search %.1f hrs)"),
-        *VehicleDefinition->VehicleName.ToString(), TargetLocation.X, TargetLocation.Y, TotalTravelTimeHours, SearchHoursAtTarget);
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s launched %s mission — distance %.0f px | travel %.1f hrs + %.1f hrs search = %.1f hrs total"),
+        *VehicleDefinition->VehicleName.ToString(),
+        *UEnum::GetValueAsString(CurrentMission ? CurrentMission->MissionType : EMissionType::Recon),
+        DistOutbound, TravelTimeHours, SearchHoursAtTarget, TotalTravelTimeHours);
 }
 
 void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)

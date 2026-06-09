@@ -427,6 +427,53 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         UE_LOG(LogTemp, Verbose, TEXT("[EXPANSION DEBUG] %s — At maximum bases (%d)"), *UEnum::GetValueAsString(Faction), MaxBases);
     }
 
+    // ===========================================================================
+    // NEW: DAILY RECON FOR ALL IDLE HEALTHY VEHICLES (the loop you wanted)
+    // ===========================================================================
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s — Daily Recon Wave: checking idle healthy vehicles..."), *UEnum::GetValueAsString(Faction));
+
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    int32 ReconLaunched = 0;
+
+    for (UStrategyBase* Base : AllBases)
+    {
+        if (!Base || !Base->HasOperationalFacilityOfType(EFacilityType::Hanger)) continue;
+
+        TArray<UStrategyVehicle*> IdleHealthyVehicles;
+
+        for (UStrategyFacility* Facility : Base->Facilities)
+        {
+            if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+            {
+                for (UStrategyVehicle* Vehicle : Facility->ParkedVehicles)
+                {
+                    if (Vehicle && Vehicle->CurrentMission == nullptr && !Vehicle->NeedsRepair())
+                    {
+                        int32 MaxHealth = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100;
+                        if (Vehicle->CurrentHealth >= MaxHealth * 0.95f)   // 95%+ health = ready to fly
+                        {
+                            IdleHealthyVehicles.Add(Vehicle);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (IdleHealthyVehicles.Num() > 0)
+        {
+            UE_LOG(LogTemp, Display, TEXT("[AI] %s launching %d recon mission(s) from base '%s'"),
+                *UEnum::GetValueAsString(Faction), IdleHealthyVehicles.Num(), *Base->BaseName.ToString());
+
+            MissionMgr->LaunchMissionFromBase(Base, 1, EMissionType::Recon);
+            ReconLaunched += IdleHealthyVehicles.Num();
+        }
+    }
+
+    if (ReconLaunched == 0)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[AI] %s — No idle healthy vehicles ready for recon today"), *UEnum::GetValueAsString(Faction));
+    }
+
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
