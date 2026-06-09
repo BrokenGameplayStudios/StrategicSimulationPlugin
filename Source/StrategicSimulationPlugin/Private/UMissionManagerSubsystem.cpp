@@ -96,27 +96,8 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(const TArray<UStr
 }
 
 // ===========================================================================
-// NEW: Update every vehicle that is on a live mission
+// Updated StartMission — now uses very short duration for live missions
 // ===========================================================================
-void UMissionManagerSubsystem::UpdateAllLiveVehicles()
-{
-    float CurrentHours = GetCurrentGameHours();
-
-    for (UMissionGroup* Mission : ActiveMissions)
-    {
-        if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
-
-        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
-        {
-            if (Vehicle)
-            {
-                Vehicle->UpdatePositionAndPings(CurrentHours);
-            }
-        }
-    }
-}
-
-// Updated StartMission — now also activates the new live movement system
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction /*= EFactionType::Enemy*/)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
@@ -125,7 +106,10 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->OriginBase = OriginBase;
     NewMission->VehiclesInFleet = Vehicles;
     NewMission->StartDay = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay();
-    NewMission->DurationDays = DurationDays;
+
+    // === NEW: Live missions use 1-day duration (the live system will resolve them early) ===
+    NewMission->DurationDays = (MissionType == EMissionType::Recon || MissionType == EMissionType::Offensive) ? 1 : DurationDays;
+
     NewMission->Status = EMissionStatus::InProgress;
     NewMission->Outcome = EMissionOutcome::Success;
     NewMission->MissionType = MissionType;
@@ -181,12 +165,54 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     }
 
     UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission for faction %s with %d vehicles from base '%s' (duration: %d days)"),
-        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString(), DurationDays);
+        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString(), NewMission->DurationDays);
 
-    // === NEW: Activate live movement + radar pings for every vehicle ===
+    // === Activate live movement (unchanged) ===
     ActivateLiveMovementForVehicles(Vehicles, MissionType);
 
     return NewMission;
+}
+
+// ===========================================================================
+// Updated UpdateAllLiveVehicles — now cleans up finished live missions
+// ===========================================================================
+void UMissionManagerSubsystem::UpdateAllLiveVehicles()
+{
+    float CurrentHours = GetCurrentGameHours();
+
+    for (int32 i = ActiveMissions.Num() - 1; i >= 0; --i)   // reverse loop so we can remove
+    {
+        UMissionGroup* Mission = ActiveMissions[i];
+        if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
+
+        bool bMissionStillActive = false;
+
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (Vehicle)
+            {
+                Vehicle->UpdatePositionAndPings(CurrentHours);
+
+                // If the live system says the vehicle is back home, the mission is done
+                if (Vehicle->CurrentMission == nullptr)
+                {
+                    bMissionStillActive = false;
+                }
+                else
+                {
+                    bMissionStillActive = true;
+                }
+            }
+        }
+
+        // If all vehicles finished their live path, resolve and remove the mission
+        if (!bMissionStillActive)
+        {
+            ResolveMissionOutcome(Mission);
+            ActiveMissions.RemoveAt(i);
+            UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Mission resolved and removed early by live movement system"));
+        }
+    }
 }
 
 UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType)
