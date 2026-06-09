@@ -224,18 +224,22 @@ void UStrategyVehicle::PerformRadarPing()
         {
             if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
             {
-                // Reliable faction lookup - always use HomeBase (this is what owns the vehicle)
+                // PRIORITY 1: Use the mission's faction (this is the reliable one for enemy vehicles)
                 EFactionType VehicleFaction = EFactionType::Human;
 
-                if (HomeBase)
+                if (CurrentMission)
+                {
+                    VehicleFaction = CurrentMission->AttackingFaction;
+                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] Using CurrentMission → %s"), *UEnum::GetValueAsString(VehicleFaction));
+                }
+                else if (HomeBase)
                 {
                     VehicleFaction = HomeBase->OwningFaction;
-                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] Using HomeBase '%s' → %s"),
-                        *HomeBase->BaseName.ToString(), *UEnum::GetValueAsString(VehicleFaction));
+                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] Using HomeBase → %s"), *UEnum::GetValueAsString(VehicleFaction));
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("[VEHICLE FACTION] HomeBase is NULL → defaulting to Human"));
+                    UE_LOG(LogTemp, Warning, TEXT("[VEHICLE FACTION] No mission or HomeBase → defaulting to Human"));
                 }
 
                 // Duplicate check per faction
