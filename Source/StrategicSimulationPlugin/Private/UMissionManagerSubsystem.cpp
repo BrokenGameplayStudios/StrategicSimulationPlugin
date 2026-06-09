@@ -304,6 +304,32 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         Reward.ResearchPoints = FMath::RandRange(400, 900);
         Reward.Money = FMath::RandRange(300, 700);
         UE_LOG(LogTemp, Display, TEXT("[RECON] Success — gained intel and discovered new map location"));
+
+        // === NEW: Actually register a discovered site using the correct faction ===
+        if (Mission->VehiclesInFleet.Num() > 0)
+        {
+            UStrategyVehicle* FirstVehicle = Mission->VehiclesInFleet[0];
+            if (FirstVehicle)
+            {
+                FVector2D SiteLocation = FirstVehicle->CurrentPosition;
+
+                if (UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+                {
+                    UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
+                        Mission->AttackingFaction,      // This is correct for BOTH Human and Enemy
+                        SiteLocation,
+                        EStrategySiteType::PotentialBase
+                    );
+
+                    if (NewSite)
+                    {
+                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s recon mission discovered site at (%.0f, %.0f)"),
+                            *UEnum::GetValueAsString(Mission->AttackingFaction),
+                            SiteLocation.X, SiteLocation.Y);
+                    }
+                }
+            }
+        }
     }
     else
     {
