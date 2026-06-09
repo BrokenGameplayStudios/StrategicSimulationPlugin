@@ -224,10 +224,19 @@ void UStrategyVehicle::PerformRadarPing()
         {
             if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
             {
-                // Get the vehicle's real faction from its home base
-                EFactionType VehicleFaction = (HomeBase != nullptr) ? HomeBase->OwningFaction : EFactionType::Human;
+                // Debug: let's see what's happening with HomeBase
+                EFactionType VehicleFaction = EFactionType::Human;
+                if (HomeBase)
+                {
+                    VehicleFaction = HomeBase->OwningFaction;
+                    UE_LOG(LogTemp, Display, TEXT("[VEHICLE FACTION] HomeBase valid → %s"), *UEnum::GetValueAsString(VehicleFaction));
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[VEHICLE FACTION] HomeBase is NULL → defaulting to Human"));
+                }
 
-                // Prevent duplicate sites at almost the same location
+                // Prevent duplicates
                 bool bAlreadyExists = false;
                 TArray<UStrategySiteDefinition*>& SitesArray = (VehicleFaction == EFactionType::Human)
                     ? BaseManager->DiscoveredSitesHuman
