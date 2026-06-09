@@ -5,6 +5,7 @@
 #include "StrategicSimulationTypes.h"
 #include "UStrategyFacility.h"
 #include "UFacilityDefinition.h"
+#include "StrategicSiteDefinition.h"
 #include "UStrategyBase.h"
 #include "UTimeManagerSubsystem.h"
 #include "UBaseManagerSubsystem.generated.h"
@@ -61,6 +62,17 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalAvailableHangerSlots(EFactionType Faction) const;
+
+    /** All discovered strategic sites for each faction */
+    UPROPERTY(BlueprintReadOnly, Category = "Expansion")
+    TArray<UStrategySiteDefinition*> DiscoveredSitesHuman;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Expansion")
+    TArray<UStrategySiteDefinition*> DiscoveredSitesEnemy;
+
+    /** Called by vehicles during recon when they find something good */
+    UFUNCTION(BlueprintCallable, Category = "Expansion")
+    UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type = EStrategySiteType::PotentialBase, float OptionalScore = 0.0f);
 
     UFUNCTION(BlueprintCallable, Category = "Base")
     void ResetAllBases();

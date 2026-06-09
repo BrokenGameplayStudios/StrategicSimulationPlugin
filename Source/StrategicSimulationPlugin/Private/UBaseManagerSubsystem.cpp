@@ -746,3 +746,30 @@ FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) con
 
     return Output;
 }
+
+UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type, float OptionalScore)
+{
+    UStrategySiteDefinition* NewSite = NewObject<UStrategySiteDefinition>(this);
+
+    NewSite->Location = Location;
+    NewSite->SiteType = Type;
+    NewSite->DiscoveringFaction = Faction;
+    NewSite->bHasBeenUsed = false;
+    NewSite->SiteName = FString::Printf(TEXT("%s Site"), *UEnum::GetValueAsString(Type));
+
+    if (Faction == EFactionType::Human)
+    {
+        DiscoveredSitesHuman.Add(NewSite);
+    }
+    else
+    {
+        DiscoveredSitesEnemy.Add(NewSite);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[RECON] %s discovered %s at (%.0f, %.0f)"),
+        *UEnum::GetValueAsString(Faction),
+        *UEnum::GetValueAsString(Type),
+        Location.X, Location.Y);
+
+    return NewSite;
+}
