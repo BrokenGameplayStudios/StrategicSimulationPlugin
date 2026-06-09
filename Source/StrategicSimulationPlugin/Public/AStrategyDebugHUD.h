@@ -2,10 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
+#include "Math/Vector2D.h" // ensure FVector2D is available
 #include "AStrategyDebugHUD.generated.h"
 
 class UStrategyBase;
 class UMissionGroup;
+class UStrategyVehicle;   // NEW
 
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API AStrategyDebugHUD : public AHUD
@@ -26,7 +28,11 @@ public:
     float MapScale = 0.85f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map")
-    FVector2D MapOffset = FVector2D(100.0f, 100.0f);
+    ::FVector2D MapOffset = ::FVector2D(100.0f, 100.0f);
+
+    // NEW: Vehicle debug visuals
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map|Vehicles")
+    bool bShowVehiclePaths = true;
 
     UFUNCTION(Exec)
     void ToggleDebugHUD();
@@ -42,5 +48,7 @@ protected:
 private:
     void DrawBase(UStrategyBase* Base, FLinearColor Color);
     void DrawMission(UMissionGroup* Mission);
-    FVector2D GetScreenPosition(const FVector2D& WorldPos) const;
+    void DrawVehicle(UStrategyVehicle* Vehicle);   // NEW
+
+    ::FVector2D GetScreenPosition(const ::FVector2D& WorldPos) const;
 };

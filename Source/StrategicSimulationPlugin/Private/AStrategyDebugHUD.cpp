@@ -83,24 +83,89 @@ void AStrategyDebugHUD::DrawHUD()
     UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
     if (!BaseMgr) return;
 
-    // Draw bases
+    // === EXISTING: Draw bases (unchanged) ===
     for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
         DrawBase(Base, FLinearColor::Blue);
 
     for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
         DrawBase(Base, FLinearColor::Red);
 
-    // Draw active missions
+    // === EXISTING: Draw active missions (kept for now) ===
     if (MissionMgr)
     {
         for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
             DrawMission(Mission);
     }
 
-    // Legend
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE = Human Bases"), 50, 50, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("RED  = Enemy Bases"), 50, 80, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Missions"), 50, 110, 1.0f, 1.0f, FFontRenderInfo());
+    // === NEW: Draw live vehicles (moving dots + optional waypoints) ===
+    if (MissionMgr)
+    {
+        for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+        {
+            if (!Mission) continue;
+
+            for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+            {
+                if (Vehicle)
+                    DrawVehicle(Vehicle);
+            }
+        }
+    }
+
+    // Legend (updated)
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE  = Human Bases"), 50, 50, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("RED   = Enemy Bases"), 50, 80, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GREEN = Human Vehicles  |  RED = Enemy Vehicles"), 50, 110, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths (toggle with bShowVehiclePaths)"), 50, 140, 1.0f, 1.0f, FFontRenderInfo());
+}
+
+void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
+{
+    if (!Vehicle || !Canvas) return;
+
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    float CurrentHours = MissionMgr ? MissionMgr->GetCurrentGameHours() : 0.0f;
+
+    FVector2D ScreenPos = GetScreenPosition(Vehicle->CurrentPosition);
+
+    // FIXED: More robust faction color (works even if HomeBase is temporarily null)
+    FLinearColor VehicleColor = FLinearColor::Red; // default enemy
+    if (Vehicle->HomeBase)
+    {
+        VehicleColor = (Vehicle->HomeBase->OwningFaction == EFactionType::Human)
+            ? FLinearColor::Green : FLinearColor::Red;
+    }
+    else if (Vehicle->CurrentMission && Vehicle->CurrentMission->AttackingFaction == EFactionType::Human)
+    {
+        VehicleColor = FLinearColor::Green;
+    }
+
+    // Draw the moving dot
+    Canvas->K2_DrawBox(ScreenPos - FVector2D(4, 4), FVector2D(8, 8), 2.0f, VehicleColor);
+
+    // Vehicle name label
+    Canvas->DrawText(GEngine->GetSmallFont(),
+        FText::FromString(Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("VEH")),
+        ScreenPos.X + 12, ScreenPos.Y - 8, 0.7f, 0.7f, FFontRenderInfo());
+
+    // Waypoint debug lines + progress marker
+    if (bShowVehiclePaths && Vehicle->CurrentWaypoints.Num() >= 2)
+    {
+        for (int32 i = 0; i < Vehicle->CurrentWaypoints.Num() - 1; ++i)
+        {
+            FVector2D A = GetScreenPosition(Vehicle->CurrentWaypoints[i]);
+            FVector2D B = GetScreenPosition(Vehicle->CurrentWaypoints[i + 1]);
+            Canvas->K2_DrawLine(A, B, 1.5f, FLinearColor::Yellow);
+        }
+
+        if (Vehicle->TotalTravelTimeHours > 0.0f)
+        {
+            float Progress = FMath::Clamp((CurrentHours - Vehicle->LaunchGameTimeHours) / Vehicle->TotalTravelTimeHours, 0.0f, 1.0f);
+            FVector2D ProgressPos = Vehicle->GetPositionOnPath(Progress);
+            FVector2D ScreenProgress = GetScreenPosition(ProgressPos);
+            Canvas->K2_DrawBox(ScreenProgress - FVector2D(3, 3), FVector2D(6, 6), 1.5f, FLinearColor::White);
+        }
+    }
 }
 
 void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
