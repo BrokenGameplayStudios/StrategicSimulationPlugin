@@ -128,27 +128,20 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
 
     FVector2D ScreenPos = GetScreenPosition(Vehicle->CurrentPosition);
 
-    // FIXED: More robust faction color (works even if HomeBase is temporarily null)
-    FLinearColor VehicleColor = FLinearColor::Red; // default enemy
+    // Robust faction color
+    FLinearColor VehicleColor = FLinearColor::Red;
     if (Vehicle->HomeBase)
-    {
-        VehicleColor = (Vehicle->HomeBase->OwningFaction == EFactionType::Human)
-            ? FLinearColor::Green : FLinearColor::Red;
-    }
-    else if (Vehicle->CurrentMission && Vehicle->CurrentMission->AttackingFaction == EFactionType::Human)
-    {
-        VehicleColor = FLinearColor::Green;
-    }
+        VehicleColor = (Vehicle->HomeBase->OwningFaction == EFactionType::Human) ? FLinearColor::Green : FLinearColor::Red;
 
     // Draw the moving dot
     Canvas->K2_DrawBox(ScreenPos - FVector2D(4, 4), FVector2D(8, 8), 2.0f, VehicleColor);
 
-    // Vehicle name label
+    // Name label
     Canvas->DrawText(GEngine->GetSmallFont(),
         FText::FromString(Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("VEH")),
         ScreenPos.X + 12, ScreenPos.Y - 8, 0.7f, 0.7f, FFontRenderInfo());
 
-    // Waypoint debug lines + progress marker
+    // Waypoint lines + progress (only if still on a live path)
     if (bShowVehiclePaths && Vehicle->CurrentWaypoints.Num() >= 2)
     {
         for (int32 i = 0; i < Vehicle->CurrentWaypoints.Num() - 1; ++i)

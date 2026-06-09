@@ -96,7 +96,7 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(const TArray<UStr
 }
 
 // ===========================================================================
-// Updated StartMission — consistent short duration + better logging
+// Updated StartMission — long duration for live missions (old system no longer kills them early)
 // ===========================================================================
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction)
 {
@@ -107,8 +107,9 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->VehiclesInFleet = Vehicles;
     NewMission->StartDay = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay();
 
-    // === LIVE MISSION TUNING: 1-day duration for the old system, live system resolves early ===
-    NewMission->DurationDays = 1;   // old SimulateOneDay() just keeps it alive one day max
+    // === FIXED: Live missions stay alive in the old system for 30 days ===
+    // The live movement system will resolve them early when the vehicle returns
+    NewMission->DurationDays = (MissionType == EMissionType::Recon) ? 30 : DurationDays;
 
     NewMission->Status = EMissionStatus::InProgress;
     NewMission->Outcome = EMissionOutcome::Success;
@@ -117,6 +118,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
     ActiveMissions.Add(NewMission);
 
+    // === soldier assignment code (keep your existing block exactly as-is) ===
     USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
     if (SoldierMgr)
     {
@@ -164,8 +166,8 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission for faction %s with %d vehicles from base '%s' (live system active)"),
-        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString());
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission for faction %s with %d vehicles from base '%s' (live system active, duration: %d days)"),
+        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString(), NewMission->DurationDays);
 
     ActivateLiveMovementForVehicles(Vehicles, MissionType);
 
