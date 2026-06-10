@@ -747,31 +747,47 @@ FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) con
     return Output;
 }
 
+// ==================== PASTE THIS FULL FUNCTION (replace the old AddDiscoveredSite) ====================
 UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type, float OptionalScore)
 {
-    UStrategySiteDefinition* NewSite = NewObject<UStrategySiteDefinition>(this);
+    // Find existing site in AllPotentialSites (exact or nearest match)
+    UStrategySiteDefinition* ExistingSite = nullptr;
+    float BestDist = MAX_FLT;
 
-    NewSite->Location = Location;
-    NewSite->SiteType = Type;
-    NewSite->DiscoveringFaction = Faction;
-    NewSite->bHasBeenUsed = false;
-    NewSite->SiteName = FString::Printf(TEXT("%s Site"), *UEnum::GetValueAsString(Type));
+    for (UStrategySiteDefinition* Site : AllPotentialSites)
+    {
+        if (!Site) continue;
+        float Dist = FVector2D::Distance(Site->Location, Location);
+        if (Dist < BestDist)
+        {
+            BestDist = Dist;
+            ExistingSite = Site;
+        }
+    }
 
+    if (!ExistingSite)
+    {
+        // Fallback: create new only if truly new
+        ExistingSite = NewObject<UStrategySiteDefinition>(this);
+        ExistingSite->Location = Location;
+        ExistingSite->SiteType = Type;
+        AllPotentialSites.Add(ExistingSite);
+    }
+
+    // Mark discovered for the correct faction
     if (Faction == EFactionType::Human)
     {
-        DiscoveredSitesHuman.Add(NewSite);
+        DiscoveredSitesHuman.AddUnique(ExistingSite);
     }
     else
     {
-        DiscoveredSitesEnemy.Add(NewSite);
+        DiscoveredSitesEnemy.AddUnique(ExistingSite);
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[RECON] %s discovered %s at (%.0f, %.0f)"),
-        *UEnum::GetValueAsString(Faction),
-        *UEnum::GetValueAsString(Type),
-        Location.X, Location.Y);
+    UE_LOG(LogTemp, Display, TEXT("[DISCOVERY] %s discovered node at (%.0f, %.0f)"),
+        *UEnum::GetValueAsString(Faction), Location.X, Location.Y);
 
-    return NewSite;
+    return ExistingSite;
 }
 
 void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistanceBetweenSites)

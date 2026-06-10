@@ -213,36 +213,42 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
     }
 }
 
+// ==================== PASTE THIS FULL FUNCTION (replace the old PerformRadarPing) ====================
 void UStrategyVehicle::PerformRadarPing()
 {
-    if (FMath::FRand() < 0.22f)
+    if (!HomeBase) return;
+
+    EFactionType VehicleFaction = HomeBase->OwningFaction;
+
+    UE_LOG(LogTemp, Display, TEXT("[RADAR PING] %s vehicle at (%.0f, %.0f) - Faction: %s"),
+        *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y,
+        *UEnum::GetValueAsString(VehicleFaction));
+
+    if (UWorld* World = GetWorld())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[RADAR PING SUCCESS] %s detected CONTACT at (%.0f, %.0f)!"),
-            *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
-
-        if (UWorld* World = GetWorld())
+        if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
         {
-            if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+            for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
             {
-                EFactionType VehicleFaction = HomeBase ? HomeBase->OwningFaction : EFactionType::Human;
+                if (!Site || Site->bHasBeenUsed) continue;
 
-                for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
+                // Pure distance check - NO dice roll
+                if (FVector2D::Distance(Site->Location, CurrentPosition) < 64.0f)
                 {
-                    if (!Site || Site->bHasBeenUsed) continue;
-
-                    if (FVector2D::Distance(Site->Location, CurrentPosition) < 250.0f) // radar range
+                    // Discover for the REAL faction that owns the vehicle
+                    if (VehicleFaction == EFactionType::Human)
                     {
-                        // Discover for this faction
-                        if (VehicleFaction == EFactionType::Human)
-                            BaseManager->DiscoveredSitesHuman.AddUnique(Site);
-                        else
-                            BaseManager->DiscoveredSitesEnemy.AddUnique(Site);
-
-                        UE_LOG(LogTemp, Display, TEXT("[SITE DISCOVERED] %s found site at (%.0f, %.0f)"),
-                            *UEnum::GetValueAsString(VehicleFaction), Site->Location.X, Site->Location.Y);
-
-                        break; // one site per ping
+                        BaseManager->DiscoveredSitesHuman.AddUnique(Site);
                     }
+                    else
+                    {
+                        BaseManager->DiscoveredSitesEnemy.AddUnique(Site);
+                    }
+
+                    UE_LOG(LogTemp, Display, TEXT("[SITE DISCOVERED] %s found node at (%.0f, %.0f)"),
+                        *UEnum::GetValueAsString(VehicleFaction), Site->Location.X, Site->Location.Y);
+
+                    break; // one discovery per ping
                 }
             }
         }
