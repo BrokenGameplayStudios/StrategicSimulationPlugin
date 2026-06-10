@@ -48,6 +48,7 @@ protected:
 private:
     void DrawBase(UStrategyBase* Base, FLinearColor Color);
     void DrawMission(UMissionGroup* Mission);
+    void DrawAllPotentialSites();
     void DrawVehicle(UStrategyVehicle* Vehicle);   // NEW    
     void DrawDiscoveredSites();
 

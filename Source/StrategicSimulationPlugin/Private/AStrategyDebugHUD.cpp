@@ -74,6 +74,7 @@ void AStrategyDebugHUD::ToggleStrategyMap()
     UE_LOG(LogTemp, Display, TEXT("[DEBUG HUD] Strategy Map %s"), bShowStrategyMap ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+// ==================== PASTE THIS FULL FUNCTION OVER THE EXISTING DrawHUD() ====================
 void AStrategyDebugHUD::DrawHUD()
 {
     Super::DrawHUD();
@@ -91,14 +92,14 @@ void AStrategyDebugHUD::DrawHUD()
     for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
         DrawBase(Base, FLinearColor::Red);
 
-    // === EXISTING: Draw active missions (kept for now) ===
+    // === EXISTING: Draw active missions (unchanged) ===
     if (MissionMgr)
     {
         for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
             DrawMission(Mission);
     }
 
-    // === NEW: Draw live vehicles (moving dots + optional waypoints) ===
+    // === EXISTING: Draw live vehicles (unchanged) ===
     if (MissionMgr)
     {
         for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
@@ -111,15 +112,57 @@ void AStrategyDebugHUD::DrawHUD()
                     DrawVehicle(Vehicle);
             }
         }
-
-        DrawDiscoveredSites();
     }
+
+    // === PHASE 1: Draw ALL potential nodes + fog-of-war markers ===
+    DrawAllPotentialSites();
 
     // Legend (updated)
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE  = Human Bases"), 50, 50, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("RED   = Enemy Bases"), 50, 80, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GREEN = Human Vehicles  |  RED = Enemy Vehicles"), 50, 110, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths (toggle with bShowVehiclePaths)"), 50, 140, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths"), 50, 140, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 170, 1.0f, 1.0f, FFontRenderInfo());
+}
+
+// ==================== NEW FUNCTION - ADD THIS ANYWHERE IN THE FILE (e.g. after DrawDiscoveredSites) ====================
+void AStrategyDebugHUD::DrawAllPotentialSites()
+{
+    if (!Canvas) return;
+
+    UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseManager) return;
+
+    // Draw EVERY generated node as a dim white square
+    for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
+    {
+        if (!Site) continue;
+
+        FVector2D ScreenPos = GetScreenPosition(Site->Location);
+
+        // Main node: dim white square (10x10 pixels)
+        Canvas->K2_DrawBox(ScreenPos - FVector2D(5.0f, 5.0f), FVector2D(10.0f, 10.0f), 1.0f, FLinearColor(0.8f, 0.8f, 0.8f, 0.7f));
+
+        // === Fog-of-war markers (exactly as you requested) ===
+        // 4x4 blue square top-left if Human knows about it
+        if (BaseManager->DiscoveredSitesHuman.Contains(Site))
+        {
+            Canvas->K2_DrawBox(ScreenPos - FVector2D(8.0f, 12.0f), FVector2D(4.0f, 4.0f), 1.0f, FLinearColor::Blue);
+        }
+
+        // 4x4 red square top-right if Enemy knows about it
+        if (BaseManager->DiscoveredSitesEnemy.Contains(Site))
+        {
+            Canvas->K2_DrawBox(ScreenPos + FVector2D(4.0f, -12.0f), FVector2D(4.0f, 4.0f), 1.0f, FLinearColor::Red);
+        }
+    }
+
+    // Optional live count in corner
+    FString CountText = FString::Printf(TEXT("Nodes: %d | Human discovered: %d | Enemy discovered: %d"),
+        BaseManager->AllPotentialSites.Num(),
+        BaseManager->DiscoveredSitesHuman.Num(),
+        BaseManager->DiscoveredSitesEnemy.Num());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(CountText), 50.0f, 200.0f, 1.0f, 1.0f, FFontRenderInfo());
 }
 
 void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
@@ -193,41 +236,4 @@ void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
 FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& WorldPos) const
 {
     return (WorldPos * MapScale) + MapOffset;
-}
-
-void AStrategyDebugHUD::DrawDiscoveredSites()
-{
-    if (!Canvas || !GetWorld()) return;
-
-    UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-    if (!BaseManager) return;
-
-    // Live counts for both factions
-    int32 HumanCount = BaseManager->DiscoveredSitesHuman.Num();
-    int32 EnemyCount = BaseManager->DiscoveredSitesEnemy.Num();
-
-    FString CountText = FString::Printf(TEXT("Discovered Sites — Human: %d | Enemy: %d"), HumanCount, EnemyCount);
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(CountText), 50.0f, 220.0f, 1.0f, 1.0f, FFontRenderInfo());
-
-    // Human sites = small light-blue squares
-    for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesHuman)
-    {
-        if (!Site) continue;
-        FVector2D ScreenPos = GetScreenPosition(Site->Location);
-        float HalfSize = 6.0f;
-        Canvas->K2_DrawBox(ScreenPos - FVector2D(HalfSize, HalfSize),
-            FVector2D(HalfSize * 2, HalfSize * 2),
-            1.0f, FLinearColor(0.0f, 0.85f, 1.0f));
-    }
-
-    // Enemy sites = small light-red squares
-    for (UStrategySiteDefinition* Site : BaseManager->DiscoveredSitesEnemy)
-    {
-        if (!Site) continue;
-        FVector2D ScreenPos = GetScreenPosition(Site->Location);
-        float HalfSize = 6.0f;
-        Canvas->K2_DrawBox(ScreenPos - FVector2D(HalfSize, HalfSize),
-            FVector2D(HalfSize * 2, HalfSize * 2),
-            1.0f, FLinearColor(1.0f, 0.4f, 0.4f));
-    }
 }
