@@ -242,13 +242,28 @@ void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
 {
     if (!Mission || !Mission->OriginBase || !Canvas) return;
 
-    FVector2D Start = GetScreenPosition(Mission->OriginBase->MapLocation);
-    FVector2D End = Start + FVector2D(120.0f, 40.0f); // temporary direction
+    FVector2D BasePos = GetScreenPosition(Mission->OriginBase->MapLocation);
 
-    Canvas->K2_DrawLine(Start, End, 3.0f, FLinearColor::Yellow);
-
+    // === Clean mission label near the originating base ===
     FString Info = FString::Printf(TEXT("%s"), *UEnum::GetValueAsString(Mission->MissionType));
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(Info), End.X + 10, End.Y, 0.8f, 0.8f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(),
+        FText::FromString(Info),
+        BasePos.X + 15.0f, BasePos.Y - 5.0f,
+        0.8f, 0.8f, FFontRenderInfo());
+
+    // === Proper faint connection line from base to the mission group ===
+    // (only draws if the mission has vehicles and at least one is moving)
+    if (Mission->VehiclesInFleet.Num() > 0)
+    {
+        UStrategyVehicle* LeadVehicle = Mission->VehiclesInFleet[0];
+        if (LeadVehicle && LeadVehicle->CurrentMission != nullptr)
+        {
+            FVector2D VehiclePos = GetScreenPosition(LeadVehicle->CurrentPosition);
+
+            // Very faint yellow line so it doesn't fight with the detailed vehicle path
+            Canvas->K2_DrawLine(BasePos, VehiclePos, 1.0f, FLinearColor(1.0f, 1.0f, 0.0f, 0.25f));
+        }
+    }
 }
 
 FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& LogicalPos) const
