@@ -213,7 +213,6 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
     }
 }
 
-// ==================== PASTE THIS FULL FUNCTION (replace the old PerformRadarPing) ====================
 void UStrategyVehicle::PerformRadarPing()
 {
     if (!HomeBase) return;
@@ -233,7 +232,11 @@ void UStrategyVehicle::PerformRadarPing()
                 if (!Site || Site->bHasBeenUsed) continue;
 
                 // Pure distance check - NO dice roll
-                if (FVector2D::Distance(Site->Location, CurrentPosition) < 64.0f)
+				if (FVector2D::Distance(Site->Location, CurrentPosition) < 300.0f) // Default 64.0f detection radius - testing with 300.0f
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[RADAR PING] %s vehicle DETECTED site '%s' at (%.0f, %.0f)!"),
+						*VehicleDefinition->VehicleName.ToString(), *Site->SiteName.ToString(), Site->Location.X, Site->Location.Y);
+				}
                 {
                     // Discover for the REAL faction that owns the vehicle
                     if (VehicleFaction == EFactionType::Human)

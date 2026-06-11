@@ -100,7 +100,7 @@ public:
     void UpdateDamageStateFromHealth();
 
     // ===========================================================================
-    // === NEW: LIVE MOVEMENT + RADAR PING SYSTEM (X-COM style geoscape) ===
+    // === NEW: LIVE MOVEMENT + RADAR PING SYSTEM 
     // ===========================================================================
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
     FVector2D CurrentPosition;

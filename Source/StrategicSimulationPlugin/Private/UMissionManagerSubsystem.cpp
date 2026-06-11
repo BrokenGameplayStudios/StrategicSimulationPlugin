@@ -298,45 +298,17 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     // === Rewards ===
     FResourceStockpile Reward;
-
     if (bIsRecon)
     {
-        // Recon gives intel instead of combat loot
-        Reward.ResearchPoints = FMath::RandRange(400, 900);
-        Reward.Money = FMath::RandRange(300, 700);
-        UE_LOG(LogTemp, Display, TEXT("[RECON] Success — gained intel and discovered new map location"));
-
-        // === Register the site using the MISSION'S correct faction ===
-        if (Mission->VehiclesInFleet.Num() > 0)
-        {
-            UStrategyVehicle* FirstVehicle = Mission->VehiclesInFleet[0];
-            if (FirstVehicle && FirstVehicle->HomeBase)
-            {
-                EFactionType CorrectFaction = FirstVehicle->HomeBase->OwningFaction;
-
-                if (UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
-                {
-                    FVector2D SiteLocation = FirstVehicle->CurrentPosition;
-
-                    UStrategySiteDefinition* NewSite = BaseManager->AddDiscoveredSite(
-                        CorrectFaction,
-                        SiteLocation,
-                        EStrategySiteType::PotentialBase
-                    );
-
-                    if (NewSite)
-                    {
-                        UE_LOG(LogTemp, Display, TEXT("[SITE ADDED] %s recon mission discovered site at (%.0f, %.0f)"),
-                            *UEnum::GetValueAsString(CorrectFaction),
-                            SiteLocation.X, SiteLocation.Y);
-                    }
-                }
-            }
-        }
+        // Recon is now pure intel gathering — discovery happens LIVE via vehicle radar pings
+        // No more reward-based discovery at mission end
+        Reward.ResearchPoints = FMath::RandRange(200, 500);   // small intel reward only
+        
+        UE_LOG(LogTemp, Display, TEXT("[RECON] Mission complete — intel gathered via live radar pings"));
     }
     else
     {
-        // Original reward logic for non-recon missions
+        // Original reward logic for non-recon missions (unchanged)
         switch (Outcome)
         {
         case EMissionOutcome::Success:
