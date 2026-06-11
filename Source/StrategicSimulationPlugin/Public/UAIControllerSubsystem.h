@@ -74,6 +74,9 @@ private:
     bool TryResearch(EFactionType Faction);
     bool TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase);
 
+    /** Finds a suitable discovered but unused site for AI expansion */
+    UStrategySiteDefinition* FindExpansionSiteForAI(EFactionType Faction) const;
+
     /** Returns the base with the fewest parked vehicles (for staggered distribution) */
     UStrategyBase* GetBaseWithFewestVehicles(EFactionType Faction) const;
 };

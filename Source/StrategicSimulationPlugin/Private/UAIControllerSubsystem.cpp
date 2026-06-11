@@ -1068,7 +1068,7 @@ UStrategySiteDefinition* UAIControllerSubsystem::FindExpansionSiteForAI(EFaction
     {
         if (Site && !Site->bHasBeenUsed && BaseMgr->CanBuildBaseOnSite(Faction, Site))
         {
-            return Site; // Return the first valid unused discovered site
+            return Site;
         }
     }
 
