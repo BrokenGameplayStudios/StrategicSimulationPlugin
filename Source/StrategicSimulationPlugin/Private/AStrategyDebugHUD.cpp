@@ -228,11 +228,12 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
                 FVector2D(ProgressSize, ProgressSize), 1.5f * Scale, VehicleColor);
         }
     }
-
-    // === RADAR CIRCLE now uses the fresh visual position ===
-    if (Vehicle->PingRadiusPixels > 0.0f)
+        
+    // === RADAR CIRCLE (always uses value from VehicleDefinition) ===
+    float RadarRange = Vehicle->GetRadarRange();
+    if (RadarRange > 0.0f)
     {
-        float ScreenRadius = Vehicle->PingRadiusPixels * Scale;
+        float ScreenRadius = RadarRange * Scale;
         FLinearColor RadarColor(0.0f, 1.0f, 1.0f, 0.35f);
 
         const int32 NumSegments = 48;
@@ -247,7 +248,7 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
             Canvas->K2_DrawLine(P1, P2, 1.0f, RadarColor);
         }
 
-        FString RadiusText = FString::Printf(TEXT("R: %.0f"), Vehicle->PingRadiusPixels);
+        FString RadiusText = FString::Printf(TEXT("R: %.0f"), RadarRange);
         Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(RadiusText),
             ScreenPos.X + 15.0f * Scale, ScreenPos.Y - 20.0f * Scale,
             0.6f, 0.6f, FFontRenderInfo());

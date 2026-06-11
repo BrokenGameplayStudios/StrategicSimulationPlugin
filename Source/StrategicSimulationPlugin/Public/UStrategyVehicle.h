@@ -132,8 +132,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar", meta = (ClampMin = "0.1", ClampMax = "4.0"))
     float PingIntervalHours = 0.5f;  // every 30 game minutes by default
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar")
-    float PingRadiusPixels = 120.0f;  // area one ping can scan (future zone checks)
+    // Deprecated - Radar range is now controlled ONLY by UVehicleDefinition->RadarRangePixels
+    // Use GetRadarRange() to get the current value.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar", meta = (DeprecatedProperty))
+    float PingRadiusPixels = 64.0f;
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
     float GetRadarRange() const;

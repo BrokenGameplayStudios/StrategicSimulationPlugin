@@ -13,7 +13,7 @@ UStrategyVehicle::UStrategyVehicle()
     CurrentHealth = 100;
     DamageState = EVehicleDamageState::Undamaged;
 
-    // NEW movement/radar defaults
+    // Movement defaults
     CurrentPosition = FVector2D::ZeroVector;
     CurrentWaypoints.Empty();
     LaunchGameTimeHours = 0.0f;
@@ -21,9 +21,6 @@ UStrategyVehicle::UStrategyVehicle()
     LastPingGameTimeHours = 0.0f;
     CruiseSpeedPixelsPerHour = 180.0f;
     PingIntervalHours = 0.5f;
-
-    // Radar range now comes from VehicleDefinition (fallback to 300)
-    PingRadiusPixels = 300.0f;
 }
 
 float UStrategyVehicle::GetMaxRange() const
@@ -221,7 +218,6 @@ void UStrategyVehicle::PerformRadarPing()
 
     EFactionType VehicleFaction = HomeBase->OwningFaction;
 
-    // Get BaseManager safely without relying on GetWorld() on a UObject
     UGameInstance* GameInstance = nullptr;
     if (UWorld* World = GetWorld())
     {
@@ -239,7 +235,7 @@ void UStrategyVehicle::PerformRadarPing()
         {
             if (!Site || Site->bHasBeenUsed) continue;
 
-            if (FVector2D::Distance(Site->Location, CurrentPosition) <= PingRadiusPixels)
+            if (FVector2D::Distance(Site->Location, CurrentPosition) <= GetRadarRange())
             {
                 BaseManager->AddDiscoveredSite(VehicleFaction, Site->Location, Site->SiteType);
             }
@@ -291,5 +287,5 @@ float UStrategyVehicle::GetRadarRange() const
     {
         return VehicleDefinition->RadarRangePixels;
     }
-    return PingRadiusPixels;
+    return 64.0f; // Safe fallback
 }
