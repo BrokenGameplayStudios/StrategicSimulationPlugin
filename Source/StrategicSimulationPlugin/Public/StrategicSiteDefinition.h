@@ -34,4 +34,10 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site")
     FString SiteName = TEXT("Unnamed Site");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site|Resources")
+    FResourceStockpile MaxResources;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Resources")
+    FResourceStockpile CurrentResources;
 };
