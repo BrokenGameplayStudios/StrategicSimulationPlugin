@@ -171,13 +171,7 @@ void UStrategyCampaignSubsystem::ResetSimulation()
 void UStrategyCampaignSubsystem::StartSimulation()
 {
     GetTimeManager()->SetTimeScale(1.0f);
-    UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED"));
-
-    if (UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
-    {
-        BaseManager->GenerateInitialSites(25, 300.0f);   // 25 sites, min 300 units apart
-        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Initialized Game Map Sites"));
-    }
+    UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED")); 
 
     // === SET AI EXPANSION LIMIT AS A GAME SETTING ===
     if (UAIControllerSubsystem* AIController = GetAIController())

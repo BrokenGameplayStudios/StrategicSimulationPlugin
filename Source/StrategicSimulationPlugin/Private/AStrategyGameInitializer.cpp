@@ -14,7 +14,7 @@ void AStrategyGameInitializer::BeginPlay()
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
     if (!Campaign)
     {
-        UE_LOG(LogTemp, Error, TEXT("❌ GameInitializer: Could not find Campaign Subsystem!"));
+        UE_LOG(LogTemp, Error, TEXT("GameInitializer: Could not find Campaign Subsystem!"));
         return;
     }
 
@@ -32,7 +32,7 @@ void AStrategyGameInitializer::BeginPlay()
     if (ItemDatabaseAsset.IsValid())
     {
         Campaign->ItemDatabaseAsset = ItemDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: ItemDatabaseAsset set"));
+        UE_LOG(LogTemp, Display, TEXT("GameInitializer: ItemDatabaseAsset set"));
     }
     else if (!ItemDatabaseAsset.IsNull())
     {
@@ -40,7 +40,7 @@ void AStrategyGameInitializer::BeginPlay()
         if (LoadedDB)
         {
             Campaign->ItemDatabaseAsset = ItemDatabaseAsset;
-            UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: ItemDatabaseAsset loaded synchronously"));
+            UE_LOG(LogTemp, Display, TEXT("GameInitializer: ItemDatabaseAsset loaded synchronously"));
         }
     }
 
@@ -49,7 +49,7 @@ void AStrategyGameInitializer::BeginPlay()
         for (auto& Soft : FacDB->AvailableFacilities)
             Soft.LoadSynchronous();
         Campaign->FacilityDatabaseAsset = FacilityDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d facilities from FacilityDatabase"), FacDB->AvailableFacilities.Num());
+        UE_LOG(LogTemp, Display, TEXT("Loaded %d facilities from FacilityDatabase"), FacDB->AvailableFacilities.Num());
     }
 
     if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
@@ -57,7 +57,7 @@ void AStrategyGameInitializer::BeginPlay()
         for (auto& Soft : SoldierDB->AvailableSoldierClasses)
             Soft.LoadSynchronous();
         Campaign->SoldierClassDatabaseAsset = SoldierClassDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d soldier classes from SoldierClassDatabase"), SoldierDB->AvailableSoldierClasses.Num());
+        UE_LOG(LogTemp, Display, TEXT("Loaded %d soldier classes from SoldierClassDatabase"), SoldierDB->AvailableSoldierClasses.Num());
     }
 
     if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
@@ -65,7 +65,7 @@ void AStrategyGameInitializer::BeginPlay()
         for (auto& Soft : ResearchDB->AvailableTechs)
             Soft.LoadSynchronous();
         Campaign->ResearchDatabaseAsset = ResearchDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d research projects from ResearchDatabase"), ResearchDB->AvailableTechs.Num());
+        UE_LOG(LogTemp, Display, TEXT("Loaded %d research projects from ResearchDatabase"), ResearchDB->AvailableTechs.Num());
     }
 
     if (UVehicleDatabase* VehicleDB = VehicleDatabaseAsset.Get())
@@ -73,7 +73,7 @@ void AStrategyGameInitializer::BeginPlay()
         for (auto& Soft : VehicleDB->AvailableVehicles)
             Soft.LoadSynchronous();
         Campaign->VehicleDatabaseAsset = VehicleDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("✅ Loaded %d vehicles from VehicleDatabase"), VehicleDB->AvailableVehicles.Num());
+        UE_LOG(LogTemp, Display, TEXT("Loaded %d vehicles from VehicleDatabase"), VehicleDB->AvailableVehicles.Num());
     }
     else
     {
@@ -110,9 +110,6 @@ void AStrategyGameInitializer::BeginPlay()
             bStartWithEnemyAI ? TEXT("ON") : TEXT("OFF"));
     }
 
-
-    UE_LOG(LogTemp, Display, TEXT("✅ GameInitializer: All Databases force-loaded and registered"));
-
     UResourceManagerSubsystem* ResourceMgr = GetWorld()->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     if (ResourceMgr)
     {
@@ -123,5 +120,14 @@ void AStrategyGameInitializer::BeginPlay()
 
     // === START THE SIMULATION ===
     Campaign->StartSimulation();
-    UE_LOG(LogTemp, Display, TEXT("🚀 Simulation STARTED — AI will act every day"));
+
+    // === NEW: Generate strategic sites using values from this actor ===
+    if (UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+    {
+        BaseManager->GenerateInitialSites(NumberOfStrategicSites, MinimumDistanceBetweenSites);
+        UE_LOG(LogTemp, Display, TEXT("[MAP] GameInitializer applied custom site settings → %d sites, min distance %.0f"),
+            NumberOfStrategicSites, MinimumDistanceBetweenSites);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("Simulation STARTED — AI will act every day"));
 }

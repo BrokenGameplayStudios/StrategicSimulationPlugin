@@ -794,34 +794,50 @@ void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistan
 {
     AllPotentialSites.Empty();
 
-    if (!GetWorld()) return;
+    if (!GetWorld() || NumSites <= 0) return;
+
+    const int32 MaxAttemptsPerSite = 50;
+    int32 SitesPlaced = 0;
 
     for (int32 i = 0; i < NumSites; ++i)
     {
-        FVector2D NewLoc(FMath::RandRange(-2200.0f, 2200.0f), FMath::RandRange(-2200.0f, 2200.0f));
-
-        // Avoid clustering
-        bool bTooClose = false;
-        for (UStrategySiteDefinition* Existing : AllPotentialSites)
+        bool bPlaced = false;
+        for (int32 Attempt = 0; Attempt < MaxAttemptsPerSite; ++Attempt)
         {
-            if (FVector2D::Distance(Existing->Location, NewLoc) < MinDistanceBetweenSites)
+            FVector2D NewLoc(FMath::RandRange(-2200.0f, 2200.0f), FMath::RandRange(-2200.0f, 2200.0f));
+
+            bool bTooClose = false;
+            for (UStrategySiteDefinition* Existing : AllPotentialSites)
             {
-                bTooClose = true;
-                break;
+                if (FVector2D::Distance(Existing->Location, NewLoc) < MinDistanceBetweenSites)
+                {
+                    bTooClose = true;
+                    break;
+                }
             }
+            if (bTooClose) continue;
+
+            UStrategySiteDefinition* NewSite = NewObject<UStrategySiteDefinition>();
+            NewSite->Location = NewLoc;
+            NewSite->SiteType = EStrategySiteType::PotentialBase;
+            NewSite->SiteName = FString::Printf(TEXT("Potential Base %d"), SitesPlaced + 1);
+
+            AllPotentialSites.Add(NewSite);
+
+            // White debug sphere so you can see all sites from the start
+            DrawDebugSphere(GetWorld(), FVector(NewLoc.X, NewLoc.Y, 100.0f), 55.0f, 12, FColor::White, true, -1.0f, 0, 3.0f);
+
+            SitesPlaced++;
+            bPlaced = true;
+            break;
         }
-        if (bTooClose) continue;
 
-        UStrategySiteDefinition* NewSite = NewObject<UStrategySiteDefinition>();
-        NewSite->Location = NewLoc;
-        NewSite->SiteType = EStrategySiteType::PotentialBase;
-        NewSite->SiteName = FString::Printf(TEXT("Potential Base %d"), i + 1);
-
-        AllPotentialSites.Add(NewSite);
-
-        // White debug sphere so you can see all sites from the start
-        DrawDebugSphere(GetWorld(), FVector(NewLoc.X, NewLoc.Y, 100.0f), 55.0f, 12, FColor::White, true, -1.0f, 0, 3.0f);
+        if (!bPlaced)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[MAP] Could not place site %d after %d attempts (map may be too crowded)"), i + 1, MaxAttemptsPerSite);
+        }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Generated %d potential base sites at game start (min distance %.0f)"), AllPotentialSites.Num(), MinDistanceBetweenSites);
+    UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Generated %d / %d potential base sites (min distance %.0f)"),
+        AllPotentialSites.Num(), NumSites, MinDistanceBetweenSites);
 }

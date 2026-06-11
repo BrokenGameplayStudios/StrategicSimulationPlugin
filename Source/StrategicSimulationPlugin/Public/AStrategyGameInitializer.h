@@ -37,6 +37,15 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
     bool bShowFacilityTicks = false;
 
+    // === NEW: MAP / STRATEGIC SITE GENERATION (editable in level) ===
+   /** How many potential base sites to spawn on the strategy map */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "5", ClampMax = "100"))
+    int32 NumberOfStrategicSites = 25;
+
+    /** Minimum distance (in world units) between any two sites. Higher = more spread out. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "100.0", ClampMax = "800.0"))
+    float MinimumDistanceBetweenSites = 350.0f;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;
