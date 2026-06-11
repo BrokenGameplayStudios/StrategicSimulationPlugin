@@ -219,40 +219,32 @@ void UStrategyVehicle::PerformRadarPing()
 
     EFactionType VehicleFaction = HomeBase->OwningFaction;
 
-    UE_LOG(LogTemp, Display, TEXT("[RADAR PING] %s vehicle at (%.0f, %.0f) - Faction: %s"),
+    UE_LOG(LogTemp, Display, TEXT("[RADAR PING] %s vehicle at (%.0f, %.0f) - Faction: %s | Radius: %.0f px"),
         *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y,
-        *UEnum::GetValueAsString(VehicleFaction));
+        *UEnum::GetValueAsString(VehicleFaction), PingRadiusPixels);
 
     if (UWorld* World = GetWorld())
     {
         if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
         {
+            int32 DiscoveredThisPing = 0;
+
             for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
             {
                 if (!Site || Site->bHasBeenUsed) continue;
 
-                // Pure distance check - NO dice roll
-				if (FVector2D::Distance(Site->Location, CurrentPosition) < 300.0f) // Default 64.0f detection radius - testing with 300.0f
-				{
-					UE_LOG(LogTemp, Warning, TEXT("[RADAR PING] %s vehicle DETECTED site '%s' at (%.0f, %.0f)!"),
-						*VehicleDefinition->VehicleName.ToString(), *Site->SiteName, Site->Location.X, Site->Location.Y);
-				}
+                if (FVector2D::Distance(Site->Location, CurrentPosition) <= PingRadiusPixels)
                 {
-                    // Discover for the REAL faction that owns the vehicle
-                    if (VehicleFaction == EFactionType::Human)
-                    {
-                        BaseManager->DiscoveredSitesHuman.AddUnique(Site);
-                    }
-                    else
-                    {
-                        BaseManager->DiscoveredSitesEnemy.AddUnique(Site);
-                    }
-
-                    UE_LOG(LogTemp, Display, TEXT("[SITE DISCOVERED] %s found node at (%.0f, %.0f)"),
-                        *UEnum::GetValueAsString(VehicleFaction), Site->Location.X, Site->Location.Y);
-
-                    break; // one discovery per ping
+                    // Use the official discovery API (nearest-match + AddUnique + logging)
+                    BaseManager->AddDiscoveredSite(VehicleFaction, Site->Location, Site->SiteType);
+                    DiscoveredThisPing++;
                 }
+            }
+
+            if (DiscoveredThisPing > 0)
+            {
+                UE_LOG(LogTemp, Display, TEXT("[RADAR PING] %s discovered %d new sites this ping!"),
+                    *VehicleDefinition->VehicleName.ToString(), DiscoveredThisPing);
             }
         }
     }
