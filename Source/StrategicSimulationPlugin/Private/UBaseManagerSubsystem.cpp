@@ -26,6 +26,8 @@ void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation)
 {
     UStrategyBase* NewBase = NewObject<UStrategyBase>(this);
+    NewBase->OwningFaction = Faction;   // ← THIS WAS MISSING (now enemy bases get correct faction)
+
     NewBase->BaseName = BaseName.IsEmpty() ? FText::FromString("New Base") : BaseName;
     NewBase->MapLocation = MapLocation;
 
@@ -94,7 +96,6 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
                         if (Commander)
                         {
-                            // Correct FString assignment (this was the syntax error)
                             Commander->SoldierName = (Faction == EFactionType::Human)
                                 ? FString("Sgt. Commander")
                                 : FString("Overlord Commander");
