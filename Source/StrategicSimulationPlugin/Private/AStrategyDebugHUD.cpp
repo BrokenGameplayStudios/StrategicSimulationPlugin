@@ -177,7 +177,19 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
     UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
     float CurrentHours = MissionMgr ? MissionMgr->GetCurrentGameHours() : 0.0f;
 
-    FVector2D ScreenPos = GetScreenPosition(Vehicle->CurrentPosition);
+    // === Use freshly calculated position every frame for smooth visuals ===
+    FVector2D CurrentVisualPosition = Vehicle->CurrentPosition;
+
+    if (Vehicle->TotalTravelTimeHours > 0.0f && Vehicle->CurrentMission != nullptr)
+    {
+        float Progress = FMath::Clamp(
+            (CurrentHours - Vehicle->LaunchGameTimeHours) / Vehicle->TotalTravelTimeHours,
+            0.0f, 1.0f);
+
+        CurrentVisualPosition = Vehicle->GetPositionOnPath(Progress);
+    }
+
+    FVector2D ScreenPos = GetScreenPosition(CurrentVisualPosition);
 
     // Faction color
     FLinearColor VehicleColor = FLinearColor::Red;
@@ -195,7 +207,7 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
         ScreenPos.X + (12.0f * Scale), ScreenPos.Y - (8.0f * Scale),
         0.7f, 0.7f, FFontRenderInfo());
 
-    // Yellow paths + progress dot
+    // Yellow paths + progress dot (unchanged)
     if (bShowVehiclePaths && Vehicle->CurrentWaypoints.Num() >= 2)
     {
         for (int32 i = 0; i < Vehicle->CurrentWaypoints.Num() - 1; ++i)
@@ -217,7 +229,7 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
         }
     }
 
-    // === RADAR CIRCLE (must be inside DrawVehicle to follow the ship) ===
+    // === RADAR CIRCLE now uses the fresh visual position ===
     if (Vehicle->PingRadiusPixels > 0.0f)
     {
         float ScreenRadius = Vehicle->PingRadiusPixels * Scale;

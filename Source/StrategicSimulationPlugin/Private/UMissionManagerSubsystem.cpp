@@ -64,9 +64,16 @@ float UMissionManagerSubsystem::GetCurrentGameHours() const
     if (!TimeMgr)
         return 0.0f;
 
-    // Simple but accurate enough for our live system: total days * 24 + current hour
     FDateTime CurrentDate = TimeMgr->GetCurrentGameDate();
-    return (TimeMgr->GetTotalSimulationDays() * 24.0f) + CurrentDate.GetHour();
+
+    // Precise version: includes minutes and seconds for smooth movement
+    float Hours = CurrentDate.GetHour();
+    float Minutes = CurrentDate.GetMinute() / 60.0f;
+    float Seconds = CurrentDate.GetSecond() / 3600.0f;
+
+    float PreciseHours = Hours + Minutes + Seconds;
+
+    return (TimeMgr->GetTotalSimulationDays() * 24.0f) + PreciseHours;
 }
 
 // ===========================================================================
