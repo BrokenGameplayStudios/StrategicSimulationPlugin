@@ -135,6 +135,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar")
     float PingRadiusPixels = 120.0f;  // area one ping can scan (future zone checks)
 
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
+    float GetRadarRange() const;
+
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget = 3.0f);
 

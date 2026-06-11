@@ -21,6 +21,8 @@ UStrategyVehicle::UStrategyVehicle()
     LastPingGameTimeHours = 0.0f;
     CruiseSpeedPixelsPerHour = 180.0f;
     PingIntervalHours = 0.5f;
+
+    // Radar range now comes from VehicleDefinition (fallback to 300)
     PingRadiusPixels = 300.0f;
 }
 
@@ -281,4 +283,13 @@ bool UStrategyVehicle::IsMissionComplete(float CurrentGameHours) const
     if (TotalTravelTimeHours <= 0.0f) return true;
     float Elapsed = CurrentGameHours - LaunchGameTimeHours;
     return Elapsed >= TotalTravelTimeHours;
+}
+
+float UStrategyVehicle::GetRadarRange() const
+{
+    if (VehicleDefinition)
+    {
+        return VehicleDefinition->RadarRangePixels;
+    }
+    return PingRadiusPixels;
 }

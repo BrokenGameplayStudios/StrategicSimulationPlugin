@@ -27,6 +27,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Range")
     float MaxRange = 800.0f;
 
+    // === NEW: Radar Range ===
+    /** Radar detection radius in map pixels. Used during live scouting missions. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar")
+    float RadarRangePixels = 64.0f;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
     int32 AttackPower = 0;
 
