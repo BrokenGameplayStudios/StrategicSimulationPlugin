@@ -22,7 +22,7 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
     UFUNCTION(BlueprintCallable, Category = "Base")
-    UStrategyBase* BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation);
+    UStrategyBase* BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation, UStrategySiteDefinition* Site = nullptr);
 
     UFUNCTION(BlueprintCallable, Category = "Base")
     const TArray<UStrategyBase*>& GetBases(EFactionType Faction) const;
@@ -82,6 +82,14 @@ public:
     /** Called by vehicles during recon when they find something good */
     UFUNCTION(BlueprintCallable, Category = "Expansion")
     UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type = EStrategySiteType::PotentialBase, float OptionalScore = 0.0f);
+
+    /** Attempts to build a new base on a discovered site. Returns true if successful. */
+    UFUNCTION(BlueprintCallable, Category = "Base Expansion")
+    bool TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName);
+
+    /** Checks if a faction can build a base on this specific site. */
+    UFUNCTION(BlueprintCallable, Category = "Base Expansion")
+    bool CanBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* Site) const;
 
     UFUNCTION(BlueprintCallable, Category = "Base")
     void ResetAllBases();

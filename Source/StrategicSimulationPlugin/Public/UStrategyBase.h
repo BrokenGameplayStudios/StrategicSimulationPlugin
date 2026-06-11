@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "StrategicSimulationTypes.h"
+#include "StrategicSiteDefinition.h"
 #include "UStrategyFacility.h"
 #include "UFacilityDefinition.h"
 #include "UStrategyBase.generated.h"
@@ -23,6 +24,10 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ownership")
     EFactionType OwningFaction = EFactionType::Human;
+
+    /** The site this base was built on (if any). A site can only have one base. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Base|Site")
+    UStrategySiteDefinition* BuiltOnSite = nullptr;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Facilities")
     TArray<UStrategyFacility*> Facilities;

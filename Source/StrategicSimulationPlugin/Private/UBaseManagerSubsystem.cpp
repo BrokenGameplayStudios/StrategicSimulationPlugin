@@ -23,13 +23,18 @@ void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 // === FULL FUNCTION: UBaseManagerSubsystem::BuildNewBase (COMMANDER FIXED) ===
 // Commander is now spawned using the FIRST class in SoldierClassDatabase (your DA_Sol_Commander).
 // It is placed in the initial Command Center and does NOT use barracks slots.
-UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation)
+UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation, UStrategySiteDefinition* Site)
 {
     UStrategyBase* NewBase = NewObject<UStrategyBase>(this);
-    NewBase->OwningFaction = Faction;   // ← THIS WAS MISSING (now enemy bases get correct faction)
-
+    NewBase->OwningFaction = Faction;   
     NewBase->BaseName = BaseName.IsEmpty() ? FText::FromString("New Base") : BaseName;
     NewBase->MapLocation = MapLocation;
+    NewBase->BuiltOnSite = Site;  
+
+    if (Site)
+    {
+        Site->bHasBeenUsed = true;
+    }
 
     if (Faction == EFactionType::Human)
         HumanBases.Add(NewBase);
@@ -206,11 +211,12 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
     // ===============================
     TArray<UStrategyBase*>& Bases = GetMutableBases(Faction);
 
-    // (Kept your original safety check — rare case for brand-new game)
     if (Bases.IsEmpty())
     {
-        FVector2D DefaultLoc = FVector2D(960.f, 540.f);
-        BuildNewBase(Faction, FText::FromString("Command Center"), DefaultLoc);
+        // We should not reach here during normal expansion.
+        // Log a warning instead of silently creating a base at the map center.
+        UE_LOG(LogTemp, Warning, TEXT("[BaseManager] Tried to build facility with no bases. Expansion should go through TryBuildBaseOnSite()."));
+        return nullptr;
     }
 
     UStrategyBase* ChosenBase = TargetBase;
@@ -846,4 +852,43 @@ void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistan
 
     UE_LOG(LogTemp, Display, TEXT("[MAP] Generated %d / %d sites inside %.0f×%.0f map with %.0f px border"),
         AllPotentialSites.Num(), NumSites, LogicalMapWidth, LogicalMapHeight, BorderPadding);
+}
+
+bool UBaseManagerSubsystem::CanBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* Site) const
+{
+    if (!Site) return false;
+
+    // Site must be discovered by this faction
+    const TArray<UStrategySiteDefinition*>& Discovered = (Faction == EFactionType::Human)
+        ? DiscoveredSitesHuman
+        : DiscoveredSitesEnemy;
+
+    if (!Discovered.Contains(Site)) return false;
+
+    // Site must not already be used
+    if (Site->bHasBeenUsed) return false;
+
+    // Check base limit
+    if (!CanBuildNewBase(Faction)) return false;
+
+    return true;
+}
+
+bool UBaseManagerSubsystem::TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName)
+{
+    if (!CanBuildBaseOnSite(Faction, TargetSite)) return false;
+
+    // Build the base at the site's location
+    UStrategyBase* NewBase = BuildNewBase(Faction, BaseName, TargetSite->Location);
+    if (!NewBase) return false;
+
+    // Link the base to the site
+    NewBase->BuiltOnSite = TargetSite;
+    TargetSite->bHasBeenUsed = true;
+
+    UE_LOG(LogTemp, Display, TEXT("[BASE EXPANSION] %s built new base '%s' on site '%s' at (%.0f, %.0f)"),
+        *UEnum::GetValueAsString(Faction), *BaseName.ToString(), *TargetSite->SiteName,
+        TargetSite->Location.X, TargetSite->Location.Y);
+
+    return true;
 }
