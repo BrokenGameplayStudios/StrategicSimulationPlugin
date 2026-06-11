@@ -195,7 +195,7 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
         ScreenPos.X + (12.0f * Scale), ScreenPos.Y - (8.0f * Scale),
         0.7f, 0.7f, FFontRenderInfo());
 
-    // Yellow waypoint paths + progress dot
+    // Yellow paths + progress dot
     if (bShowVehiclePaths && Vehicle->CurrentWaypoints.Num() >= 2)
     {
         for (int32 i = 0; i < Vehicle->CurrentWaypoints.Num() - 1; ++i)
@@ -217,11 +217,11 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
         }
     }
 
-    // === RADAR CIRCLE (now correctly follows the moving vehicle) ===
+    // === RADAR CIRCLE (must be inside DrawVehicle to follow the ship) ===
     if (Vehicle->PingRadiusPixels > 0.0f)
     {
         float ScreenRadius = Vehicle->PingRadiusPixels * Scale;
-        FLinearColor RadarColor(0.0f, 1.0f, 1.0f, 0.35f); // Cyan
+        FLinearColor RadarColor(0.0f, 1.0f, 1.0f, 0.35f);
 
         const int32 NumSegments = 48;
         for (int32 i = 0; i < NumSegments; ++i)
