@@ -184,18 +184,18 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
     if (Vehicle->HomeBase)
         VehicleColor = (Vehicle->HomeBase->OwningFaction == EFactionType::Human) ? FLinearColor::Green : FLinearColor::Red;
 
-    // Scaled vehicle dot (8x8 logical pixels)
+    // Scaled vehicle dot
     float VehicleSize = 8.0f * Scale;
     Canvas->K2_DrawBox(ScreenPos - FVector2D(VehicleSize * 0.5f, VehicleSize * 0.5f),
         FVector2D(VehicleSize, VehicleSize), 2.0f * Scale, VehicleColor);
 
-    // Scaled name label (offset also scales)
+    // Scaled name label
     Canvas->DrawText(GEngine->GetSmallFont(),
         FText::FromString(Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("VEH")),
         ScreenPos.X + (12.0f * Scale), ScreenPos.Y - (8.0f * Scale),
         0.7f, 0.7f, FFontRenderInfo());
 
-    // Waypoint paths + progress (all scaled)
+    // Waypoint paths + progress
     if (bShowVehiclePaths && Vehicle->CurrentWaypoints.Num() >= 2)
     {
         for (int32 i = 0; i < Vehicle->CurrentWaypoints.Num() - 1; ++i)
@@ -213,17 +213,18 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
 
             float ProgressSize = 6.0f * Scale;
             Canvas->K2_DrawBox(ScreenProgress - FVector2D(ProgressSize * 0.5f, ProgressSize * 0.5f),
-                FVector2D(ProgressSize, ProgressSize), 1.5f * Scale, FLinearColor::White);
+                FVector2D(ProgressSize, ProgressSize), 1.5f * Scale, VehicleColor);   // Changed to VehicleColor for consistency
         }
     }
-    // === RADAR CIRCLE VISUALIZATION (for tuning PingRadiusPixels) ===
-    if (Vehicle->PingRadiusPixels > 0.0f && bShowStrategyMap)
+
+    // === RADAR CIRCLE (now correctly follows the moving vehicle) ===
+    if (Vehicle->PingRadiusPixels > 0.0f)
     {
-        float ScreenRadius = Vehicle->PingRadiusPixels * GetCurrentMapScale();
-        FLinearColor RadarColor(0.0f, 1.0f, 1.0f, 0.35f); // Cyan, semi-transparent
+        float ScreenRadius = Vehicle->PingRadiusPixels * Scale;           // Use the Scale variable we already have
+        FLinearColor RadarColor(0.0f, 1.0f, 1.0f, 0.35f); // Cyan
 
         // Draw circle using line segments
-        const int32 NumSegments = 48; // Higher = smoother circle
+        const int32 NumSegments = 48;
         for (int32 i = 0; i < NumSegments; ++i)
         {
             float Angle1 = (float)i / NumSegments * 2.0f * PI;
@@ -241,11 +242,11 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
             Canvas->K2_DrawLine(P1, P2, 1.0f, RadarColor);
         }
 
-        // Optional: show current radius value near the vehicle
+        // Show current radius value
         FString RadiusText = FString::Printf(TEXT("R: %.0f"), Vehicle->PingRadiusPixels);
         Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(RadiusText),
-            ScreenPos.X + 15.0f * GetCurrentMapScale(),
-            ScreenPos.Y - 20.0f * GetCurrentMapScale(),
+            ScreenPos.X + 15.0f * Scale,
+            ScreenPos.Y - 20.0f * Scale,
             0.6f, 0.6f, FFontRenderInfo());
     }
 }
