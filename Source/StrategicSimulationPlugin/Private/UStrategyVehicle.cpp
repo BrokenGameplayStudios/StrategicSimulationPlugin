@@ -219,18 +219,27 @@ void UStrategyVehicle::PerformRadarPing()
 
     EFactionType VehicleFaction = HomeBase->OwningFaction;
 
+    // Get BaseManager safely without relying on GetWorld() on a UObject
+    UGameInstance* GameInstance = nullptr;
     if (UWorld* World = GetWorld())
     {
-        if (UBaseManagerSubsystem* BaseManager = World->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
-        {
-            for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
-            {
-                if (!Site || Site->bHasBeenUsed) continue;
+        GameInstance = World->GetGameInstance();
+    }
+    if (!GameInstance)
+    {
+        GameInstance = Cast<UGameInstance>(GetOuter());
+    }
+    if (!GameInstance) return;
 
-                if (FVector2D::Distance(Site->Location, CurrentPosition) <= PingRadiusPixels)
-                {
-                    BaseManager->AddDiscoveredSite(VehicleFaction, Site->Location, Site->SiteType);
-                }
+    if (UBaseManagerSubsystem* BaseManager = GameInstance->GetSubsystem<UBaseManagerSubsystem>())
+    {
+        for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
+        {
+            if (!Site || Site->bHasBeenUsed) continue;
+
+            if (FVector2D::Distance(Site->Location, CurrentPosition) <= PingRadiusPixels)
+            {
+                BaseManager->AddDiscoveredSite(VehicleFaction, Site->Location, Site->SiteType);
             }
         }
     }

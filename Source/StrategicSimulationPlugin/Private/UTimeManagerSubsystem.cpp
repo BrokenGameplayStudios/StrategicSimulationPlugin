@@ -1,6 +1,7 @@
 #include "UTimeManagerSubsystem.h"
 #include "UResourceManagerSubsystem.h"
 #include "UAIControllerSubsystem.h"
+#include "UMissionManagerSubsystem.h"
 #include "Engine/Engine.h"
 
 void UTimeManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -43,6 +44,14 @@ void UTimeManagerSubsystem::RealTimeTick()
                 AI->RunAIForFaction(EFactionType::Enemy, CurrentDayNum);
             }
         }
+    }
+
+    // === NEW: Keep live vehicle positions and radar pings updated every frame ===
+    // This makes the detection radius circle move with the vehicle and allows
+    // site discovery along the actual flight path (not just at the base).
+    if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
+    {
+        MissionMgr->UpdateAllLiveVehicles();
     }
 }
 
