@@ -791,21 +791,26 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
     return ExistingSite;
 }
 
-void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistanceBetweenSites)
+void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistanceBetweenSites,
+    float LogicalMapWidth, float LogicalMapHeight, float BorderPadding)
 {
     AllPotentialSites.Empty();
-
     if (!GetWorld() || NumSites <= 0) return;
 
     const int32 MaxAttemptsPerSite = 50;
     int32 SitesPlaced = 0;
+
+    float MinX = BorderPadding;
+    float MaxX = LogicalMapWidth - BorderPadding;
+    float MinY = BorderPadding;
+    float MaxY = LogicalMapHeight - BorderPadding;
 
     for (int32 i = 0; i < NumSites; ++i)
     {
         bool bPlaced = false;
         for (int32 Attempt = 0; Attempt < MaxAttemptsPerSite; ++Attempt)
         {
-            FVector2D NewLoc(FMath::RandRange(-2200.0f, 2200.0f), FMath::RandRange(-2200.0f, 2200.0f));
+            FVector2D NewLoc(FMath::RandRange(MinX, MaxX), FMath::RandRange(MinY, MaxY));
 
             bool bTooClose = false;
             for (UStrategySiteDefinition* Existing : AllPotentialSites)
@@ -825,7 +830,7 @@ void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistan
 
             AllPotentialSites.Add(NewSite);
 
-            // White debug sphere so you can see all sites from the start
+            // White debug sphere (still useful in world space)
             DrawDebugSphere(GetWorld(), FVector(NewLoc.X, NewLoc.Y, 100.0f), 55.0f, 12, FColor::White, true, -1.0f, 0, 3.0f);
 
             SitesPlaced++;
@@ -835,10 +840,10 @@ void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistan
 
         if (!bPlaced)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MAP] Could not place site %d after %d attempts (map may be too crowded)"), i + 1, MaxAttemptsPerSite);
+            UE_LOG(LogTemp, Warning, TEXT("[MAP] Could not place site %d after %d attempts"), i + 1, MaxAttemptsPerSite);
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[EXPANSION] Generated %d / %d potential base sites (min distance %.0f)"),
-        AllPotentialSites.Num(), NumSites, MinDistanceBetweenSites);
+    UE_LOG(LogTemp, Display, TEXT("[MAP] Generated %d / %d sites inside %.0f×%.0f map with %.0f px border"),
+        AllPotentialSites.Num(), NumSites, LogicalMapWidth, LogicalMapHeight, BorderPadding);
 }

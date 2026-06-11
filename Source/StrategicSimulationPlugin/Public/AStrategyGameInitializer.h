@@ -46,6 +46,17 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "100.0", ClampMax = "800.0"))
     float MinimumDistanceBetweenSites = 350.0f;
 
+    /** Logical map size in pixels (the "world" coordinates) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "800.0", ClampMax = "3840.0"))
+    float LogicalMapWidth = 1920.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "600.0", ClampMax = "2160.0"))
+    float LogicalMapHeight = 1080.0f;
+
+    /** Everything spawns inside this border (100 px = playable area) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "50.0", ClampMax = "300.0"))
+    float MapBorderPadding = 100.0f;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;

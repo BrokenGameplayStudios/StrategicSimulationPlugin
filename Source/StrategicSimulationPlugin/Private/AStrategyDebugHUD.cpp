@@ -74,6 +74,18 @@ void AStrategyDebugHUD::ToggleStrategyMap()
     UE_LOG(LogTemp, Display, TEXT("[DEBUG HUD] Strategy Map %s"), bShowStrategyMap ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+float AStrategyDebugHUD::GetCurrentMapScale() const
+{
+    if (!Canvas) return 1.0f;
+
+    const float LogicalWidth = 1920.0f;
+    const float LogicalHeight = 1080.0f;
+
+    float ScaleX = Canvas->SizeX / LogicalWidth;
+    float ScaleY = Canvas->SizeY / LogicalHeight;
+    return FMath::Min(ScaleX, ScaleY);   // uniform scale, keeps aspect ratio perfect
+}
+
 // ==================== PASTE THIS FULL FUNCTION OVER THE EXISTING DrawHUD() ====================
 void AStrategyDebugHUD::DrawHUD()
 {
@@ -133,31 +145,34 @@ void AStrategyDebugHUD::DrawAllPotentialSites()
     UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (!BaseManager) return;
 
-    // Draw EVERY generated node as a dim white square
+    float Scale = GetCurrentMapScale();
+
     for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
     {
         if (!Site) continue;
 
         FVector2D ScreenPos = GetScreenPosition(Site->Location);
 
-        // Main node: dim white square (10x10 pixels)
-        Canvas->K2_DrawBox(ScreenPos - FVector2D(5.0f, 5.0f), FVector2D(10.0f, 10.0f), 1.0f, FLinearColor(0.8f, 0.8f, 0.8f, 0.7f));
+        // Main node (white square) — now scales with map
+        float NodeSize = 10.0f * Scale;
+        Canvas->K2_DrawBox(ScreenPos - FVector2D(NodeSize * 0.5f, NodeSize * 0.5f),
+            FVector2D(NodeSize, NodeSize), 1.0f, FLinearColor(0.8f, 0.8f, 0.8f, 0.7f));
 
-        // === Fog-of-war markers (exactly as you requested) ===
-        // 4x4 blue square top-left if Human knows about it
+        // 4x4 discovery markers (blue left / red right) — also scale
+        float MarkerSize = 4.0f * Scale;
         if (BaseManager->DiscoveredSitesHuman.Contains(Site))
         {
-            Canvas->K2_DrawBox(ScreenPos - FVector2D(8.0f, 12.0f), FVector2D(4.0f, 4.0f), 1.0f, FLinearColor::Blue);
+            Canvas->K2_DrawBox(ScreenPos - FVector2D(8.0f * Scale, 12.0f * Scale),
+                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Blue);
         }
-
-        // 4x4 red square top-right if Enemy knows about it
         if (BaseManager->DiscoveredSitesEnemy.Contains(Site))
         {
-            Canvas->K2_DrawBox(ScreenPos + FVector2D(4.0f, -12.0f), FVector2D(4.0f, 4.0f), 1.0f, FLinearColor::Red);
+            Canvas->K2_DrawBox(ScreenPos + FVector2D(4.0f * Scale, -12.0f * Scale),
+                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Red);
         }
     }
 
-    // Optional live count in corner
+    // Live count (fixed size so it's always readable)
     FString CountText = FString::Printf(TEXT("Nodes: %d | Human discovered: %d | Enemy discovered: %d"),
         BaseManager->AllPotentialSites.Num(),
         BaseManager->DiscoveredSitesHuman.Num(),
@@ -169,6 +184,8 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
 {
     if (!Vehicle || !Canvas) return;
 
+    float Scale = GetCurrentMapScale();
+
     UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
     float CurrentHours = MissionMgr ? MissionMgr->GetCurrentGameHours() : 0.0f;
 
@@ -179,22 +196,25 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
     if (Vehicle->HomeBase)
         VehicleColor = (Vehicle->HomeBase->OwningFaction == EFactionType::Human) ? FLinearColor::Green : FLinearColor::Red;
 
-    // Draw the moving dot
-    Canvas->K2_DrawBox(ScreenPos - FVector2D(4, 4), FVector2D(8, 8), 2.0f, VehicleColor);
+    // Scaled vehicle dot (8x8 logical pixels)
+    float VehicleSize = 8.0f * Scale;
+    Canvas->K2_DrawBox(ScreenPos - FVector2D(VehicleSize * 0.5f, VehicleSize * 0.5f),
+        FVector2D(VehicleSize, VehicleSize), 2.0f * Scale, VehicleColor);
 
-    // Name label
+    // Scaled name label (offset also scales)
     Canvas->DrawText(GEngine->GetSmallFont(),
         FText::FromString(Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("VEH")),
-        ScreenPos.X + 12, ScreenPos.Y - 8, 0.7f, 0.7f, FFontRenderInfo());
+        ScreenPos.X + (12.0f * Scale), ScreenPos.Y - (8.0f * Scale),
+        0.7f, 0.7f, FFontRenderInfo());
 
-    // Waypoint lines + progress (only if still on a live path)
+    // Waypoint paths + progress (all scaled)
     if (bShowVehiclePaths && Vehicle->CurrentWaypoints.Num() >= 2)
     {
         for (int32 i = 0; i < Vehicle->CurrentWaypoints.Num() - 1; ++i)
         {
             FVector2D A = GetScreenPosition(Vehicle->CurrentWaypoints[i]);
             FVector2D B = GetScreenPosition(Vehicle->CurrentWaypoints[i + 1]);
-            Canvas->K2_DrawLine(A, B, 1.5f, FLinearColor::Yellow);
+            Canvas->K2_DrawLine(A, B, 1.5f * Scale, FLinearColor::Yellow);
         }
 
         if (Vehicle->TotalTravelTimeHours > 0.0f)
@@ -202,7 +222,10 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
             float Progress = FMath::Clamp((CurrentHours - Vehicle->LaunchGameTimeHours) / Vehicle->TotalTravelTimeHours, 0.0f, 1.0f);
             FVector2D ProgressPos = Vehicle->GetPositionOnPath(Progress);
             FVector2D ScreenProgress = GetScreenPosition(ProgressPos);
-            Canvas->K2_DrawBox(ScreenProgress - FVector2D(3, 3), FVector2D(6, 6), 1.5f, FLinearColor::White);
+
+            float ProgressSize = 6.0f * Scale;
+            Canvas->K2_DrawBox(ScreenProgress - FVector2D(ProgressSize * 0.5f, ProgressSize * 0.5f),
+                FVector2D(ProgressSize, ProgressSize), 1.5f * Scale, FLinearColor::White);
         }
     }
 }
@@ -211,13 +234,20 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
 {
     if (!Base || !Canvas) return;
 
-    // <<< CHANGE THIS TO YOUR ACTUAL POSITION MEMBER NAME >>>
-    // Look in UStrategyBase.h for the FVector2D member (common names: Location, BaseLocation, Position, WorldLocation)
-    FVector2D ScreenPos = GetScreenPosition(Base->MapLocation);   // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+    float Scale = GetCurrentMapScale();
 
-    Canvas->K2_DrawBox(ScreenPos - FVector2D(10, 10), FVector2D(20, 20), 2.0f, Color);
+    FVector2D ScreenPos = GetScreenPosition(Base->MapLocation);
 
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(Base->BaseName.ToString()), ScreenPos.X + 25, ScreenPos.Y - 10, 1.0f, 1.0f, FFontRenderInfo());
+    // Scaled base box (20x20 logical pixels → grows/shrinks with map)
+    float BaseSize = 20.0f * Scale;
+    Canvas->K2_DrawBox(ScreenPos - FVector2D(BaseSize * 0.5f, BaseSize * 0.5f),
+        FVector2D(BaseSize, BaseSize), 2.0f * Scale, Color);
+
+    // Scaled name label offset
+    Canvas->DrawText(GEngine->GetSmallFont(),
+        FText::FromString(Base->BaseName.ToString()),
+        ScreenPos.X + (25.0f * Scale), ScreenPos.Y - (10.0f * Scale),
+        1.0f, 1.0f, FFontRenderInfo());
 }
 
 void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
@@ -233,7 +263,35 @@ void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(Info), End.X + 10, End.Y, 0.8f, 0.8f, FFontRenderInfo());
 }
 
-FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& WorldPos) const
+float AStrategyDebugHUD::GetCurrentMapScale() const
 {
-    return (WorldPos * MapScale) + MapOffset;
+    if (!Canvas) return 1.0f;
+
+    const float LogicalWidth = 1920.0f;
+    const float LogicalHeight = 1080.0f;
+
+    float ScaleX = Canvas->SizeX / LogicalWidth;
+    float ScaleY = Canvas->SizeY / LogicalHeight;
+    return FMath::Min(ScaleX, ScaleY);   // uniform scale, preserves aspect ratio
+}
+
+::FVector2D AStrategyDebugHUD::GetScreenPosition(const ::FVector2D& LogicalPos) const
+{
+    if (!Canvas)
+    {
+        // Safety fallback (should never hit)
+        return (LogicalPos * 0.85f) + MapOffset;
+    }
+
+    const float LogicalWidth = 1920.0f;
+    const float LogicalHeight = 1080.0f;
+
+    float UniformScale = GetCurrentMapScale();
+
+    FVector2D ScaledPos = LogicalPos * UniformScale;
+
+    FVector2D CanvasCenter(Canvas->SizeX * 0.5f, Canvas->SizeY * 0.5f);
+    FVector2D LogicalCenter(LogicalWidth * 0.5f, LogicalHeight * 0.5f);
+
+    return CanvasCenter + (ScaledPos - LogicalCenter * UniformScale);
 }

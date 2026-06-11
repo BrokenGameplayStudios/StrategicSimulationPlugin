@@ -30,6 +30,13 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map")
     ::FVector2D MapOffset = ::FVector2D(100.0f, 100.0f);
 
+    /** Returns the current uniform scale factor so icons/lines also scale with the map */
+    UFUNCTION(BlueprintCallable, Category = "Debug Map")
+    float GetCurrentMapScale() const;
+
+    /** Logical 1920x1080 pixel map → fits any Canvas size, centered, aspect preserved */
+    FVector2D GetScreenPosition(const FVector2D& LogicalPos) const;
+
     // NEW: Vehicle debug visuals
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map|Vehicles")
     bool bShowVehiclePaths = true;
@@ -52,5 +59,10 @@ private:
     void DrawVehicle(UStrategyVehicle* Vehicle);   // NEW    
     void DrawDiscoveredSites();
 
-    ::FVector2D GetScreenPosition(const ::FVector2D& WorldPos) const;
+    /** Returns the current uniform scale factor (so icons, dots, lines all grow/shrink together) */
+    UFUNCTION(BlueprintCallable, Category = "Debug Map")
+    float GetCurrentMapScale() const;
+
+    /** Logical 1920×1080 map → automatically centered + scaled to any screen resolution */
+    ::FVector2D GetScreenPosition(const ::FVector2D& LogicalPos) const;
 };

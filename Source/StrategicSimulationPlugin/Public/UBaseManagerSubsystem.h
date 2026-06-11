@@ -76,7 +76,8 @@ public:
 
     /** Generate initial potential base sites at game start (callable with different parameters later) */
     UFUNCTION(BlueprintCallable, Category = "Expansion")
-    void GenerateInitialSites(int32 NumSites = 25, float MinDistanceBetweenSites = 350.0f);
+    void GenerateInitialSites(int32 NumSites = 25, float MinDistanceBetweenSites = 180.0f,
+        float LogicalMapWidth = 1920.0f, float LogicalMapHeight = 1080.0f, float BorderPadding = 100.0f);
 
     /** Called by vehicles during recon when they find something good */
     UFUNCTION(BlueprintCallable, Category = "Expansion")
