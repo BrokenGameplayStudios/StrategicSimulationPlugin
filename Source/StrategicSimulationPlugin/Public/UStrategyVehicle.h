@@ -117,6 +117,15 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Live Movement")
     float CruiseSpeedPixelsPerHour = 250.0f;  // pixels per game hour — tweak per vehicle type later
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    float OutboundTravelTime = 0.0f;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    float ReturnTravelTime = 0.0f;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    float SearchTimeAtTarget = 0.0f;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
     float LastPingGameTimeHours = 0.0f;
 

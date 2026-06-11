@@ -216,6 +216,38 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
                 FVector2D(ProgressSize, ProgressSize), 1.5f * Scale, FLinearColor::White);
         }
     }
+    // === RADAR CIRCLE VISUALIZATION (for tuning PingRadiusPixels) ===
+    if (Vehicle->PingRadiusPixels > 0.0f && bShowStrategyMap)
+    {
+        float ScreenRadius = Vehicle->PingRadiusPixels * GetCurrentMapScale();
+        FLinearColor RadarColor(0.0f, 1.0f, 1.0f, 0.35f); // Cyan, semi-transparent
+
+        // Draw circle using line segments
+        const int32 NumSegments = 48; // Higher = smoother circle
+        for (int32 i = 0; i < NumSegments; ++i)
+        {
+            float Angle1 = (float)i / NumSegments * 2.0f * PI;
+            float Angle2 = (float)(i + 1) / NumSegments * 2.0f * PI;
+
+            FVector2D P1(
+                ScreenPos.X + FMath::Cos(Angle1) * ScreenRadius,
+                ScreenPos.Y + FMath::Sin(Angle1) * ScreenRadius
+            );
+            FVector2D P2(
+                ScreenPos.X + FMath::Cos(Angle2) * ScreenRadius,
+                ScreenPos.Y + FMath::Sin(Angle2) * ScreenRadius
+            );
+
+            Canvas->K2_DrawLine(P1, P2, 1.0f, RadarColor);
+        }
+
+        // Optional: show current radius value near the vehicle
+        FString RadiusText = FString::Printf(TEXT("R: %.0f"), Vehicle->PingRadiusPixels);
+        Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(RadiusText),
+            ScreenPos.X + 15.0f * GetCurrentMapScale(),
+            ScreenPos.Y - 20.0f * GetCurrentMapScale(),
+            0.6f, 0.6f, FFontRenderInfo());
+    }
 }
 
 void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)

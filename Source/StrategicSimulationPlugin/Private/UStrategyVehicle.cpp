@@ -21,7 +21,7 @@ UStrategyVehicle::UStrategyVehicle()
     LastPingGameTimeHours = 0.0f;
     CruiseSpeedPixelsPerHour = 180.0f;
     PingIntervalHours = 0.5f;
-    PingRadiusPixels = 120.0f;
+    PingRadiusPixels = 300.0f;
 }
 
 float UStrategyVehicle::GetMaxRange() const
@@ -166,23 +166,23 @@ void UStrategyVehicle::LaunchScoutingMission(FVector2D TargetLocation, float Cur
 
     CurrentPosition = HomeBase->MapLocation;
     CurrentWaypoints.Empty();
-    CurrentWaypoints.Add(HomeBase->MapLocation);
-    CurrentWaypoints.Add(TargetLocation);
-    CurrentWaypoints.Add(HomeBase->MapLocation);
+    CurrentWaypoints.Add(HomeBase->MapLocation);      // 0 = Base
+    CurrentWaypoints.Add(TargetLocation);             // 1 = Target
+    CurrentWaypoints.Add(HomeBase->MapLocation);      // 2 = Base
 
     LaunchGameTimeHours = CurrentGameHours;
     LastPingGameTimeHours = CurrentGameHours;
 
     float DistOutbound = FVector2D::Distance(HomeBase->MapLocation, TargetLocation);
-    float TravelTimeHours = (DistOutbound * 2.0f) / CruiseSpeedPixelsPerHour;
+    OutboundTravelTime = DistOutbound / CruiseSpeedPixelsPerHour;
+    ReturnTravelTime = OutboundTravelTime;           // assume same speed back
+    SearchTimeAtTarget = SearchHoursAtTarget;
 
-    // === TUNABLE: 1 hour at location (as you requested) + travel time ===
-    TotalTravelTimeHours = TravelTimeHours + SearchHoursAtTarget;
+    TotalTravelTimeHours = OutboundTravelTime + SearchTimeAtTarget + ReturnTravelTime;
 
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s launched %s mission — distance %.0f px | travel %.1f hrs + %.1f hrs search = %.1f hrs total"),
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s launched mission — travel out: %.1f hrs | search: %.1f hrs | return: %.1f hrs"),
         *VehicleDefinition->VehicleName.ToString(),
-        *UEnum::GetValueAsString(CurrentMission ? CurrentMission->MissionType : EMissionType::Recon),
-        DistOutbound, TravelTimeHours, SearchHoursAtTarget, TotalTravelTimeHours);
+        OutboundTravelTime, SearchTimeAtTarget, ReturnTravelTime);
 }
 
 void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
@@ -252,17 +252,33 @@ void UStrategyVehicle::PerformRadarPing()
 
 FVector2D UStrategyVehicle::GetPositionOnPath(float Progress) const
 {
-    if (CurrentWaypoints.Num() < 2) return CurrentPosition;
+    if (CurrentWaypoints.Num() < 3) return CurrentPosition;
 
-    float SegmentProgress = Progress * (CurrentWaypoints.Num() - 1);
-    int32 SegmentIdx = FMath::FloorToInt(SegmentProgress);
-    float Frac = SegmentProgress - SegmentIdx;
+    // Remap progress so we dwell at the target during search time
+    float TravelPortion = OutboundTravelTime + ReturnTravelTime;
+    if (TravelPortion <= 0.0f) return CurrentWaypoints[1]; // safety
 
-    if (SegmentIdx >= CurrentWaypoints.Num() - 1) SegmentIdx = CurrentWaypoints.Num() - 2;
+    // Time spent moving vs searching
+    float MovingTime = Progress * TotalTravelTimeHours;
 
-    FVector2D A = CurrentWaypoints[SegmentIdx];
-    FVector2D B = CurrentWaypoints[SegmentIdx + 1];
-    return FMath::Lerp(A, B, Frac);
+    if (MovingTime <= OutboundTravelTime)
+    {
+        // Going to target (first segment)
+        float t = MovingTime / OutboundTravelTime;
+        return FMath::Lerp(CurrentWaypoints[0], CurrentWaypoints[1], t);
+    }
+    else if (MovingTime <= OutboundTravelTime + SearchTimeAtTarget)
+    {
+        // Waiting at target
+        return CurrentWaypoints[1];
+    }
+    else
+    {
+        // Returning home (second segment)
+        float ReturnElapsed = MovingTime - (OutboundTravelTime + SearchTimeAtTarget);
+        float t = ReturnElapsed / ReturnTravelTime;
+        return FMath::Lerp(CurrentWaypoints[1], CurrentWaypoints[2], t);
+    }
 }
 
 bool UStrategyVehicle::IsMissionComplete(float CurrentGameHours) const
