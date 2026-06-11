@@ -74,18 +74,6 @@ void AStrategyDebugHUD::ToggleStrategyMap()
     UE_LOG(LogTemp, Display, TEXT("[DEBUG HUD] Strategy Map %s"), bShowStrategyMap ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
-float AStrategyDebugHUD::GetCurrentMapScale() const
-{
-    if (!Canvas) return 1.0f;
-
-    const float LogicalWidth = 1920.0f;
-    const float LogicalHeight = 1080.0f;
-
-    float ScaleX = Canvas->SizeX / LogicalWidth;
-    float ScaleY = Canvas->SizeY / LogicalHeight;
-    return FMath::Min(ScaleX, ScaleY);   // uniform scale, keeps aspect ratio perfect
-}
-
 // ==================== PASTE THIS FULL FUNCTION OVER THE EXISTING DrawHUD() ====================
 void AStrategyDebugHUD::DrawHUD()
 {
@@ -153,7 +141,7 @@ void AStrategyDebugHUD::DrawAllPotentialSites()
 
         FVector2D ScreenPos = GetScreenPosition(Site->Location);
 
-        // Main node (white square) — now scales with map
+        // Main node (white square) — scales with map
         float NodeSize = 10.0f * Scale;
         Canvas->K2_DrawBox(ScreenPos - FVector2D(NodeSize * 0.5f, NodeSize * 0.5f),
             FVector2D(NodeSize, NodeSize), 1.0f, FLinearColor(0.8f, 0.8f, 0.8f, 0.7f));
@@ -263,24 +251,12 @@ void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(Info), End.X + 10, End.Y, 0.8f, 0.8f, FFontRenderInfo());
 }
 
-float AStrategyDebugHUD::GetCurrentMapScale() const
-{
-    if (!Canvas) return 1.0f;
-
-    const float LogicalWidth = 1920.0f;
-    const float LogicalHeight = 1080.0f;
-
-    float ScaleX = Canvas->SizeX / LogicalWidth;
-    float ScaleY = Canvas->SizeY / LogicalHeight;
-    return FMath::Min(ScaleX, ScaleY);   // uniform scale, preserves aspect ratio
-}
-
-::FVector2D AStrategyDebugHUD::GetScreenPosition(const ::FVector2D& LogicalPos) const
+FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& LogicalPos) const
 {
     if (!Canvas)
     {
-        // Safety fallback (should never hit)
-        return (LogicalPos * 0.85f) + MapOffset;
+        // Safety fallback
+        return (LogicalPos * MapScale) + MapOffset;
     }
 
     const float LogicalWidth = 1920.0f;
@@ -294,4 +270,19 @@ float AStrategyDebugHUD::GetCurrentMapScale() const
     FVector2D LogicalCenter(LogicalWidth * 0.5f, LogicalHeight * 0.5f);
 
     return CanvasCenter + (ScaledPos - LogicalCenter * UniformScale);
+}
+
+float AStrategyDebugHUD::GetCurrentMapScale() const
+{
+    if (!Canvas)
+    {
+        return 1.0f;
+    }
+
+    const float LogicalWidth = 1920.0f;
+    const float LogicalHeight = 1080.0f;
+
+    float ScaleX = Canvas->SizeX / LogicalWidth;
+    float ScaleY = Canvas->SizeY / LogicalHeight;
+    return FMath::Min(ScaleX, ScaleY);   // uniform scale, preserves aspect ratio
 }

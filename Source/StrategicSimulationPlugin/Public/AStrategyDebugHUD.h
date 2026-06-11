@@ -58,11 +58,4 @@ private:
     void DrawAllPotentialSites();
     void DrawVehicle(UStrategyVehicle* Vehicle);   // NEW    
     void DrawDiscoveredSites();
-
-    /** Returns the current uniform scale factor (so icons, dots, lines all grow/shrink together) */
-    UFUNCTION(BlueprintCallable, Category = "Debug Map")
-    float GetCurrentMapScale() const;
-
-    /** Logical 1920×1080 map → automatically centered + scaled to any screen resolution */
-    ::FVector2D GetScreenPosition(const ::FVector2D& LogicalPos) const;
 };
