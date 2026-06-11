@@ -412,14 +412,21 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
                 *UEnum::GetValueAsString(Faction), AllBases.Num() + 1);
 
             FString NewName = FString::Printf(TEXT("Forward Base %02d"), AllBases.Num() + 1);
-            if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString(NewName), FVector2D::ZeroVector))
+
+            // Try to expand onto a discovered site
+            if (UStrategySiteDefinition* TargetSite = FindExpansionSiteForAI(Faction))
             {
-                UE_LOG(LogTemp, Display, TEXT("[AI] ✅ New base created: %s"), *NewBase->BaseName.ToString());
+                if (BaseMgr->TryBuildBaseOnSite(Faction, TargetSite, FText::FromString(NewName)))
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[AI] %s successfully expanded onto discovered site: %s"),
+                        *UEnum::GetValueAsString(Faction), *TargetSite->SiteName);
+                }
             }
-        }
-        else if (bAllBasesHaveVehicle)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — All bases ready but not enough money"), *UEnum::GetValueAsString(Faction));
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[AI] %s wants to expand but has no valid discovered sites available."),
+                    *UEnum::GetValueAsString(Faction));
+            }
         }
     }
     else
@@ -1046,4 +1053,24 @@ UStrategyBase* UAIControllerSubsystem::GetBaseWithFewestVehicles(EFactionType Fa
     }
 
     return BestBase;
+}
+
+UStrategySiteDefinition* UAIControllerSubsystem::FindExpansionSiteForAI(EFactionType Faction) const
+{
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr) return nullptr;
+
+    const TArray<UStrategySiteDefinition*>& DiscoveredSites = (Faction == EFactionType::Human)
+        ? BaseMgr->DiscoveredSitesHuman
+        : BaseMgr->DiscoveredSitesEnemy;
+
+    for (UStrategySiteDefinition* Site : DiscoveredSites)
+    {
+        if (Site && !Site->bHasBeenUsed && BaseMgr->CanBuildBaseOnSite(Faction, Site))
+        {
+            return Site; // Return the first valid unused discovered site
+        }
+    }
+
+    return nullptr;
 }
