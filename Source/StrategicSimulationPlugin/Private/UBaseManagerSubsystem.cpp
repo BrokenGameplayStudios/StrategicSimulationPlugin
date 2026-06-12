@@ -905,17 +905,7 @@ void UBaseManagerSubsystem::ProcessDailyResourceExtraction(EFactionType Faction)
         if (!Base || !Base->BuiltOnSite) continue;
 
         UStrategySiteDefinition* Site = Base->BuiltOnSite;
-
-        // Skip if site has no resources left
-        if (!Site ||
-            (Site->CurrentResources.Money <= 0 &&
-                Site->CurrentResources.Metals <= 0 &&
-                Site->CurrentResources.Biologicals <= 0 &&
-                Site->CurrentResources.Chemicals <= 0 &&
-                Site->CurrentResources.ExoticMaterial <= 0))
-        {
-            continue;
-        }
+        if (!Site || Site->CurrentResources.IsEmpty()) continue; // Nothing left to extract
 
         FResourceStockpile Extraction = Base->GetDailyExtractionFromSite();
 

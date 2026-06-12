@@ -52,6 +52,11 @@ struct FResourceStockpile
     bool operator>=(const FResourceStockpile& Other) const;
     void Add(const FResourceStockpile& Other);
     void Subtract(const FResourceStockpile& Other);
+    bool IsEmpty() const
+    {
+        return Money <= 0 && Metals <= 0 && Biologicals <= 0 &&
+            Chemicals <= 0 && ExoticMaterial <= 0;
+    }
 };
 
 // === CLEAN: Unified Item Category (used by soldiers, vehicles, research, production) ===

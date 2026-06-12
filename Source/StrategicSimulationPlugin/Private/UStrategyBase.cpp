@@ -344,11 +344,12 @@ FResourceStockpile UStrategyBase::GetDailyExtractionFromSite() const
 
     for (UStrategyFacility* Facility : Facilities)
     {
-        if (!Facility || !Facility->IsOperational()) continue;
+        // Only count facilities that are built and operational
+        if (!Facility || Facility->BuildProgressDays > 0 || !Facility->bIsOperational)
+            continue;
 
         if (UFacilityDefinition* Def = Facility->FacilityDefinition)
         {
-            // Add extraction values
             TotalExtraction.Money += Def->ExtractionPerDay.Money;
             TotalExtraction.Metals += Def->ExtractionPerDay.Metals;
             TotalExtraction.Biologicals += Def->ExtractionPerDay.Biologicals;
