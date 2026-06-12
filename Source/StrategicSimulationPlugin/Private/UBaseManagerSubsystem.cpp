@@ -446,6 +446,9 @@ void UBaseManagerSubsystem::OnDayPassed(int32 NewDay)
     AdvanceAllConstruction();           // NEW: Processes the construction queue every day
     SimulateDailyRepairs(EFactionType::Human);
     SimulateDailyRepairs(EFactionType::Enemy);
+    // === NEW: Daily resource extraction from sites ===
+    ProcessDailyResourceExtraction(EFactionType::Human);
+    ProcessDailyResourceExtraction(EFactionType::Enemy);
 }
 
 bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const
@@ -891,4 +894,36 @@ bool UBaseManagerSubsystem::TryBuildBaseOnSite(EFactionType Faction, UStrategySi
         TargetSite->Location.X, TargetSite->Location.Y);
 
     return true;
+}
+
+void UBaseManagerSubsystem::ProcessDailyResourceExtraction(EFactionType Faction)
+{
+    TArray<UStrategyBase*>& Bases = GetMutableBases(Faction);
+
+    for (UStrategyBase* Base : Bases)
+    {
+        if (!Base || !Base->BuiltOnSite) continue;
+
+        UStrategySiteDefinition* Site = Base->BuiltOnSite;
+
+        // Skip if site has no resources left
+        if (!Site ||
+            (Site->CurrentResources.Money <= 0 &&
+                Site->CurrentResources.Metals <= 0 &&
+                Site->CurrentResources.Biologicals <= 0 &&
+                Site->CurrentResources.Chemicals <= 0 &&
+                Site->CurrentResources.ExoticMaterial <= 0))
+        {
+            continue;
+        }
+
+        FResourceStockpile Extraction = Base->GetDailyExtractionFromSite();
+
+        // Subtract extraction from site (clamp to zero)
+        Site->CurrentResources.Money = FMath::Max(0, Site->CurrentResources.Money - Extraction.Money);
+        Site->CurrentResources.Metals = FMath::Max(0, Site->CurrentResources.Metals - Extraction.Metals);
+        Site->CurrentResources.Biologicals = FMath::Max(0, Site->CurrentResources.Biologicals - Extraction.Biologicals);
+        Site->CurrentResources.Chemicals = FMath::Max(0, Site->CurrentResources.Chemicals - Extraction.Chemicals);
+        Site->CurrentResources.ExoticMaterial = FMath::Max(0, Site->CurrentResources.ExoticMaterial - Extraction.ExoticMaterial);
+    }
 }

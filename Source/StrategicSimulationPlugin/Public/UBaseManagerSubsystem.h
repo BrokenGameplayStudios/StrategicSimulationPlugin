@@ -91,6 +91,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Base Expansion")
     bool CanBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* Site) const;
 
+    /** Processes daily resource extraction from sites for all bases of a faction */
+    void ProcessDailyResourceExtraction(EFactionType Faction);
+
     UFUNCTION(BlueprintCallable, Category = "Base")
     void ResetAllBases();
 

@@ -337,3 +337,25 @@ void UStrategyBase::ProcessKIABody(UStrategySoldier* Body)
     // Body is now fully processed and deleted
     Body->ConditionalBeginDestroy();
 }
+
+FResourceStockpile UStrategyBase::GetDailyExtractionFromSite() const
+{
+    FResourceStockpile TotalExtraction;
+
+    for (UStrategyFacility* Facility : Facilities)
+    {
+        if (!Facility || !Facility->IsOperational()) continue;
+
+        if (UFacilityDefinition* Def = Facility->FacilityDefinition)
+        {
+            // Add extraction values
+            TotalExtraction.Money += Def->ExtractionPerDay.Money;
+            TotalExtraction.Metals += Def->ExtractionPerDay.Metals;
+            TotalExtraction.Biologicals += Def->ExtractionPerDay.Biologicals;
+            TotalExtraction.Chemicals += Def->ExtractionPerDay.Chemicals;
+            TotalExtraction.ExoticMaterial += Def->ExtractionPerDay.ExoticMaterial;
+        }
+    }
+
+    return TotalExtraction;
+}

@@ -98,7 +98,7 @@ public:
     bool HasOperationalCommandCenter() const;
 
     UFUNCTION(BlueprintCallable, Category = "Base")
-    bool HasOperationalFacilityOfType(EFacilityType FacilityType) const;   // <-- THIS IS THE NEW ONE WE NEED
+    bool HasOperationalFacilityOfType(EFacilityType FacilityType) const;  
     
     UFUNCTION(BlueprintCallable, Category = "Base")
     bool HasAnyFacilityOfType(EFacilityType FacilityType) const;
@@ -108,6 +108,10 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalCapacityForType(EFacilityType FacilityType) const;
+
+    /** Calculates total resources this base extracts per day from its site (only from operational facilities) */
+    UFUNCTION(BlueprintCallable, Category = "Base|Resources")
+    FResourceStockpile GetDailyExtractionFromSite() const;
 
     UFUNCTION(BlueprintCallable, Category = "Facilities")
     int32 GetTotalBuiltOfType(EFacilityType FacilityType) const;
