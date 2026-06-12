@@ -38,7 +38,7 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
 
     // === HUMAN RESOURCES ===
     FResourceStockpile HumanRes = ResourceMgr->GetResources(EFactionType::Human);
-    DebugText += FString::Printf(TEXT("[AI] EFactionType::Human AI — Day %d decision - Bases: %d | 💰%d | 🛠️%d | 🧬%d | ⚗️%d | 🌌%d | 📚%d\n"),
+    DebugText += FString::Printf(TEXT("[AI] Human — Day %d | Bases: %d | M:%d Mt:%d Bio:%d Chem:%d Exo:%d RP:%d\n"),
         Campaign->GetTimeManager()->GetCurrentDay(),
         BaseMgr->GetBases(EFactionType::Human).Num(),
         HumanRes.Money, HumanRes.Metals, HumanRes.Biologicals,
@@ -46,18 +46,64 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
 
     // === ENEMY RESOURCES ===
     FResourceStockpile EnemyRes = ResourceMgr->GetResources(EFactionType::Enemy);
-    DebugText += FString::Printf(TEXT("[AI] EFactionType::Enemy AI — Day %d decision - Bases: %d | 💰%d | 🛠️%d | 🧬%d | ⚗️%d | 🌌%d | 📚%d\n"),
+    DebugText += FString::Printf(TEXT("[AI] Enemy — Day %d | Bases: %d | M:%d Mt:%d Bio:%d Chem:%d Exo:%d RP:%d\n\n"),
         Campaign->GetTimeManager()->GetCurrentDay(),
         BaseMgr->GetBases(EFactionType::Enemy).Num(),
         EnemyRes.Money, EnemyRes.Metals, EnemyRes.Biologicals,
         EnemyRes.Chemicals, EnemyRes.ExoticMaterial, EnemyRes.ResearchPoints);
 
-    DebugText += TEXT("\n");
+    // === BASES WITH EXTRACTION + SITE INFO ===
+    DebugText += TEXT("=== BASES ===\n");
 
-    // === BASE STATES (clean log-style) ===
-    DebugText += BaseMgr->GetBaseStateDebugString(EFactionType::Human);
-    DebugText += TEXT("\n");
-    DebugText += BaseMgr->GetBaseStateDebugString(EFactionType::Enemy);
+    for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
+    {
+        if (!Base) continue;
+
+        FString SiteInfo = TEXT("No Site");
+        if (Base->BuiltOnSite)
+        {
+            SiteInfo = FString::Printf(TEXT("%s | Res: M:%d/%d Mt:%d/%d Bio:%d/%d Chem:%d/%d Exo:%d/%d"),
+                *Base->BuiltOnSite->SiteName,
+                Base->BuiltOnSite->CurrentResources.Money, Base->BuiltOnSite->MaxResources.Money,
+                Base->BuiltOnSite->CurrentResources.Metals, Base->BuiltOnSite->MaxResources.Metals,
+                Base->BuiltOnSite->CurrentResources.Biologicals, Base->BuiltOnSite->MaxResources.Biologicals,
+                Base->BuiltOnSite->CurrentResources.Chemicals, Base->BuiltOnSite->MaxResources.Chemicals,
+                Base->BuiltOnSite->CurrentResources.ExoticMaterial, Base->BuiltOnSite->MaxResources.ExoticMaterial);
+        }
+
+        FResourceStockpile Extraction = Base->GetDailyExtractionFromSite();
+
+        DebugText += FString::Printf(TEXT("  [H] %s | Extraction/Day: M:%d Mt:%d Bio:%d Chem:%d Exo:%d | Site: %s\n"),
+            *Base->BaseName.ToString(),
+            Extraction.Money, Extraction.Metals, Extraction.Biologicals,
+            Extraction.Chemicals, Extraction.ExoticMaterial,
+            *SiteInfo);
+    }
+
+    for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
+    {
+        if (!Base) continue;
+
+        FString SiteInfo = TEXT("No Site");
+        if (Base->BuiltOnSite)
+        {
+            SiteInfo = FString::Printf(TEXT("%s | Res: M:%d/%d Mt:%d/%d Bio:%d/%d Chem:%d/%d Exo:%d/%d"),
+                *Base->BuiltOnSite->SiteName,
+                Base->BuiltOnSite->CurrentResources.Money, Base->BuiltOnSite->MaxResources.Money,
+                Base->BuiltOnSite->CurrentResources.Metals, Base->BuiltOnSite->MaxResources.Metals,
+                Base->BuiltOnSite->CurrentResources.Biologicals, Base->BuiltOnSite->MaxResources.Biologicals,
+                Base->BuiltOnSite->CurrentResources.Chemicals, Base->BuiltOnSite->MaxResources.Chemicals,
+                Base->BuiltOnSite->CurrentResources.ExoticMaterial, Base->BuiltOnSite->MaxResources.ExoticMaterial);
+        }
+
+        FResourceStockpile Extraction = Base->GetDailyExtractionFromSite();
+
+        DebugText += FString::Printf(TEXT("  [E] %s | Extraction/Day: M:%d Mt:%d Bio:%d Chem:%d Exo:%d | Site: %s\n"),
+            *Base->BaseName.ToString(),
+            Extraction.Money, Extraction.Metals, Extraction.Biologicals,
+            Extraction.Chemicals, Extraction.ExoticMaterial,
+            *SiteInfo);
+    }
 
     GEngine->AddOnScreenDebugMessage(999, 0.0f, FColor::Cyan, DebugText);
 }

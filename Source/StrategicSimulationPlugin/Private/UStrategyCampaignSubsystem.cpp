@@ -187,28 +187,28 @@ void UStrategyCampaignSubsystem::StartSimulation()
         UE_LOG(LogTemp, Display, TEXT("[FACILITY DATABASE] Loaded %d facilities:"), FacilityDB->AvailableFacilities.Num());
         for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
         {
+            // Inside the for loop for facilities
             if (UFacilityDefinition* Def = SoftDef.Get())
             {
                 FString RepairInfo = (Def->RepairHealthPerDay > 0) ?
                     FString::Printf(TEXT(" | Repair: +%d HP/day"), Def->RepairHealthPerDay) : TEXT("");
 
-                FString UnlocksList = " (Unlocks: ";
-                bool First = true;
+                // === NEW: Production & Extraction ===
+                FString Production = FString::Printf(TEXT("Prod: M:%d Mt:%d Bio:%d Chem:%d Exo:%d"),
+                    Def->ProductionPerDay.Money,
+                    Def->ProductionPerDay.Metals,
+                    Def->ProductionPerDay.Biologicals,
+                    Def->ProductionPerDay.Chemicals,
+                    Def->ProductionPerDay.ExoticMaterial);
 
-                for (const TSoftObjectPtr<UResearchTechDefinition>& SoftResearch : Def->UnlocksResearch)
-                {
-                    if (UResearchTechDefinition* Research = SoftResearch.Get())
-                    {
-                        if (!First) UnlocksList += ", ";
-                        UnlocksList += Research->ProjectName.ToString();
-                        First = false;
-                    }
-                }
+                FString Extraction = FString::Printf(TEXT("Extract: M:%d Mt:%d Bio:%d Chem:%d Exo:%d"),
+                    Def->ExtractionPerDay.Money,
+                    Def->ExtractionPerDay.Metals,
+                    Def->ExtractionPerDay.Biologicals,
+                    Def->ExtractionPerDay.Chemicals,
+                    Def->ExtractionPerDay.ExoticMaterial);
 
-                if (First) UnlocksList += "None";
-                UnlocksList += ")";
-
-                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Build Time: %d days (Prerequisites: %s)%s"),
+                UE_LOG(LogTemp, Display, TEXT("  • %s | Type: %s | Capacity: %d | Production Slots: %d | Speed: %.1f | MaxBuilt: %d | Power: +%d / -%d | Build Cost: %d Money, %d Metal, %d Biologicals, %d Chemicals | Build Time: %d days (Prerequisites: %s)%s | %s | %s"),
                     *Def->FacilityName.ToString(),
                     *UEnum::GetValueAsString(Def->FacilityType),
                     Def->Capacity,
@@ -223,7 +223,9 @@ void UStrategyCampaignSubsystem::StartSimulation()
                     Def->BuildCost.Chemicals,
                     Def->BuildTimeDays,
                     *FString::JoinBy(Def->PrerequisiteFacilities, TEXT(", "), [](EFacilityType T) { return UEnum::GetValueAsString(T); }),
-                    *RepairInfo);
+                    *RepairInfo,
+                    *Production,
+                    *Extraction);
             }
         }
     }
