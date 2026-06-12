@@ -120,6 +120,27 @@ void AStrategyDebugHUD::ToggleStrategyMap()
     UE_LOG(LogTemp, Display, TEXT("[DEBUG HUD] Strategy Map %s"), bShowStrategyMap ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+void AStrategyDebugHUD::ShowSiteInfo(int32 SiteIndex)
+{
+    UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseManager) return;
+
+    if (SiteIndex < 0 || SiteIndex >= BaseManager->AllPotentialSites.Num())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Debug HUD] Invalid site index: %d"), SiteIndex);
+        return;
+    }
+
+    SelectedSiteIndex = SiteIndex;
+    UE_LOG(LogTemp, Display, TEXT("[Debug HUD] Now inspecting Site #%d"), SiteIndex);
+}
+
+void AStrategyDebugHUD::ClearSiteInfo()
+{
+    SelectedSiteIndex = -1;
+    UE_LOG(LogTemp, Display, TEXT("[Debug HUD] Site inspector cleared"));
+}
+
 // ==================== PASTE THIS FULL FUNCTION OVER THE EXISTING DrawHUD() ====================
 void AStrategyDebugHUD::DrawHUD()
 {
@@ -169,30 +190,69 @@ void AStrategyDebugHUD::DrawHUD()
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GREEN = Human Vehicles  |  RED = Enemy Vehicles"), 50, 110, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths"), 50, 140, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 170, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 200, 1.0f, 1.0f, FFontRenderInfo());
+
+    // === SITE INSPECTOR (Bottom of screen) ===
+    if (SelectedSiteIndex >= 0)
+    {
+        UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+        if (BaseManager && BaseManager->AllPotentialSites.IsValidIndex(SelectedSiteIndex))
+        {
+            UStrategySiteDefinition* Site = BaseManager->AllPotentialSites[SelectedSiteIndex];
+            if (Site)
+            {
+                FString SiteInfo = FString::Printf(TEXT("=== SITE #%d INSPECTOR ===\n"), SelectedSiteIndex);
+                SiteInfo += FString::Printf(TEXT("Name: %s\n"), *Site->SiteName);
+                SiteInfo += FString::Printf(TEXT("Location: (%.0f, %.0f)\n"), Site->Location.X, Site->Location.Y);
+                SiteInfo += FString::Printf(TEXT("Type: %s\n"), *UEnum::GetValueAsString(Site->SiteType));
+                SiteInfo += FString::Printf(TEXT("Discovered: Human=%s | Enemy=%s\n"),
+                    BaseManager->DiscoveredSitesHuman.Contains(Site) ? TEXT("Yes") : TEXT("No"),
+                    BaseManager->DiscoveredSitesEnemy.Contains(Site) ? TEXT("Yes") : TEXT("No"));
+
+                if (Site->bHasBeenUsed)
+                    SiteInfo += TEXT("Status: USED (Base Built)\n");
+                else
+                    SiteInfo += TEXT("Status: Available\n");
+
+                // TODO: Add base info, facilities, soldiers later
+                SiteInfo += TEXT("\n[More details will be added here]");
+
+                Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(SiteInfo),
+                    50, Canvas->SizeY - 280, 1.0f, 1.0f, FFontRenderInfo());
+            }
+        }
+    }
 }
 
 // ==================== NEW FUNCTION - ADD THIS ANYWHERE IN THE FILE (e.g. after DrawDiscoveredSites) ====================
 void AStrategyDebugHUD::DrawAllPotentialSites()
 {
-    if (!Canvas) return;
+    if (!Canvas || !bShowStrategyMap) return;
 
     UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (!BaseManager) return;
 
     float Scale = GetCurrentMapScale();
 
-    for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
+    for (int32 i = 0; i < BaseManager->AllPotentialSites.Num(); i++)
     {
+        UStrategySiteDefinition* Site = BaseManager->AllPotentialSites[i];
         if (!Site) continue;
 
         FVector2D ScreenPos = GetScreenPosition(Site->Location);
 
-        // Main node (white square) — scales with map
+        // Site Node
         float NodeSize = 10.0f * Scale;
         Canvas->K2_DrawBox(ScreenPos - FVector2D(NodeSize * 0.5f, NodeSize * 0.5f),
-            FVector2D(NodeSize, NodeSize), 1.0f, FLinearColor(0.8f, 0.8f, 0.8f, 0.7f));
+            FVector2D(NodeSize, NodeSize), 1.0f, FLinearColor(0.85f, 0.85f, 0.85f, 0.8f));
 
-        // 4x4 discovery markers (blue left / red right) — also scale
+        // === Site Index Number (Bigger & Clearer) ===
+        FString IndexText = FString::Printf(TEXT("%d"), i);
+        Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(IndexText),
+            ScreenPos.X + 10.0f * Scale, ScreenPos.Y - 14.0f * Scale,
+            0.85f, 0.85f, FFontRenderInfo());   // Increased size
+
+        // Discovery Markers
         float MarkerSize = 4.0f * Scale;
         if (BaseManager->DiscoveredSitesHuman.Contains(Site))
         {
@@ -205,13 +265,6 @@ void AStrategyDebugHUD::DrawAllPotentialSites()
                 FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Red);
         }
     }
-
-    // Live count (fixed size so it's always readable)
-    FString CountText = FString::Printf(TEXT("Nodes: %d | Human discovered: %d | Enemy discovered: %d"),
-        BaseManager->AllPotentialSites.Num(),
-        BaseManager->DiscoveredSitesHuman.Num(),
-        BaseManager->DiscoveredSitesEnemy.Num());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(CountText), 50.0f, 200.0f, 1.0f, 1.0f, FFontRenderInfo());
 }
 
 void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)

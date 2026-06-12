@@ -47,6 +47,16 @@ public:
     UFUNCTION(Exec)
     void ToggleStrategyMap();
 
+    // === Site Inspector ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map|Site Info")
+    int32 SelectedSiteIndex = -1;
+
+    UFUNCTION(Exec)
+    void ShowSiteInfo(int32 SiteIndex);
+
+    UFUNCTION(Exec)
+    void ClearSiteInfo();
+
 protected:
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaTime) override;
