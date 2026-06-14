@@ -55,4 +55,8 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Damage & Repair")
     EVehicleDamageState DefaultDamageState = EVehicleDamageState::Undamaged;
+
+    /** Default behavior tendency for this vehicle type (used by AI when deciding how to react to detections) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Behavior")
+    EVehicleBehavior DefaultBehavior = EVehicleBehavior::Scouting;
 };

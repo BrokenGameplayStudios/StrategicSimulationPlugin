@@ -374,3 +374,19 @@ void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
         OnVehicleDetected.Broadcast(this, OtherVehicle);
     }
 }
+
+void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior)
+{
+    if (CurrentBehavior != NewBehavior)
+    {
+        EVehicleBehavior PreviousBehavior = CurrentBehavior;
+        CurrentBehavior = NewBehavior;
+
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s changed behavior from %s to %s"),
+            *GetNameSafe(this),
+            *UEnum::GetValueAsString(PreviousBehavior),
+            *UEnum::GetValueAsString(NewBehavior));
+
+        // TODO: Later we will hook this into mission path changes
+    }
+}

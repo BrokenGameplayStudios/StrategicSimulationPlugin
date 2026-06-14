@@ -46,6 +46,18 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     TArray<class UStrategySoldier*> CurrentPassengers;
 
+	//=== Behavuior & State ===
+
+    /** Current behavior state of this vehicle */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Behavior")
+    EVehicleBehavior CurrentBehavior = EVehicleBehavior::Scouting;
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Behavior")
+    void SetBehavior(EVehicleBehavior NewBehavior);
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Behavior")
+    EVehicleBehavior GetBehavior() const { return CurrentBehavior; }
+
     // === Hardpoint System ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Vehicle|Hardpoints")
     TArray<TSoftObjectPtr<UItemDefinition>> EquippedWeapons;

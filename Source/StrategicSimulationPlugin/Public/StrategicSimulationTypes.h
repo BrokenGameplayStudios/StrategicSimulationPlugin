@@ -201,3 +201,15 @@ struct FVehicleStats
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
     int32 ProductionDays = 20;
 };
+
+UENUM(BlueprintType)
+enum class EVehicleBehavior : uint8
+{
+    Scouting        UMETA(DisplayName = "Scouting"),
+    Patrolling      UMETA(DisplayName = "Patrolling"),
+    Returning       UMETA(DisplayName = "Returning"),
+    Evading         UMETA(DisplayName = "Evading"),
+    Attacking       UMETA(DisplayName = "Attacking"),
+    Escorting       UMETA(DisplayName = "Escorting"),
+    Idle            UMETA(DisplayName = "Idle")
+};
