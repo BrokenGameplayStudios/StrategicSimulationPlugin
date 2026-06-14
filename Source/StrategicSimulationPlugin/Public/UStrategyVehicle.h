@@ -7,14 +7,13 @@
 #include "StrategicSiteDefinition.h"
 #include "UStrategyVehicle.generated.h"
 
-// =====================================================
-// Detection Delegates
-// =====================================================
+// Forward declaration required for self-referential delegate parameter
+class UStrategyVehicle;
 
 /** Broadcast when this vehicle detects a new site (fires only once per site per faction) */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSiteDetected, EFactionType, DetectingFaction, UStrategySiteDefinition*, DetectedSite);
 
-/** Broadcast when this vehicle detects a new enemy vehicle (can fire multiple times) */
+/** Broadcast when this vehicle detects a new enemy vehicle (can fire multiple times for new contacts) */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnVehicleDetected, UStrategyVehicle*, DetectingVehicle, UStrategyVehicle*, DetectedVehicle);
 
 class UStrategyBase;
@@ -174,9 +173,8 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")
     FOnVehicleDetected OnVehicleDetected;
 
-    UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Detection")
     void TryDetectVehicle(UStrategyVehicle* OtherVehicle);
-
 private:
 
     /** Tracks vehicles we've recently detected to avoid spamming the delegate */
