@@ -5,6 +5,7 @@
 #include "USoldierManagerSubsystem.h"
 #include "UFacilityDatabase.h"
 #include "UFacilityDefinition.h"
+#include "UMissionManagerSubsystem.h"
 #include "Engine/Engine.h"          // ← Added for GEngine
 #include "Kismet/GameplayStatics.h" // ← Added for safety
 
@@ -359,4 +360,141 @@ FResourceStockpile UStrategyBase::GetDailyExtractionFromSite() const
     }
 
     return TotalExtraction;
+}
+
+int32 UStrategyBase::GetStationedSoldiersCount() const
+{
+    int32 Count = 0;
+
+    UGameInstance* GI = GetTypedOuter<UGameInstance>();
+    if (!GI)
+    {
+        if (UWorld* World = GetWorld())
+            GI = World->GetGameInstance();
+    }
+
+    if (GI)
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            if (USoldierManagerSubsystem* SoldierMgr = Campaign->GetSoldierManager())
+            {
+                for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(OwningFaction))
+                {
+                    if (Soldier && Soldier->HomeBarracks)
+                    {
+                        for (UStrategyFacility* Facility : Facilities)
+                        {
+                            if (Facility == Soldier->HomeBarracks && Facility->BuildProgressDays <= 0)
+                            {
+                                Count++;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return Count;
+}
+
+int32 UStrategyBase::GetSoldiersOnMissionCount() const
+{
+    int32 Count = 0;
+
+    UGameInstance* GI = GetTypedOuter<UGameInstance>();
+    if (!GI)
+    {
+        if (UWorld* World = GetWorld())
+            GI = World->GetGameInstance();
+    }
+
+    if (GI)
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            if (UMissionManagerSubsystem* MissionMgr = Campaign->GetMissionManager())
+            {
+                for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+                {
+                    if (!Mission) continue;
+
+                    // Check if this mission originated from this base
+                    bool bFromThisBase = (Mission->OriginBase == this);
+
+                    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+                    {
+                        if (Vehicle)
+                        {
+                            // Also check if the vehicle belongs to this base
+                            if (bFromThisBase || Vehicle->HomeBase == this)
+                            {
+                                Count += Vehicle->CurrentPassengers.Num();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return Count;
+}
+
+int32 UStrategyBase::GetStationedVehiclesCount() const
+{
+    int32 Count = 0;
+
+    for (UStrategyFacility* Facility : Facilities)
+    {
+        if (Facility &&
+            Facility->BuildProgressDays <= 0 &&
+            Facility->FacilityDefinition &&
+            Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+        {
+            Count += Facility->ParkedVehicles.Num();
+        }
+    }
+
+    return Count;
+}
+
+int32 UStrategyBase::GetVehiclesOnMissionCount() const
+{
+    int32 Count = 0;
+
+    UGameInstance* GI = GetTypedOuter<UGameInstance>();
+    if (!GI)
+    {
+        if (UWorld* World = GetWorld())
+            GI = World->GetGameInstance();
+    }
+
+    if (GI)
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            if (UMissionManagerSubsystem* MissionMgr = Campaign->GetMissionManager())
+            {
+                for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+                {
+                    if (!Mission) continue;
+
+                    bool bFromThisBase = (Mission->OriginBase == this);
+
+                    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+                    {
+                        if (Vehicle && (bFromThisBase || Vehicle->HomeBase == this))
+                        {
+                            Count++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return Count;
 }

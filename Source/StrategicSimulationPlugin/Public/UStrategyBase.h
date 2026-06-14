@@ -134,4 +134,17 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Soldiers")
     TArray<UStrategySoldier*> GetStationedSoldiers() const;
+
+    // === Dynamic Counts for Debug / Inspector ===
+    UFUNCTION(BlueprintCallable, Category = "Base|Personnel")
+    int32 GetStationedSoldiersCount() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base|Personnel")
+    int32 GetSoldiersOnMissionCount() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base|Vehicles")
+    int32 GetStationedVehiclesCount() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Base|Vehicles")
+    int32 GetVehiclesOnMissionCount() const;
 };
