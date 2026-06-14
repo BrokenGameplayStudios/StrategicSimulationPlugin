@@ -119,15 +119,15 @@ void AStrategyGameInitializer::BeginPlay()
     }
 
     // === START THE SIMULATION ===
-    Campaign->StartSimulation();
+    //Campaign->StartSimulation();
 
     // === NEW: Generate strategic sites using values from this actor ===
-    if (UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
-    {
-        BaseManager->GenerateInitialSites(NumberOfStrategicSites, MinimumDistanceBetweenSites, LogicalMapWidth, LogicalMapHeight, MapBorderPadding);
-        UE_LOG(LogTemp, Display, TEXT("[MAP] Applied 1920x1080 logical map → %d sites, border %.0f px"),
-            NumberOfStrategicSites, MapBorderPadding);
-    }
+    //if (UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+    //{
+        //BaseManager->GenerateInitialSites(NumberOfStrategicSites, MinimumDistanceBetweenSites, LogicalMapWidth, LogicalMapHeight, MapBorderPadding);
+        //UE_LOG(LogTemp, Display, TEXT("[MAP] Applied 1920x1080 logical map → %d sites, border %.0f px"),
+            //NumberOfStrategicSites, MapBorderPadding);
+    //}
 
-    UE_LOG(LogTemp, Display, TEXT("Simulation STARTED — AI will act every day"));
+    UE_LOG(LogTemp, Display, TEXT("Simulation INITIALIZED Press Start — AI will act every day"));
 }
