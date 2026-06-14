@@ -379,18 +379,12 @@ int32 UStrategyBase::GetStationedSoldiersCount() const
         {
             if (USoldierManagerSubsystem* SoldierMgr = Campaign->GetSoldierManager())
             {
+                // This matches exactly how DebugPrintFullBaseState does it
                 for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(OwningFaction))
                 {
-                    if (Soldier && Soldier->HomeBarracks)
+                    if (Soldier && Soldier->StationedBase == this)
                     {
-                        for (UStrategyFacility* Facility : Facilities)
-                        {
-                            if (Facility == Soldier->HomeBarracks && Facility->BuildProgressDays <= 0)
-                            {
-                                Count++;
-                                break;
-                            }
-                        }
+                        Count++;
                     }
                 }
             }
@@ -419,17 +413,11 @@ int32 UStrategyBase::GetSoldiersOnMissionCount() const
             {
                 for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
                 {
-                    if (!Mission) continue;
-
-                    // Check if this mission originated from this base
-                    bool bFromThisBase = (Mission->OriginBase == this);
-
-                    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+                    if (Mission && Mission->OriginBase == this)
                     {
-                        if (Vehicle)
+                        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
                         {
-                            // Also check if the vehicle belongs to this base
-                            if (bFromThisBase || Vehicle->HomeBase == this)
+                            if (Vehicle)
                             {
                                 Count += Vehicle->CurrentPassengers.Num();
                             }
@@ -449,8 +437,7 @@ int32 UStrategyBase::GetStationedVehiclesCount() const
 
     for (UStrategyFacility* Facility : Facilities)
     {
-        if (Facility &&
-            Facility->BuildProgressDays <= 0 &&
+        if (Facility && Facility->BuildProgressDays <= 0 &&
             Facility->FacilityDefinition &&
             Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
@@ -480,16 +467,9 @@ int32 UStrategyBase::GetVehiclesOnMissionCount() const
             {
                 for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
                 {
-                    if (!Mission) continue;
-
-                    bool bFromThisBase = (Mission->OriginBase == this);
-
-                    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+                    if (Mission && Mission->OriginBase == this)
                     {
-                        if (Vehicle && (bFromThisBase || Vehicle->HomeBase == this))
-                        {
-                            Count++;
-                        }
+                        Count += Mission->VehiclesInFleet.Num();
                     }
                 }
             }
