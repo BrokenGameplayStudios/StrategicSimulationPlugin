@@ -31,15 +31,16 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
 
     UBaseManagerSubsystem* BaseMgr = Campaign->GetBaseManager();
     UResourceManagerSubsystem* ResourceMgr = Campaign->GetResourceManager();
-    if (!BaseMgr || !ResourceMgr) return;
+    USoldierManagerSubsystem* SoldierMgr = Campaign->GetSoldierManager();
+    UMissionManagerSubsystem* MissionMgr = Campaign->GetMissionManager();
+
+    if (!BaseMgr || !ResourceMgr || !SoldierMgr) return;
 
     FString DebugText;
-
-    // Header
-    DebugText += FString::Printf(TEXT("=== STRATEGIC SIMULATION DEBUG ===\n"));
+    DebugText += TEXT("=== STRATEGIC SIMULATION DEBUG ===\n");
     DebugText += FString::Printf(TEXT("DATE %s\n\n"), *Campaign->GetTimeManager()->GetCurrentGameDate().ToString());
 
-    // === FACTION RESOURCE SUMMARY ===
+    // === FACTION SUMMARIES ===
     FResourceStockpile HumanRes = ResourceMgr->GetResources(EFactionType::Human);
     FResourceStockpile EnemyRes = ResourceMgr->GetResources(EFactionType::Enemy);
 
@@ -53,60 +54,100 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
         EnemyRes.Money, EnemyRes.Metals, EnemyRes.Biologicals,
         EnemyRes.Chemicals, EnemyRes.ExoticMaterial, EnemyRes.ResearchPoints);
 
-    // === BASE SUMMARIES (Human) ===
-    DebugText += TEXT("=== Human Bases ===\n");
-    for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
+    // === DETAILED BASE STATE (matching DebugPrintFullBaseState) ===
+    for (EFactionType Faction : { EFactionType::Human, EFactionType::Enemy })
     {
-        if (!Base) continue;
+        const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+        if (Bases.Num() == 0) continue;
 
-        FResourceStockpile Extraction = Base->GetDailyExtractionFromSite();
+        DebugText += FString::Printf(TEXT("=== BASE STATE FOR %s (%d bases) ===\n"),
+            *UEnum::GetValueAsString(Faction), Bases.Num());
 
-        DebugText += FString::Printf(TEXT("%s | Extraction/Day: M:%d Mt:%d Bio:%d Chem:%d Exo:%d RP:%d\n"),
-            *Base->BaseName.ToString(),
-            Extraction.Money, Extraction.Metals, Extraction.Biologicals,
-            Extraction.Chemicals, Extraction.ExoticMaterial, 0); // RP extraction not implemented yet
+        for (UStrategyBase* Base : Bases)
+        {
+            if (!Base) continue;
 
-        // Facility counts
-        int32 Cmd = Base->GetCountOfType(EFacilityType::Command);
-        int32 Living = Base->GetCountOfType(EFacilityType::LivingQuarters);
-        int32 Storage = Base->GetCountOfType(EFacilityType::Storage);
-        int32 Workshop = Base->GetCountOfType(EFacilityType::Workshop);
-        int32 Hanger = Base->GetCountOfType(EFacilityType::Hanger);
+            // === Soldiers Stationed (same logic as subsystem) ===
+            int32 SoldiersStationed = 0;
+            if (SoldierMgr)
+            {
+                for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
+                {
+                    if (Soldier && Soldier->StationedBase == Base)
+                        SoldiersStationed++;
+                }
+            }
 
-        DebugText += FString::Printf(TEXT("   Facilities: Command:%d | Living:%d | Storage:%d | Workshop:%d | Hanger:%d\n"),
-            Cmd, Living, Storage, Workshop, Hanger);
+            // === Soldiers on Mission ===
+            int32 SoldiersOnMission = 0;
+            if (MissionMgr)
+            {
+                for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+                {
+                    if (Mission && Mission->OriginBase == Base)
+                    {
+                        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+                        {
+                            if (Vehicle)
+                                SoldiersOnMission += Vehicle->CurrentPassengers.Num();
+                        }
+                    }
+                }
+            }
 
-        // Soldiers & Vehicles (basic version)
-        int32 SoldiersStationed = 0; // You can expand this later
-        int32 SoldiersOnMission = 0;
-        int32 VehiclesStationed = 0;
-        int32 VehiclesOnMission = 0;
+            // === Vehicles Stationed ===
+            int32 VehiclesStationed = 0;
+            for (UStrategyFacility* Fac : Base->Facilities)
+            {
+                if (Fac && Fac->FacilityDefinition &&
+                    Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
+                    Fac->BuildProgressDays <= 0)
+                {
+                    VehiclesStationed += Fac->ParkedVehicles.Num();
+                }
+            }
 
-        DebugText += FString::Printf(TEXT("   Soldiers: Stationed:%d | On Mission:%d | Vehicles: Stationed:%d | On Mission:%d\n\n"),
-            SoldiersStationed, SoldiersOnMission, VehiclesStationed, VehiclesOnMission);
-    }
+            // === Vehicles on Mission ===
+            int32 VehiclesOnMission = 0;
+            if (MissionMgr)
+            {
+                for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+                {
+                    if (Mission && Mission->OriginBase == Base)
+                        VehiclesOnMission += Mission->VehiclesInFleet.Num();
+                }
+            }
 
-    // === BASE SUMMARIES (Enemy) ===
-    DebugText += TEXT("=== Enemy Bases ===\n");
-    for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
-    {
-        if (!Base) continue;
+            DebugText += FString::Printf(TEXT("Base: %s | Net Power: %d\n"),
+                *Base->BaseName.ToString(), Base->GetNetPower());
 
-        FResourceStockpile Extraction = Base->GetDailyExtractionFromSite();
+            // Facilities
+            FString FacilityList;
+            TArray<EFacilityType> TypesToShow = {
+                EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
+                EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
+                EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy
+            };
 
-        DebugText += FString::Printf(TEXT("%s | Extraction/Day: M:%d Mt:%d Bio:%d Chem:%d Exo:%d RP:%d\n"),
-            *Base->BaseName.ToString(),
-            Extraction.Money, Extraction.Metals, Extraction.Biologicals,
-            Extraction.Chemicals, Extraction.ExoticMaterial, 0);
+            for (EFacilityType Type : TypesToShow)
+            {
+                int32 Count = Base->GetTotalBuiltOfType(Type);
+                if (Count > 0)
+                {
+                    FacilityList += FString::Printf(TEXT("%d %s, "), Count, *UEnum::GetValueAsString(Type));
+                }
+            }
+            if (!FacilityList.IsEmpty())
+                FacilityList = FacilityList.LeftChop(2);
 
-        int32 Cmd = Base->GetCountOfType(EFacilityType::Command);
-        int32 Living = Base->GetCountOfType(EFacilityType::LivingQuarters);
-        int32 Storage = Base->GetCountOfType(EFacilityType::Storage);
-        int32 Workshop = Base->GetCountOfType(EFacilityType::Workshop);
-        int32 Hanger = Base->GetCountOfType(EFacilityType::Hanger);
+            DebugText += FString::Printf(TEXT("  Facilities: %s\n"), *FacilityList);
 
-        DebugText += FString::Printf(TEXT("   Facilities: Command:%d | Living:%d | Storage:%d | Workshop:%d | Hanger:%d\n\n"),
-            Cmd, Living, Storage, Workshop, Hanger);
+            DebugText += FString::Printf(TEXT("  Soldiers stationed: %d | Vehicles stationed: %d | POW Count: %d | KIA Bodies: %d\n"),
+                SoldiersStationed, VehiclesStationed, Base->GetPOWCount(), Base->GetKIABodyCount());
+
+            DebugText += FString::Printf(TEXT("  Soldiers on mission: %d | Vehicles on mission: %d\n\n"),
+                SoldiersOnMission, VehiclesOnMission);
+        }
     }
 
     GEngine->AddOnScreenDebugMessage(999, 0.0f, FColor::Cyan, DebugText);
@@ -196,7 +237,7 @@ void AStrategyDebugHUD::DrawHUD()
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 170, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 200, 1.0f, 1.0f, FFontRenderInfo());
 
-    // === SITE INSPECTOR (Bottom Panel) ===
+    // === SITE INSPECTOR (Bottom of screen) ===
     if (SelectedSiteIndex >= 0)
     {
         UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -207,27 +248,31 @@ void AStrategyDebugHUD::DrawHUD()
             {
                 FString InspectorText;
 
-                // === SITE HEADER ===
+                // === SITE INFO ===
                 InspectorText += FString::Printf(TEXT("=== SITE #%d INSPECTOR ===\n"), SelectedSiteIndex);
                 InspectorText += FString::Printf(TEXT("Name: %s\n"), *Site->SiteName);
                 InspectorText += FString::Printf(TEXT("Location: (%.0f, %.0f)\n"), Site->Location.X, Site->Location.Y);
                 InspectorText += FString::Printf(TEXT("Type: %s\n"), *UEnum::GetValueAsString(Site->SiteType));
+
+                bool bHumanDiscovered = BaseManager->DiscoveredSitesHuman.Contains(Site);
+                bool bEnemyDiscovered = BaseManager->DiscoveredSitesEnemy.Contains(Site);
                 InspectorText += FString::Printf(TEXT("Discovered: Human: %s | Enemy: %s\n"),
-                    BaseManager->DiscoveredSitesHuman.Contains(Site) ? TEXT("Yes") : TEXT("No"),
-                    BaseManager->DiscoveredSitesEnemy.Contains(Site) ? TEXT("Yes") : TEXT("No"));
+                    bHumanDiscovered ? TEXT("Yes") : TEXT("No"),
+                    bEnemyDiscovered ? TEXT("Yes") : TEXT("No"));
 
-                FString Status = Site->bHasBeenUsed ? TEXT("Used (Base Built)") : TEXT("Available");
-                InspectorText += FString::Printf(TEXT("Status: %s\n"), *Status);
+                FString StatusText = Site->bHasBeenUsed ? TEXT("Used (Base Built)") : TEXT("Available");
+                InspectorText += FString::Printf(TEXT("Status: %s\n"), *StatusText);
 
-                // Remaining Resources
+                // Remaining Resources on Site
                 InspectorText += FString::Printf(TEXT("Remaining Resources - Mt: %d Bio: %d Chem: %d Exo: %d\n\n"),
                     Site->CurrentResources.Metals,
                     Site->CurrentResources.Biologicals,
                     Site->CurrentResources.Chemicals,
                     Site->CurrentResources.ExoticMaterial);
 
-                // === BASE SECTION (if a base is built on this site) ===
+                // === FIND OWNING BASE ===
                 UStrategyBase* OwningBase = nullptr;
+
                 for (UStrategyBase* Base : BaseManager->GetBases(EFactionType::Human))
                 {
                     if (Base && Base->BuiltOnSite == Site)
@@ -236,6 +281,7 @@ void AStrategyDebugHUD::DrawHUD()
                         break;
                     }
                 }
+
                 if (!OwningBase)
                 {
                     for (UStrategyBase* Base : BaseManager->GetBases(EFactionType::Enemy))
@@ -248,11 +294,11 @@ void AStrategyDebugHUD::DrawHUD()
                     }
                 }
 
+                // === BASE SECTION ===
                 if (OwningBase)
                 {
-                    FString FactionName = (OwningBase->OwningFaction == EFactionType::Human) ? TEXT("Human") : TEXT("Enemy");
-
-                    InspectorText += FString::Printf(TEXT("== Base (%s) ==\n"), *FactionName);
+                    FString FactionStr = (OwningBase->OwningFaction == EFactionType::Human) ? TEXT("Human") : TEXT("Enemy");
+                    InspectorText += FString::Printf(TEXT("== Base (%s) ==\n"), *FactionStr);
 
                     // Extraction
                     FResourceStockpile Extraction = OwningBase->GetDailyExtractionFromSite();
@@ -260,17 +306,29 @@ void AStrategyDebugHUD::DrawHUD()
                         Extraction.Money, Extraction.Metals, Extraction.Biologicals,
                         Extraction.Chemicals, Extraction.ExoticMaterial, 0);
 
-                    // Facility counts
-                    int32 Cmd = OwningBase->GetCountOfType(EFacilityType::Command);
-                    int32 Living = OwningBase->GetCountOfType(EFacilityType::LivingQuarters);
-                    int32 Storage = OwningBase->GetCountOfType(EFacilityType::Storage);
-                    int32 Workshop = OwningBase->GetCountOfType(EFacilityType::Workshop);
-                    int32 Hanger = OwningBase->GetCountOfType(EFacilityType::Hanger);
+                    // Facilities
+                    FString FacilityList;
+                    TArray<EFacilityType> Types = {
+                        EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
+                        EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
+                        EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy
+                    };
 
-                    InspectorText += FString::Printf(TEXT("Command Center: %d | LivingSpace: %d | Storage: %d | Workshop: %d | Hanger: %d\n"),
-                        Cmd, Living, Storage, Workshop, Hanger);
+                    for (EFacilityType Type : Types)
+                    {
+                        int32 Count = OwningBase->GetTotalBuiltOfType(Type);
+                        if (Count > 0)
+                        {
+                            FacilityList += FString::Printf(TEXT("%d %s, "), Count, *UEnum::GetValueAsString(Type));
+                        }
+                    }
 
-                    // Soldiers & Vehicles
+                    if (!FacilityList.IsEmpty())
+                        FacilityList = FacilityList.LeftChop(2);
+
+                    InspectorText += FString::Printf(TEXT("Facilities: %s\n"), *FacilityList);
+
+                    // Dynamic Counts
                     int32 SoldiersStationed = OwningBase->GetStationedSoldiersCount();
                     int32 SoldiersOnMission = OwningBase->GetSoldiersOnMissionCount();
                     int32 VehiclesStationed = OwningBase->GetStationedVehiclesCount();
@@ -287,9 +345,9 @@ void AStrategyDebugHUD::DrawHUD()
                     InspectorText += TEXT("== No Base Built on this Site ==\n");
                 }
 
-                // Draw at bottom of screen
+                // Draw at bottom
                 Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(InspectorText),
-                    50, Canvas->SizeY - 320, 1.0f, 1.0f, FFontRenderInfo());
+                    50, Canvas->SizeY - 380, 1.0f, 1.0f, FFontRenderInfo());
             }
         }
     }
