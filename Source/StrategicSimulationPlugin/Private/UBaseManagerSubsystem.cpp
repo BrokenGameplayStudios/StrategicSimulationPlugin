@@ -917,3 +917,76 @@ void UBaseManagerSubsystem::ProcessDailyResourceExtraction(EFactionType Faction)
         Site->CurrentResources.ExoticMaterial = FMath::Max(0, Site->CurrentResources.ExoticMaterial - Extraction.ExoticMaterial);
     }
 }
+
+void UBaseManagerSubsystem::InitializeStartingBases(int32 MinDistanceBetweenFactions)
+{
+    if (AllPotentialSites.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[BASE INIT] No sites generated yet. Cannot place starting bases."));
+        return;
+    }
+
+    // === 1. Pick random site for Human (Player) ===
+    int32 HumanIndex = FMath::RandRange(0, AllPotentialSites.Num() - 1);
+    UStrategySiteDefinition* HumanSite = AllPotentialSites[HumanIndex];
+
+    FText HumanBaseName = FText::FromString("Command Center");
+    UStrategyBase* HumanBase = BuildNewBase(EFactionType::Human, HumanBaseName, HumanSite->Location, HumanSite);
+
+    if (HumanBase)
+    {
+        HumanBase->BuiltOnSite = HumanSite;
+        HumanSite->bHasBeenUsed = true;
+        UE_LOG(LogTemp, Display, TEXT("[BASE INIT] Human starting base placed on site #%d at (%.0f, %.0f)"),
+            HumanIndex, HumanSite->Location.X, HumanSite->Location.Y);
+    }
+
+    // === 2. Pick random site for Enemy (far from Human) ===
+    UStrategySiteDefinition* EnemySite = nullptr;
+    int32 EnemyIndex = -1;
+
+    TArray<int32> ValidIndices;
+    for (int32 i = 0; i < AllPotentialSites.Num(); i++)
+    {
+        if (i == HumanIndex) continue;
+
+        float Distance = FVector2D::Distance(AllPotentialSites[i]->Location, HumanSite->Location);
+        if (Distance >= MinDistanceBetweenFactions)
+        {
+            ValidIndices.Add(i);
+        }
+    }
+
+    if (ValidIndices.Num() > 0)
+    {
+        EnemyIndex = ValidIndices[FMath::RandRange(0, ValidIndices.Num() - 1)];
+        EnemySite = AllPotentialSites[EnemyIndex];
+    }
+    else
+    {
+        // Fallback: pick any site that isn't the human's
+        for (int32 i = 0; i < AllPotentialSites.Num(); i++)
+        {
+            if (i != HumanIndex)
+            {
+                EnemySite = AllPotentialSites[i];
+                EnemyIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (EnemySite)
+    {
+        FText EnemyBaseName = FText::FromString("Command Center");
+        UStrategyBase* EnemyBase = BuildNewBase(EFactionType::Enemy, EnemyBaseName, EnemySite->Location, EnemySite);
+
+        if (EnemyBase)
+        {
+            EnemyBase->BuiltOnSite = EnemySite;
+            EnemySite->bHasBeenUsed = true;
+            UE_LOG(LogTemp, Display, TEXT("[BASE INIT] Enemy starting base placed on site #%d at (%.0f, %.0f)"),
+                EnemyIndex, EnemySite->Location.X, EnemySite->Location.Y);
+        }
+    }
+}

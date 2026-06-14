@@ -115,6 +115,10 @@ public:
         
     FString GetBaseStateDebugString(EFactionType Faction) const;
 
+    /** Places the initial Command Centers for both factions on random sites with distance separation */
+    UFUNCTION(BlueprintCallable, Category = "Base|Initialization")
+    void InitializeStartingBases(int32 MinDistanceBetweenFactions = 700);
+
 private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Bases")
     TArray<UStrategyBase*> HumanBases;
