@@ -4,6 +4,7 @@
 #include "UObject/NoExportTypes.h"
 #include "UVehicleDefinition.h"
 #include "StrategicSimulationTypes.h"
+#include "StrategicSiteDefinition.h"
 #include "UStrategyVehicle.generated.h"
 
 // =====================================================
