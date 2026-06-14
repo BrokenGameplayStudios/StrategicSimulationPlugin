@@ -99,16 +99,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         BaseMgr->GetBases(Faction).Num(),
         Res.Money, Res.Metals, Res.Biologicals, Res.Chemicals, Res.ExoticMaterial, Res.ResearchPoints);
 
-    // === INITIAL BASE CREATION ===
-    if (BaseMgr->GetBases(Faction).Num() == 0)
-    {
-        FVector2D NewLocation = (Faction == EFactionType::Human) ? FVector2D(300.0f, 540.0f) : FVector2D(1620.0f, 540.0f);
-        if (UStrategyBase* NewBase = BaseMgr->BuildNewBase(Faction, FText::FromString("Command Center"), NewLocation))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] ✅ Initial Command Center created for %s"), *UEnum::GetValueAsString(Faction));
-        }
-    }
-
     // === PER-BASE DEVELOPMENT — FOCUS BASE ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
