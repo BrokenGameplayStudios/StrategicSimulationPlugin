@@ -5,6 +5,7 @@
 #include "UFacilityDefinition.h"
 #include "UItemDefinition.h"
 #include "UBaseManagerSubsystem.h"
+#include "UMissionManagerSubsystem.h"
 #include "StrategicSiteDefinition.h"
 
 UStrategyVehicle::UStrategyVehicle()
@@ -218,28 +219,82 @@ void UStrategyVehicle::PerformRadarPing()
 
     EFactionType VehicleFaction = HomeBase->OwningFaction;
 
-    UGameInstance* GameInstance = nullptr;
-    if (UWorld* World = GetWorld())
+    UGameInstance* GI = GetTypedOuter<UGameInstance>();
+    if (!GI)
     {
-        GameInstance = World->GetGameInstance();
+        if (UWorld* World = GetWorld())
+            GI = World->GetGameInstance();
     }
-    if (!GameInstance)
-    {
-        GameInstance = Cast<UGameInstance>(GetOuter());
-    }
-    if (!GameInstance) return;
+    if (!GI) return;
 
-    if (UBaseManagerSubsystem* BaseManager = GameInstance->GetSubsystem<UBaseManagerSubsystem>())
+    if (UBaseManagerSubsystem* BaseManager = GI->GetSubsystem<UBaseManagerSubsystem>())
     {
+        // === SITE DETECTION ===
         for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
         {
             if (!Site || Site->bHasBeenUsed) continue;
 
             if (FVector2D::Distance(Site->Location, CurrentPosition) <= GetRadarRange())
             {
-                BaseManager->AddDiscoveredSite(VehicleFaction, Site->Location, Site->SiteType);
+                const TArray<UStrategySiteDefinition*>& DiscoveredList =
+                    (VehicleFaction == EFactionType::Human) ?
+                    BaseManager->DiscoveredSitesHuman : BaseManager->DiscoveredSitesEnemy;
+
+                if (!DiscoveredList.Contains(Site))
+                {
+                    BaseManager->AddDiscoveredSite(VehicleFaction, Site->Location, Site->SiteType);
+                    OnSiteDetected.Broadcast(VehicleFaction, Site);
+                }
             }
         }
+
+        // === VEHICLE DETECTION ===
+        // 1. Check parked vehicles in enemy hangers
+        TArray<UStrategyBase*> EnemyBases = BaseManager->GetBases(
+            (VehicleFaction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human);
+
+        for (UStrategyBase* OtherBase : EnemyBases)
+        {
+            if (!OtherBase) continue;
+
+            for (UStrategyFacility* Facility : OtherBase->Facilities)
+            {
+                if (!Facility || Facility->BuildProgressDays > 0) continue;
+
+                if (Facility->FacilityDefinition &&
+                    Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+                {
+                    for (UStrategyVehicle* OtherVehicle : Facility->ParkedVehicles)
+                    {
+                        TryDetectVehicle(OtherVehicle);
+                    }
+                }
+            }
+        }
+
+        // 2. Check vehicles currently on active missions
+        if (UMissionManagerSubsystem* MissionMgr = GI->GetSubsystem<UMissionManagerSubsystem>())
+        {
+            for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+            {
+                if (!Mission) continue;
+
+                // Only check enemy missions
+                if (Mission->OriginBase && Mission->OriginBase->OwningFaction == VehicleFaction)
+                    continue;
+
+                for (UStrategyVehicle* OtherVehicle : Mission->VehiclesInFleet)
+                {
+                    TryDetectVehicle(OtherVehicle);
+                }
+            }
+        }
+    }
+
+    // Simple cleanup
+    if (RecentlyDetectedVehicles.Num() > 20)
+    {
+        RecentlyDetectedVehicles.Empty();
     }
 }
 
@@ -288,4 +343,34 @@ float UStrategyVehicle::GetRadarRange() const
         return VehicleDefinition->RadarRangePixels;
     }
     return 64.0f; // Safe fallback
+}
+
+void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
+{
+    if (!OtherVehicle || OtherVehicle == this) return;
+
+    float Distance = FVector2D::Distance(OtherVehicle->CurrentPosition, CurrentPosition);
+    if (Distance > GetRadarRange()) return;
+
+    // Check if we already detected this vehicle recently
+    bool bAlreadyDetected = false;
+    for (int32 i = RecentlyDetectedVehicles.Num() - 1; i >= 0; i--)
+    {
+        if (!RecentlyDetectedVehicles[i].IsValid())
+        {
+            RecentlyDetectedVehicles.RemoveAt(i);
+            continue;
+        }
+        if (RecentlyDetectedVehicles[i].Get() == OtherVehicle)
+        {
+            bAlreadyDetected = true;
+            break;
+        }
+    }
+
+    if (!bAlreadyDetected)
+    {
+        RecentlyDetectedVehicles.Add(OtherVehicle);
+        OnVehicleDetected.Broadcast(this, OtherVehicle);
+    }
 }

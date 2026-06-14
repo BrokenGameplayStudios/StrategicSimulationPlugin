@@ -6,6 +6,16 @@
 #include "StrategicSimulationTypes.h"
 #include "UStrategyVehicle.generated.h"
 
+// =====================================================
+// Detection Delegates
+// =====================================================
+
+/** Broadcast when this vehicle detects a new site (fires only once per site per faction) */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSiteDetected, EFactionType, DetectingFaction, UStrategySiteDefinition*, DetectedSite);
+
+/** Broadcast when this vehicle detects a new enemy vehicle (can fire multiple times) */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnVehicleDetected, UStrategyVehicle*, DetectingVehicle, UStrategyVehicle*, DetectedVehicle);
+
 class UStrategyBase;
 class UMissionGroup;
 class UStrategyFacility;
@@ -139,7 +149,7 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
     float GetRadarRange() const;
-
+    
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget = 3.0f);
 
@@ -154,4 +164,25 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     bool IsMissionComplete(float CurrentGameHours) const;
+
+    /** Delegate called when a new site is detected */
+    UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")
+    FOnSiteDetected OnSiteDetected;
+
+    /** Delegate called when a new enemy vehicle is detected */
+    UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")
+    FOnVehicleDetected OnVehicleDetected;
+
+    UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")
+    void TryDetectVehicle(UStrategyVehicle* OtherVehicle);
+
+private:
+
+    /** Tracks vehicles we've recently detected to avoid spamming the delegate */
+    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Detection")
+    TArray<TWeakObjectPtr<UStrategyVehicle>> RecentlyDetectedVehicles;
+
+    /** How long (in game hours) before we can detect the same vehicle again */
+    UPROPERTY(EditAnywhere, Category = "Vehicle|Detection")
+    float VehicleDetectionCooldownHours = 2.0f;
 };
