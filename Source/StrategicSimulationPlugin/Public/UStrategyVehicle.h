@@ -165,11 +165,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     bool IsMissionComplete(float CurrentGameHours) const;
 
-    /** Delegate called when a new site is detected */
+    /** Called when this vehicle detects a new site (fires only once per site) */
     UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")
     FOnSiteDetected OnSiteDetected;
 
-    /** Delegate called when a new enemy vehicle is detected */
+    /** Called when this vehicle detects a new enemy vehicle (can fire multiple times) */
     UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")
     FOnVehicleDetected OnVehicleDetected;
 
