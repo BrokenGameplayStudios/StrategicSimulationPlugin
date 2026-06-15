@@ -308,14 +308,12 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     if (bIsRecon)
     {
         // Recon is now pure intel gathering — discovery happens LIVE via vehicle radar pings
-        // No more reward-based discovery at mission end
-        Reward.ResearchPoints = FMath::RandRange(200, 500);   // small intel reward only
-        
+        Reward.ResearchPoints = FMath::RandRange(200, 500);
+
         UE_LOG(LogTemp, Display, TEXT("[RECON] Mission complete — intel gathered via live radar pings"));
     }
     else
     {
-        // Original reward logic for non-recon missions (unchanged)
         switch (Outcome)
         {
         case EMissionOutcome::Success:
@@ -350,7 +348,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     EFactionType Attacker = Mission->AttackingFaction;
     EFactionType Defender = (Attacker == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-    // === Vehicle & Soldier losses + return logic (unchanged except Recon safety) ===
+    // === Vehicle & Soldier losses + return logic ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
     int32 TotalCaptured = 0;
@@ -363,6 +361,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
         if (FMath::RandRange(1, 100) > SurvivalChance)
         {
+            // Vehicle is destroyed (only on very bad rolls)
             TotalVehiclesLost++;
             UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' DESTROYED"), *Vehicle->VehicleDefinition->VehicleName.ToString());
 
@@ -402,11 +401,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
         else
         {
-            // Surviving vehicle returns home
-            int32 Damage = (Outcome == EMissionOutcome::CatastrophicFailure) ? 60 :
-                (Outcome == EMissionOutcome::Failure) ? 35 : (bIsRecon ? 5 : 15);
-            Vehicle->ApplyDamage(Damage);
-
+            // Vehicle survives — NO DAMAGE is applied anymore
             if (Vehicle->HomeHanger)
             {
                 Vehicle->CurrentHanger = Vehicle->HomeHanger;
