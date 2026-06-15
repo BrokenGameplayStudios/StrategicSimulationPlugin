@@ -211,5 +211,6 @@ enum class EVehicleBehavior : uint8
     Evading         UMETA(DisplayName = "Evading"),
     Attacking       UMETA(DisplayName = "Attacking"),
     Escorting       UMETA(DisplayName = "Escorting"),
-    Idle            UMETA(DisplayName = "Idle")
+    Idle            UMETA(DisplayName = "Idle"),
+    Ignore          UMETA(DisplayName = "Ignore")
 };

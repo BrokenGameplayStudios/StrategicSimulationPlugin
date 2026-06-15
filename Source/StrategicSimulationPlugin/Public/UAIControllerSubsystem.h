@@ -59,6 +59,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "AI Control|Player Ready")
     void PerformDailyBuildOrder(EFactionType Faction);
 
+    /** AI decision logic when one of its vehicles detects an enemy vehicle */
+    void HandleVehicleDetection(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle);
+
 private:
 
     // Per-faction day guard (fixes the skip bug)

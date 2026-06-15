@@ -53,10 +53,14 @@ public:
     EVehicleBehavior CurrentBehavior = EVehicleBehavior::Scouting;
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Behavior")
-    void SetBehavior(EVehicleBehavior NewBehavior);
+    void SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicle* Target = nullptr);
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Behavior")
     EVehicleBehavior GetBehavior() const { return CurrentBehavior; }
+
+    /** Current target vehicle (used when Attacking or Evading) */
+    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Behavior")
+    TWeakObjectPtr<UStrategyVehicle> CurrentTargetVehicle;
 
     // === Hardpoint System ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Vehicle|Hardpoints")
@@ -196,4 +200,10 @@ private:
     /** How long (in game hours) before we can detect the same vehicle again */
     UPROPERTY(EditAnywhere, Category = "Vehicle|Detection")
     float VehicleDetectionCooldownHours = 2.0f;
+
+    /** Called when this vehicle detects another vehicle.
+ *  Decision logic lives in UAIControllerSubsystem (or player UI).
+ *  This function can be overridden or extended. */
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Detection")
+    virtual void HandleVehicleDetected(UStrategyVehicle* DetectedVehicle);
 };

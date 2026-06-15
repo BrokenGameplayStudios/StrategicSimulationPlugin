@@ -1,5 +1,7 @@
 #include "UStrategyVehicle.h"
 #include "UStrategyBase.h"
+//#include "UStrategyCampaignSubsystem.h"
+#include "UAIControllerSubsystem.h"
 #include "UStrategyFacility.h"
 #include "UMissionGroup.h"
 #include "UFacilityDefinition.h"
@@ -7,6 +9,7 @@
 #include "UBaseManagerSubsystem.h"
 #include "UMissionManagerSubsystem.h"
 #include "StrategicSiteDefinition.h"
+#include "Engine/Engine.h"
 
 UStrategyVehicle::UStrategyVehicle()
 {
@@ -192,24 +195,72 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
     float Elapsed = CurrentGameHours - LaunchGameTimeHours;
     float Progress = FMath::Clamp(Elapsed / TotalTravelTimeHours, 0.0f, 1.0f);
 
-    CurrentPosition = GetPositionOnPath(Progress);
+    FVector2D DesiredPosition;
 
-    // Periodic radar pings (overlapping OK, works at any time scale)
+    // === BEHAVIOR-BASED MOVEMENT ===
+    if ((CurrentBehavior == EVehicleBehavior::Attacking || CurrentBehavior == EVehicleBehavior::Evading)
+        && CurrentTargetVehicle.IsValid())
+    {
+        UStrategyVehicle* Target = CurrentTargetVehicle.Get();
+
+        if (CurrentBehavior == EVehicleBehavior::Attacking)
+        {
+            // Move toward the target (pursuit)
+            FVector2D DirectionToTarget = Target->CurrentPosition - CurrentPosition;
+            if (!DirectionToTarget.IsNearlyZero())
+            {
+                DirectionToTarget.Normalize();
+                // Move toward target (we can tune this speed later)
+                DesiredPosition = CurrentPosition + DirectionToTarget * 120.0f;
+            }
+            else
+            {
+                DesiredPosition = Target->CurrentPosition;
+            }
+        }
+        else if (CurrentBehavior == EVehicleBehavior::Evading)
+        {
+            // Move away from the target
+            FVector2D DirectionAway = CurrentPosition - Target->CurrentPosition;
+            if (!DirectionAway.IsNearlyZero())
+            {
+                DirectionAway.Normalize();
+                DesiredPosition = CurrentPosition + DirectionAway * 120.0f;
+            }
+            else
+            {
+                DesiredPosition = CurrentPosition;
+            }
+        }
+    }
+    else
+    {
+        // Normal mission pathing
+        DesiredPosition = GetPositionOnPath(Progress);
+    }
+
+    // Apply the new position
+    CurrentPosition = DesiredPosition;
+
+    // Periodic radar pings (works at any time scale)
     while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
     {
         LastPingGameTimeHours += PingIntervalHours;
         PerformRadarPing();
     }
 
-    if (Progress >= 1.0f)
+    // Mission completion check (only for normal mission behavior)
+    if (Progress >= 1.0f && CurrentBehavior != EVehicleBehavior::Attacking && CurrentBehavior != EVehicleBehavior::Evading)
     {
         UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base at (%.0f,%.0f)"),
             *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
 
-        CurrentMission = nullptr;           // let MissionManager clean up the old daily system
+        CurrentMission = nullptr;
         CurrentWaypoints.Empty();
         TotalTravelTimeHours = 0.0f;
         CurrentPosition = HomeBase ? HomeBase->MapLocation : CurrentPosition;
+        CurrentBehavior = EVehicleBehavior::Idle;
+        CurrentTargetVehicle = nullptr;
     }
 }
 
@@ -372,21 +423,43 @@ void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
     {
         RecentlyDetectedVehicles.Add(OtherVehicle);
         OnVehicleDetected.Broadcast(this, OtherVehicle);
+        HandleVehicleDetected(OtherVehicle);
     }
 }
 
-void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior)
+void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicle* Target)
 {
-    if (CurrentBehavior != NewBehavior)
+    if (CurrentBehavior != NewBehavior || CurrentTargetVehicle.Get() != Target)
     {
-        EVehicleBehavior PreviousBehavior = CurrentBehavior;
         CurrentBehavior = NewBehavior;
+        CurrentTargetVehicle = Target;
 
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s changed behavior from %s to %s"),
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s changed behavior to %s (Target: %s)"),
             *GetNameSafe(this),
-            *UEnum::GetValueAsString(PreviousBehavior),
-            *UEnum::GetValueAsString(NewBehavior));
+            *UEnum::GetValueAsString(NewBehavior),
+            Target ? *GetNameSafe(Target) : TEXT("None"));
+    }
+}
 
-        // TODO: Later we will hook this into mission path changes
+void UStrategyVehicle::HandleVehicleDetected(UStrategyVehicle* DetectedVehicle)
+{
+    if (!DetectedVehicle || DetectedVehicle == this) return;
+
+    OnVehicleDetected.Broadcast(this, DetectedVehicle);
+
+    // Notify the AI Controller (this is where decision logic lives)
+    UGameInstance* GI = GetTypedOuter<UGameInstance>();
+    if (!GI)
+    {
+        if (UWorld* World = GetWorld())
+            GI = World->GetGameInstance();
+    }
+
+    if (GI)
+    {
+        if (UAIControllerSubsystem* AI = GI->GetSubsystem<UAIControllerSubsystem>())
+        {
+            AI->HandleVehicleDetection(this, DetectedVehicle);
+        }
     }
 }

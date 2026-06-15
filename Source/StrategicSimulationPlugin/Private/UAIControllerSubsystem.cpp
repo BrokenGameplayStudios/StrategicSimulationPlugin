@@ -12,6 +12,7 @@
 #include "UStrategyVehicle.h"
 #include "UMissionManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
+#include "StrategicSimulationTypes.h"
 #include "Engine/Engine.h"
 
 void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -1063,4 +1064,34 @@ UStrategySiteDefinition* UAIControllerSubsystem::FindExpansionSiteForAI(EFaction
     }
 
     return nullptr;
+}
+
+void UAIControllerSubsystem::HandleVehicleDetection(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle)
+{
+    if (!DetectingVehicle || !DetectedVehicle) return;
+
+    UE_LOG(LogTemp, Display, TEXT("[AI] %s detected enemy vehicle: %s"),
+        *GetNameSafe(DetectingVehicle), *GetNameSafe(DetectedVehicle));
+
+    EVehicleBehavior chosenBehavior = EVehicleBehavior::Scouting;
+    if (DetectingVehicle->VehicleDefinition)
+    {
+        chosenBehavior = DetectingVehicle->VehicleDefinition->DefaultBehavior;
+    }
+
+    // Improved basic decision
+    if (chosenBehavior == EVehicleBehavior::Scouting)
+    {
+        chosenBehavior = (FMath::RandRange(0, 99) < 12) ? EVehicleBehavior::Attacking : EVehicleBehavior::Ignore;
+    }
+    else if (chosenBehavior == EVehicleBehavior::Attacking)
+    {
+        chosenBehavior = (FMath::RandRange(0, 99) < 55) ? EVehicleBehavior::Attacking : EVehicleBehavior::Ignore;
+    }
+
+    // Apply behavior + target
+    if (chosenBehavior != EVehicleBehavior::Ignore)
+    {
+        DetectingVehicle->SetBehavior(chosenBehavior, DetectedVehicle);
+    }
 }
