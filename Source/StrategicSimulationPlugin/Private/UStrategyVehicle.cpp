@@ -197,47 +197,145 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 
     FVector2D NewPosition;
 
-    // === BEHAVIOR OVERRIDE ===
-    if ((CurrentBehavior == EVehicleBehavior::Attacking || CurrentBehavior == EVehicleBehavior::Evading)
-        && CurrentTargetVehicle.IsValid())
+    // =====================================================
+    // BEHAVIOR-DRIVEN MOVEMENT
+    // =====================================================
+    if (CurrentBehavior == EVehicleBehavior::Attacking && CurrentTargetVehicle.IsValid())
     {
+        // === ATTACKING ===
         UStrategyVehicle* Target = CurrentTargetVehicle.Get();
+        FVector2D Direction = Target->CurrentPosition - CurrentPosition;
 
-        if (CurrentBehavior == EVehicleBehavior::Attacking)
+        if (!Direction.IsNearlyZero())
         {
-            // Strong pursuit toward target
-            FVector2D Direction = Target->CurrentPosition - CurrentPosition;
-            if (!Direction.IsNearlyZero())
+            Direction.Normalize();
+            NewPosition = CurrentPosition + Direction * 180.0f;
+        }
+        else
+        {
+            NewPosition = Target->CurrentPosition;
+        }
+
+        CurrentPosition = NewPosition;
+
+        // Radar pings while attacking
+        while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
+        {
+            LastPingGameTimeHours += PingIntervalHours;
+            PerformRadarPing();
+        }
+
+        // Exit condition: Too far from home
+        if (HomeBase)
+        {
+            float DistanceFromHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
+            float MaxDistance = VehicleDefinition ? VehicleDefinition->MaxRange * 0.85f : 650.0f;
+
+            if (DistanceFromHome > MaxDistance)
             {
-                Direction.Normalize();
-                NewPosition = CurrentPosition + Direction * 200.0f; // Pursuit speed
-            }
-            else
-            {
-                NewPosition = Target->CurrentPosition;
+                SetBehavior(EVehicleBehavior::Returning);
+                UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s giving up attack — too far from home"), *GetNameSafe(this));
             }
         }
-        else // Evading
-        {
-            FVector2D Direction = CurrentPosition - Target->CurrentPosition;
-            if (!Direction.IsNearlyZero())
-            {
-                Direction.Normalize();
-                NewPosition = CurrentPosition + Direction * 200.0f; // Evasion speed
-            }
-            else
-            {
-                NewPosition = CurrentPosition;
-            }
-        }
+
+        return;
     }
-    else
+    else if (CurrentBehavior == EVehicleBehavior::Evading && CurrentTargetVehicle.IsValid())
     {
-        // Normal mission pathing
-        NewPosition = GetPositionOnPath(Progress);
+        // === EVADING ===
+        UStrategyVehicle* Target = CurrentTargetVehicle.Get();
+        FVector2D Direction = CurrentPosition - Target->CurrentPosition;
+
+        if (!Direction.IsNearlyZero())
+        {
+            Direction.Normalize();
+            NewPosition = CurrentPosition + Direction * 180.0f;
+        }
+        else
+        {
+            NewPosition = CurrentPosition;
+        }
+
+        CurrentPosition = NewPosition;
+
+        while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
+        {
+            LastPingGameTimeHours += PingIntervalHours;
+            PerformRadarPing();
+        }
+
+        // Exit condition: Too far from home while evading
+        if (HomeBase)
+        {
+            float DistanceFromHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
+            float MaxDistance = VehicleDefinition ? VehicleDefinition->MaxRange * 0.85f : 650.0f;
+
+            if (DistanceFromHome > MaxDistance)
+            {
+                SetBehavior(EVehicleBehavior::Returning);
+                UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s giving up evade — too far from home"), *GetNameSafe(this));
+            }
+        }
+
+        return;
+    }
+    else if (CurrentBehavior == EVehicleBehavior::Returning)
+    {
+        // === RETURNING TO BASE ===
+        if (!HomeBase)
+        {
+            // Fallback if no home base
+            CurrentBehavior = EVehicleBehavior::Idle;
+            return;
+        }
+
+        FVector2D DirectionHome = HomeBase->MapLocation - CurrentPosition;
+
+        if (!DirectionHome.IsNearlyZero())
+        {
+            DirectionHome.Normalize();
+            NewPosition = CurrentPosition + DirectionHome * 200.0f; // Return speed
+            CurrentPosition = NewPosition;
+        }
+
+        // Radar pings while returning
+        while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
+        {
+            LastPingGameTimeHours += PingIntervalHours;
+            PerformRadarPing();
+        }
+
+        // Check if we've reached home
+        float DistanceToHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
+        if (DistanceToHome < 25.0f) // Close enough to base
+        {
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s has RETURNED to base"), *GetNameSafe(this));
+
+            CurrentBehavior = EVehicleBehavior::Idle;
+            CurrentTargetVehicle = nullptr;
+            CurrentMission = nullptr;
+            CurrentWaypoints.Empty();
+            TotalTravelTimeHours = 0.0f;
+            CurrentPosition = HomeBase->MapLocation;
+
+            if (HomeBase)
+            {
+                // Re-park the vehicle if it has a home hanger
+                if (HomeHanger)
+                {
+                    CurrentHanger = HomeHanger;
+                    HomeHanger->ParkedVehicles.AddUnique(this);
+                }
+            }
+        }
+
+        return;
     }
 
-    CurrentPosition = NewPosition;
+    // =====================================================
+    // NORMAL MISSION PATHING (Default)
+    // =====================================================
+    CurrentPosition = GetPositionOnPath(Progress);
 
     // Periodic radar pings
     while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
@@ -246,13 +344,10 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
         PerformRadarPing();
     }
 
-    // Only end mission normally if not in combat behavior
-    if (Progress >= 1.0f &&
-        CurrentBehavior != EVehicleBehavior::Attacking &&
-        CurrentBehavior != EVehicleBehavior::Evading)
+    // Normal mission completion
+    if (Progress >= 1.0f)
     {
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base"),
-            *GetNameSafe(this));
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base"), *GetNameSafe(this));
 
         CurrentMission = nullptr;
         CurrentWaypoints.Empty();
@@ -428,15 +523,24 @@ void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
 
 void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicle* Target)
 {
-    if (CurrentBehavior != NewBehavior || CurrentTargetVehicle.Get() != Target)
-    {
-        CurrentBehavior = NewBehavior;
-        CurrentTargetVehicle = Target;
+    if (CurrentBehavior == NewBehavior && CurrentTargetVehicle.Get() == Target)
+        return;
 
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s changed behavior to %s (Target: %s)"),
-            *GetNameSafe(this),
-            *UEnum::GetValueAsString(NewBehavior),
-            Target ? *GetNameSafe(Target) : TEXT("None"));
+    EVehicleBehavior PreviousBehavior = CurrentBehavior;
+
+    CurrentBehavior = NewBehavior;
+    CurrentTargetVehicle = Target;
+
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s changed behavior: %s → %s"),
+        *GetNameSafe(this),
+        *UEnum::GetValueAsString(PreviousBehavior),
+        *UEnum::GetValueAsString(NewBehavior));
+
+    if (NewBehavior == EVehicleBehavior::Attacking || NewBehavior == EVehicleBehavior::Evading)
+    {
+        CurrentWaypoints.Empty();
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s interrupting mission to %s"),
+            *GetNameSafe(this), *UEnum::GetValueAsString(NewBehavior));
     }
 }
 
