@@ -72,4 +72,7 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Result")
     int32 VehiclesLost = 0;
+
+    UPROPERTY()
+    bool bIsLiveMovement = false;
 };
