@@ -195,9 +195,9 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
     float Elapsed = CurrentGameHours - LaunchGameTimeHours;
     float Progress = FMath::Clamp(Elapsed / TotalTravelTimeHours, 0.0f, 1.0f);
 
-    FVector2D DesiredPosition;
+    FVector2D NewPosition;
 
-    // === BEHAVIOR-BASED MOVEMENT ===
+    // === BEHAVIOR OVERRIDE ===
     if ((CurrentBehavior == EVehicleBehavior::Attacking || CurrentBehavior == EVehicleBehavior::Evading)
         && CurrentTargetVehicle.IsValid())
     {
@@ -205,55 +205,54 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 
         if (CurrentBehavior == EVehicleBehavior::Attacking)
         {
-            // Move toward the target (pursuit)
-            FVector2D DirectionToTarget = Target->CurrentPosition - CurrentPosition;
-            if (!DirectionToTarget.IsNearlyZero())
+            // Strong pursuit toward target
+            FVector2D Direction = Target->CurrentPosition - CurrentPosition;
+            if (!Direction.IsNearlyZero())
             {
-                DirectionToTarget.Normalize();
-                // Move toward target (we can tune this speed later)
-                DesiredPosition = CurrentPosition + DirectionToTarget * 120.0f;
+                Direction.Normalize();
+                NewPosition = CurrentPosition + Direction * 200.0f; // Pursuit speed
             }
             else
             {
-                DesiredPosition = Target->CurrentPosition;
+                NewPosition = Target->CurrentPosition;
             }
         }
-        else if (CurrentBehavior == EVehicleBehavior::Evading)
+        else // Evading
         {
-            // Move away from the target
-            FVector2D DirectionAway = CurrentPosition - Target->CurrentPosition;
-            if (!DirectionAway.IsNearlyZero())
+            FVector2D Direction = CurrentPosition - Target->CurrentPosition;
+            if (!Direction.IsNearlyZero())
             {
-                DirectionAway.Normalize();
-                DesiredPosition = CurrentPosition + DirectionAway * 120.0f;
+                Direction.Normalize();
+                NewPosition = CurrentPosition + Direction * 200.0f; // Evasion speed
             }
             else
             {
-                DesiredPosition = CurrentPosition;
+                NewPosition = CurrentPosition;
             }
         }
     }
     else
     {
         // Normal mission pathing
-        DesiredPosition = GetPositionOnPath(Progress);
+        NewPosition = GetPositionOnPath(Progress);
     }
 
-    // Apply the new position
-    CurrentPosition = DesiredPosition;
+    CurrentPosition = NewPosition;
 
-    // Periodic radar pings (works at any time scale)
+    // Periodic radar pings
     while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
     {
         LastPingGameTimeHours += PingIntervalHours;
         PerformRadarPing();
     }
 
-    // Mission completion check (only for normal mission behavior)
-    if (Progress >= 1.0f && CurrentBehavior != EVehicleBehavior::Attacking && CurrentBehavior != EVehicleBehavior::Evading)
+    // Only end mission normally if not in combat behavior
+    if (Progress >= 1.0f &&
+        CurrentBehavior != EVehicleBehavior::Attacking &&
+        CurrentBehavior != EVehicleBehavior::Evading)
     {
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base at (%.0f,%.0f)"),
-            *VehicleDefinition->VehicleName.ToString(), CurrentPosition.X, CurrentPosition.Y);
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base"),
+            *GetNameSafe(this));
 
         CurrentMission = nullptr;
         CurrentWaypoints.Empty();
