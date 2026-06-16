@@ -152,6 +152,14 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
     float SearchTimeAtTarget = 0.0f;
 
+    /** Waypoints used when returning to base (separate from mission waypoints) */
+    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Movement")
+    TArray<FVector2D> ReturningWaypoints;
+
+    /** Current progress along the returning waypoints */
+    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Movement")
+    float ReturningProgress = 0.0f;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
     float LastPingGameTimeHours = 0.0f;
 
@@ -180,6 +188,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     bool IsMissionComplete(float CurrentGameHours) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
+    void GenerateReturnPath();
 
     /** Called when this vehicle detects a new site (fires only once per site) */
     UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")

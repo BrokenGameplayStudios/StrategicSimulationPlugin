@@ -281,52 +281,55 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
     }
     else if (CurrentBehavior == EVehicleBehavior::Returning)
     {
-        // === RETURNING TO BASE ===
-        if (!HomeBase)
+        if (ReturningWaypoints.Num() == 0 || !HomeBase)
         {
-            // Fallback if no home base
+            // Fallback if no waypoints were generated
             CurrentBehavior = EVehicleBehavior::Idle;
             return;
         }
 
-        FVector2D DirectionHome = HomeBase->MapLocation - CurrentPosition;
+        // Move along return waypoints using progress
+        ReturningProgress = FMath::Clamp(ReturningProgress + 0.015f, 0.0f, 1.0f); // Adjust speed here
 
-        if (!DirectionHome.IsNearlyZero())
-        {
-            DirectionHome.Normalize();
-            NewPosition = CurrentPosition + DirectionHome * 200.0f; // Return speed
-            CurrentPosition = NewPosition;
-        }
+        // Find current segment
+        float TotalSegments = ReturningWaypoints.Num() - 1;
+        float ScaledProgress = ReturningProgress * TotalSegments;
+        int32 CurrentIndex = FMath::FloorToInt(ScaledProgress);
+        float SegmentProgress = ScaledProgress - CurrentIndex;
 
-        // Radar pings while returning
-        while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
+        if (CurrentIndex >= ReturningWaypoints.Num() - 1)
         {
-            LastPingGameTimeHours += PingIntervalHours;
-            PerformRadarPing();
-        }
+            // Reached the end of the return path
+            CurrentPosition = HomeBase->MapLocation;
 
-        // Check if we've reached home
-        float DistanceToHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
-        if (DistanceToHome < 25.0f) // Close enough to base
-        {
-            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s has RETURNED to base"), *GetNameSafe(this));
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s has RETURNED to base via waypoints"), *GetNameSafe(this));
 
             CurrentBehavior = EVehicleBehavior::Idle;
             CurrentTargetVehicle = nullptr;
             CurrentMission = nullptr;
             CurrentWaypoints.Empty();
+            ReturningWaypoints.Empty();
             TotalTravelTimeHours = 0.0f;
-            CurrentPosition = HomeBase->MapLocation;
+            ReturningProgress = 0.0f;
 
-            if (HomeBase)
+            if (HomeHanger)
             {
-                // Re-park the vehicle if it has a home hanger
-                if (HomeHanger)
-                {
-                    CurrentHanger = HomeHanger;
-                    HomeHanger->ParkedVehicles.AddUnique(this);
-                }
+                CurrentHanger = HomeHanger;
+                HomeHanger->ParkedVehicles.AddUnique(this);
             }
+        }
+        else
+        {
+            FVector2D StartPoint = ReturningWaypoints[CurrentIndex];
+            FVector2D EndPoint = ReturningWaypoints[CurrentIndex + 1];
+            CurrentPosition = FMath::Lerp(StartPoint, EndPoint, SegmentProgress);
+        }
+
+        // Continue radar pings while returning
+        while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
+        {
+            LastPingGameTimeHours += PingIntervalHours;
+            PerformRadarPing();
         }
 
         return;
@@ -527,7 +530,6 @@ void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicl
         return;
 
     EVehicleBehavior PreviousBehavior = CurrentBehavior;
-
     CurrentBehavior = NewBehavior;
     CurrentTargetVehicle = Target;
 
@@ -536,11 +538,21 @@ void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicl
         *UEnum::GetValueAsString(PreviousBehavior),
         *UEnum::GetValueAsString(NewBehavior));
 
+    // Clear old returning path
+    ReturningWaypoints.Empty();
+    ReturningProgress = 0.0f;
+
+    if (NewBehavior == EVehicleBehavior::Returning && HomeBase)
+    {
+        // Generate waypoints from current position back to home base
+        GenerateReturnPath();
+    }
+
     if (NewBehavior == EVehicleBehavior::Attacking || NewBehavior == EVehicleBehavior::Evading)
     {
-        CurrentWaypoints.Empty();
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s interrupting mission to %s"),
-            *GetNameSafe(this), *UEnum::GetValueAsString(NewBehavior));
+        CurrentWaypoints.Empty(); // Interrupt normal mission
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s interrupting mission for combat behavior"),
+            *GetNameSafe(this));
     }
 }
 
@@ -565,4 +577,29 @@ void UStrategyVehicle::HandleVehicleDetected(UStrategyVehicle* DetectedVehicle)
             AI->HandleVehicleDetection(this, DetectedVehicle);
         }
     }
+}
+
+void UStrategyVehicle::GenerateReturnPath()
+{
+    ReturningWaypoints.Empty();
+
+    if (!HomeBase) return;
+
+    FVector2D Start = CurrentPosition;
+    FVector2D End = HomeBase->MapLocation;
+
+    // Create a simple path with a few waypoints (you can increase this for smoother paths)
+    int32 NumWaypoints = 4;
+
+    for (int32 i = 0; i <= NumWaypoints; i++)
+    {
+        float Alpha = (float)i / (float)NumWaypoints;
+        FVector2D Waypoint = FMath::Lerp(Start, End, Alpha);
+        ReturningWaypoints.Add(Waypoint);
+    }
+
+    ReturningProgress = 0.0f;
+
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s generated return path with %d waypoints"),
+        *GetNameSafe(this), ReturningWaypoints.Num());
 }
