@@ -190,7 +190,7 @@ void UStrategyVehicle::LaunchScoutingMission(FVector2D TargetLocation, float Cur
 
 void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 {
-    if (CurrentMission == nullptr || TotalTravelTimeHours <= 0.0f) return;
+    if (CurrentMission == nullptr) return;
 
     float Elapsed = CurrentGameHours - LaunchGameTimeHours;
     float Progress = FMath::Clamp(Elapsed / TotalTravelTimeHours, 0.0f, 1.0f);
@@ -198,53 +198,23 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
     FVector2D NewPosition;
 
     // =====================================================
-    // BEHAVIOR-DRIVEN MOVEMENT
+    // ATTACKING / EVADING BEHAVIOR
     // =====================================================
-    if (CurrentBehavior == EVehicleBehavior::Attacking && CurrentTargetVehicle.IsValid())
+    if ((CurrentBehavior == EVehicleBehavior::Attacking || CurrentBehavior == EVehicleBehavior::Evading)
+        && CurrentTargetVehicle.IsValid())
     {
-        // === ATTACKING ===
         UStrategyVehicle* Target = CurrentTargetVehicle.Get();
-        FVector2D Direction = Target->CurrentPosition - CurrentPosition;
 
-        if (!Direction.IsNearlyZero())
+        // Record start time if this is the first tick in combat behavior
+        if (CombatBehaviorStartTime < 0.0f)
         {
-            Direction.Normalize();
-            NewPosition = CurrentPosition + Direction * 180.0f;
-        }
-        else
-        {
-            NewPosition = Target->CurrentPosition;
+            CombatBehaviorStartTime = CurrentGameHours;
         }
 
-        CurrentPosition = NewPosition;
-
-        // Radar pings while attacking
-        while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
-        {
-            LastPingGameTimeHours += PingIntervalHours;
-            PerformRadarPing();
-        }
-
-        // Exit condition: Too far from home
-        if (HomeBase)
-        {
-            float DistanceFromHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
-            float MaxDistance = VehicleDefinition ? VehicleDefinition->MaxRange * 0.85f : 650.0f;
-
-            if (DistanceFromHome > MaxDistance)
-            {
-                SetBehavior(EVehicleBehavior::Returning);
-                UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s giving up attack — too far from home"), *GetNameSafe(this));
-            }
-        }
-
-        return;
-    }
-    else if (CurrentBehavior == EVehicleBehavior::Evading && CurrentTargetVehicle.IsValid())
-    {
-        // === EVADING ===
-        UStrategyVehicle* Target = CurrentTargetVehicle.Get();
-        FVector2D Direction = CurrentPosition - Target->CurrentPosition;
+        // Move toward or away from target
+        FVector2D Direction = (CurrentBehavior == EVehicleBehavior::Attacking)
+            ? (Target->CurrentPosition - CurrentPosition)
+            : (CurrentPosition - Target->CurrentPosition);
 
         if (!Direction.IsNearlyZero())
         {
@@ -258,40 +228,59 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 
         CurrentPosition = NewPosition;
 
+        // Continue radar pings
         while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
         {
             LastPingGameTimeHours += PingIntervalHours;
             PerformRadarPing();
         }
 
-        // Exit condition: Too far from home while evading
+        // === EXIT CONDITIONS ===
+        bool bShouldStopCombatBehavior = false;
+
+        // Exit 1: Time limit reached (~1 game hour)
+        if (CurrentGameHours - CombatBehaviorStartTime >= 1.0f)
+        {
+            bShouldStopCombatBehavior = true;
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s stopping pursuit — 1 hour time limit reached"), *GetNameSafe(this));
+        }
+
+        // Exit 2: Too far from home base (range limit)
         if (HomeBase)
         {
             float DistanceFromHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
-            float MaxDistance = VehicleDefinition ? VehicleDefinition->MaxRange * 0.85f : 650.0f;
+            float MaxAllowedDistance = VehicleDefinition ? VehicleDefinition->MaxRange * 0.9f : 700.0f;
 
-            if (DistanceFromHome > MaxDistance)
+            if (DistanceFromHome > MaxAllowedDistance)
             {
-                SetBehavior(EVehicleBehavior::Returning);
-                UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s giving up evade — too far from home"), *GetNameSafe(this));
+                bShouldStopCombatBehavior = true;
+                UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s stopping pursuit — out of range from home (%.0f)"),
+                    *GetNameSafe(this), DistanceFromHome);
             }
         }
 
-        return;
+        if (bShouldStopCombatBehavior)
+        {
+            SetBehavior(EVehicleBehavior::Returning);
+            CombatBehaviorStartTime = -1.0f;
+        }
+
+        return; // Skip normal mission pathing
     }
+
+    // =====================================================
+    // RETURNING BEHAVIOR (Waypoint-based)
+    // =====================================================
     else if (CurrentBehavior == EVehicleBehavior::Returning)
     {
         if (ReturningWaypoints.Num() == 0 || !HomeBase)
         {
-            // Fallback if no waypoints were generated
             CurrentBehavior = EVehicleBehavior::Idle;
             return;
         }
 
-        // Move along return waypoints using progress
-        ReturningProgress = FMath::Clamp(ReturningProgress + 0.015f, 0.0f, 1.0f); // Adjust speed here
+        ReturningProgress = FMath::Clamp(ReturningProgress + 0.012f, 0.0f, 1.0f);
 
-        // Find current segment
         float TotalSegments = ReturningWaypoints.Num() - 1;
         float ScaledProgress = ReturningProgress * TotalSegments;
         int32 CurrentIndex = FMath::FloorToInt(ScaledProgress);
@@ -299,7 +288,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 
         if (CurrentIndex >= ReturningWaypoints.Num() - 1)
         {
-            // Reached the end of the return path
+            // Arrived home
             CurrentPosition = HomeBase->MapLocation;
 
             UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s has RETURNED to base via waypoints"), *GetNameSafe(this));
@@ -311,6 +300,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
             ReturningWaypoints.Empty();
             TotalTravelTimeHours = 0.0f;
             ReturningProgress = 0.0f;
+            CombatBehaviorStartTime = -1.0f;
 
             if (HomeHanger)
             {
@@ -320,12 +310,12 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
         }
         else
         {
-            FVector2D StartPoint = ReturningWaypoints[CurrentIndex];
-            FVector2D EndPoint = ReturningWaypoints[CurrentIndex + 1];
-            CurrentPosition = FMath::Lerp(StartPoint, EndPoint, SegmentProgress);
+            FVector2D Start = ReturningWaypoints[CurrentIndex];
+            FVector2D End = ReturningWaypoints[CurrentIndex + 1];
+            CurrentPosition = FMath::Lerp(Start, End, SegmentProgress);
         }
 
-        // Continue radar pings while returning
+        // Radar pings while returning
         while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
         {
             LastPingGameTimeHours += PingIntervalHours;
@@ -336,18 +326,16 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
     }
 
     // =====================================================
-    // NORMAL MISSION PATHING (Default)
+    // NORMAL MISSION PATHING
     // =====================================================
     CurrentPosition = GetPositionOnPath(Progress);
 
-    // Periodic radar pings
     while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
     {
         LastPingGameTimeHours += PingIntervalHours;
         PerformRadarPing();
     }
 
-    // Normal mission completion
     if (Progress >= 1.0f)
     {
         UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base"), *GetNameSafe(this));
@@ -358,6 +346,8 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
         CurrentPosition = HomeBase ? HomeBase->MapLocation : CurrentPosition;
         CurrentBehavior = EVehicleBehavior::Idle;
         CurrentTargetVehicle = nullptr;
+        ReturningWaypoints.Empty();
+        CombatBehaviorStartTime = -1.0f;
     }
 }
 

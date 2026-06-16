@@ -62,6 +62,10 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "Vehicle|Behavior")
     TWeakObjectPtr<UStrategyVehicle> CurrentTargetVehicle;
 
+    /** Game time when current combat behavior (Attacking/Evading) started */
+    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Behavior")
+    float CombatBehaviorStartTime = -1.0f;
+
     // === Hardpoint System ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Vehicle|Hardpoints")
     TArray<TSoftObjectPtr<UItemDefinition>> EquippedWeapons;
