@@ -188,12 +188,12 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles()
 {
     float CurrentHours = GetCurrentGameHours();
 
-    for (int32 i = ActiveMissions.Num() - 1; i >= 0; --i)   // reverse loop so we can remove
+    for (int32 i = ActiveMissions.Num() - 1; i >= 0; --i)
     {
         UMissionGroup* Mission = ActiveMissions[i];
         if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
 
-        bool bMissionStillActive = false;
+        bool bAllVehiclesReturned = true;
 
         for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
         {
@@ -201,24 +201,22 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles()
             {
                 Vehicle->UpdatePositionAndPings(CurrentHours);
 
-                // If the live system says the vehicle is back home, the mission is done
-                if (Vehicle->CurrentMission == nullptr)
+                // Only consider a vehicle "returned" if it has no mission AND is not in combat/returning behavior
+                if (Vehicle->CurrentMission != nullptr ||
+                    Vehicle->CurrentBehavior == EVehicleBehavior::Attacking ||
+                    Vehicle->CurrentBehavior == EVehicleBehavior::Evading ||
+                    Vehicle->CurrentBehavior == EVehicleBehavior::Returning)
                 {
-                    bMissionStillActive = false;
-                }
-                else
-                {
-                    bMissionStillActive = true;
+                    bAllVehiclesReturned = false;
                 }
             }
         }
 
-        // If all vehicles finished their live path, resolve and remove the mission
-        if (!bMissionStillActive)
+        if (bAllVehiclesReturned)
         {
             ResolveMissionOutcome(Mission);
             ActiveMissions.RemoveAt(i);
-            UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Mission resolved and removed early by live movement system"));
+            UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Mission resolved and removed by live movement system"));
         }
     }
 }
