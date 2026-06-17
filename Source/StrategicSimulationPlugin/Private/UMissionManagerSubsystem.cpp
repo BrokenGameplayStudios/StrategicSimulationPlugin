@@ -31,7 +31,7 @@ void UMissionManagerSubsystem::SimulateOneDay()
     {
         if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
 
-        // Skip live movement missions — they manage their own lifetime
+        // Skip all live movement missions completely
         if (Mission->bIsLiveMovement)
             continue;
 
@@ -190,7 +190,7 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles()
         UMissionGroup* Mission = ActiveMissions[i];
         if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
 
-        bool bAllVehiclesDone = true;
+        bool bAllVehiclesStillActive = false;
 
         for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
         {
@@ -198,22 +198,21 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles()
             {
                 Vehicle->UpdatePositionAndPings(CurrentHours);
 
-                // A vehicle is only considered "done" if it has no mission AND is not in any special behavior
                 if (Vehicle->CurrentMission != nullptr ||
                     Vehicle->CurrentBehavior == EVehicleBehavior::Attacking ||
                     Vehicle->CurrentBehavior == EVehicleBehavior::Evading ||
                     Vehicle->CurrentBehavior == EVehicleBehavior::Returning)
                 {
-                    bAllVehiclesDone = false;
+                    bAllVehiclesStillActive = true;
                 }
             }
         }
 
-        if (bAllVehiclesDone)
+        if (!bAllVehiclesStillActive)
         {
             ResolveMissionOutcome(Mission);
             ActiveMissions.RemoveAt(i);
-            UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Mission fully completed and removed"));
+            UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Mission fully completed and removed by live movement system"));
         }
     }
 }

@@ -199,9 +199,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 
     FVector2D NewPosition;
 
-    // =====================================================
-    // ATTACKING / EVADING BEHAVIOR
-    // =====================================================
+    // === ATTACKING / EVADING BEHAVIOR ===
     if ((CurrentBehavior == EVehicleBehavior::Attacking || CurrentBehavior == EVehicleBehavior::Evading)
         && CurrentTargetVehicle.IsValid())
     {
@@ -260,9 +258,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
         return;
     }
 
-    // =====================================================
-    // RETURNING BEHAVIOR (Waypoint Pathfinding)
-    // =====================================================
+    // === RETURNING BEHAVIOR (Waypoint-based) ===
     else if (CurrentBehavior == EVehicleBehavior::Returning)
     {
         if (!HomeBase)
@@ -303,7 +299,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 
                 CurrentBehavior = EVehicleBehavior::Idle;
                 CurrentTargetVehicle = nullptr;
-                CurrentMission = nullptr;           // Safe to clear here
+                CurrentMission = nullptr;
                 CurrentWaypoints.Empty();
                 ReturningWaypoints.Empty();
                 TotalTravelTimeHours = 0.0f;
@@ -333,9 +329,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
         return;
     }
 
-    // =====================================================
-    // NORMAL MISSION PATHING
-    // =====================================================
+    // === NORMAL MISSION PATHING ===
     CurrentPosition = GetPositionOnPath(Progress);
 
     while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
@@ -344,13 +338,13 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
         PerformRadarPing();
     }
 
-    // Only complete mission when NOT in any special behavior
     if (Progress >= 1.0f &&
         CurrentBehavior != EVehicleBehavior::Attacking &&
         CurrentBehavior != EVehicleBehavior::Evading &&
         CurrentBehavior != EVehicleBehavior::Returning)
     {
-        // Only complete here for normal missions
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base"), *GetNameSafe(this));
+
         CurrentMission = nullptr;
         CurrentWaypoints.Empty();
         TotalTravelTimeHours = 0.0f;
