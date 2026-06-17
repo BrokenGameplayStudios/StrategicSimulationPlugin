@@ -350,8 +350,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
         CurrentBehavior != EVehicleBehavior::Evading &&
         CurrentBehavior != EVehicleBehavior::Returning)
     {
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base"), *GetNameSafe(this));
-
+        // Only complete here for normal missions
         CurrentMission = nullptr;
         CurrentWaypoints.Empty();
         TotalTravelTimeHours = 0.0f;
