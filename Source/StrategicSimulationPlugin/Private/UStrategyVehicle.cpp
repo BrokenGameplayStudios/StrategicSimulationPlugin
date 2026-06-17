@@ -10,6 +10,8 @@
 #include "StrategicSiteDefinition.h"
 #include "Engine/Engine.h"
 
+static UMissionManagerSubsystem* GetMissionManagerForVehicle(UStrategyVehicle* Vehicle);
+
 UStrategyVehicle::UStrategyVehicle()
 {
     CurrentRangeLeft = 0.0f;
