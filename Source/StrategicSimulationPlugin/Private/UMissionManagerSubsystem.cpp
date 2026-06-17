@@ -169,8 +169,15 @@ FVector2D UMissionManagerSubsystem::PickPatrolPointWithinRange(const FVector2D& 
     return Origin;
 }
 
+bool UMissionManagerSubsystem::HasOffensiveTargetInRange(UStrategyVehicle* Vehicle) const
+{
+    FVector2D DummyTarget;
+    TSet<UStrategySiteDefinition*> DummyReserved;
+    return TryPickMissionTarget(Vehicle, EMissionType::Offensive, DummyTarget, DummyReserved, nullptr);
+}
+
 bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType, FVector2D& OutTarget,
-    TSet<UStrategySiteDefinition*>& InOutReservedSites) const
+    TSet<UStrategySiteDefinition*>& InOutReservedSites, UStrategyBase** OutTargetBase) const
 {
     float MapWidth, MapHeight, MapPadding;
     GetMapBounds(MapWidth, MapHeight, MapPadding);
@@ -194,6 +201,13 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
     const EFactionType Faction = Vehicle->HomeBase->OwningFaction;
     const EFactionType EnemyFaction = (Faction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
     const FVector2D Origin = Vehicle->HomeBase->MapLocation;
+    if (!IsValidMapLocation(Origin, MinX, MinY, MaxX, MaxY))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[MISSION TARGET] %s — invalid home base location (%.0f, %.0f)"),
+            Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+            Origin.X, Origin.Y);
+        return false;
+    }
 
     auto IsReconCandidateSite = [](UStrategySiteDefinition* Site) -> bool
     {
@@ -288,6 +302,15 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
         {
             UStrategyBase* TargetBase = InRangeEnemyBases[FMath::RandRange(0, InRangeEnemyBases.Num() - 1)];
             OutTarget = TargetBase->MapLocation;
+            if (OutTargetBase)
+            {
+                *OutTargetBase = TargetBase;
+            }
+
+            UE_LOG(LogTemp, Display, TEXT("[BASE ATTACK EVENT] %s from '%s' → enemy base '%s' at (%.0f, %.0f)"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                Vehicle->HomeBase ? *Vehicle->HomeBase->BaseName.ToString() : TEXT("Unknown"),
+                *TargetBase->BaseName.ToString(), OutTarget.X, OutTarget.Y);
             return true;
         }
         break;
@@ -390,8 +413,9 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
     {
         if (!Vehicle || !Vehicle->HomeBase) continue;
 
+        UStrategyBase* TargetEnemyBase = nullptr;
         FVector2D TargetLocation;
-        if (!TryPickMissionTarget(Vehicle, MissionType, TargetLocation, ReservedSites))
+        if (!TryPickMissionTarget(Vehicle, MissionType, TargetLocation, ReservedSites, &TargetEnemyBase))
         {
             UE_LOG(LogTemp, Warning, TEXT("[LIVE MISSION] %s skipped — no valid in-range target found"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"));
@@ -413,7 +437,34 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
             continue;
         }
 
-        const float OutboundDist = FVector2D::Distance(Vehicle->HomeBase->MapLocation, TargetLocation);
+        float MapWidth, MapHeight, MapPadding;
+        GetMapBounds(MapWidth, MapHeight, MapPadding);
+        const float MinX = MapPadding;
+        const float MaxX = MapWidth - MapPadding;
+        const float MinY = MapPadding;
+        const float MaxY = MapHeight - MapPadding;
+
+        if (!IsValidMapLocation(TargetLocation, MinX, MinY, MaxX, MaxY))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[LIVE MISSION] %s skipped — invalid target (%.0f, %.0f)"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                TargetLocation.X, TargetLocation.Y);
+            for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+            {
+                if (Soldier) Soldier->CurrentMission = nullptr;
+            }
+            Vehicle->CurrentPassengers.Empty();
+            Vehicle->CurrentMission = nullptr;
+            if (Vehicle->HomeHanger)
+            {
+                Vehicle->CurrentHanger = Vehicle->HomeHanger;
+                Vehicle->HomeHanger->ParkedVehicles.AddUnique(Vehicle);
+            }
+            continue;
+        }
+
+        const FVector2D OriginLocation = Vehicle->HomeBase->MapLocation;
+        const float OutboundDist = FVector2D::Distance(OriginLocation, TargetLocation);
         const float RoundTripDist = OutboundDist * 2.0f;
 
         if (!Vehicle->HasEnoughRangeForMission(RoundTripDist))
@@ -441,12 +492,17 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
 
         Vehicle->CurrentRangeLeft = FMath::Max(0.0f, Vehicle->CurrentRangeLeft - RoundTripDist);
         Vehicle->BeginMissionMovement(TargetLocation, CurrentHours, SearchHours, MissionType);
+        if (TargetEnemyBase)
+        {
+            Mission->TargetEnemyBase = TargetEnemyBase;
+        }
         LaunchedVehicles.Add(Vehicle);
 
-        UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Activated %s for %s (target: %.0f,%.0f, range left: %.0f)"),
+        UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Activated %s for %s from (%.0f,%.0f) → (%.0f,%.0f) round-trip %.0f, range left: %.0f"),
             *UEnum::GetValueAsString(MissionType),
             Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
-            TargetLocation.X, TargetLocation.Y, Vehicle->CurrentRangeLeft);
+            OriginLocation.X, OriginLocation.Y, TargetLocation.X, TargetLocation.Y,
+            RoundTripDist, Vehicle->CurrentRangeLeft);
     }
 
     Mission->VehiclesInFleet = LaunchedVehicles;
@@ -569,6 +625,14 @@ void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
 
 int32 UMissionManagerSubsystem::ScheduleVehicleMissionsForBase(UStrategyBase* Base, EFactionType Faction, EMissionType MissionType)
 {
+    const TArray<UStrategyVehicle*> IdleVehicles = GatherIdleVehiclesAtBase(Base);
+    TArray<EMissionType> MissionTypes;
+    MissionTypes.Init(MissionType, IdleVehicles.Num());
+    return ScheduleVehicleMissionsForBase(Base, Faction, MissionTypes);
+}
+
+int32 UMissionManagerSubsystem::ScheduleVehicleMissionsForBase(UStrategyBase* Base, EFactionType Faction, const TArray<EMissionType>& PerVehicleMissionTypes)
+{
     if (!Base)
     {
         return 0;
@@ -597,6 +661,10 @@ int32 UMissionManagerSubsystem::ScheduleVehicleMissionsForBase(UStrategyBase* Ba
             continue;
         }
 
+        const EMissionType MissionType = PerVehicleMissionTypes.IsValidIndex(SlotIndex)
+            ? PerVehicleMissionTypes[SlotIndex]
+            : EMissionType::Recon;
+
         const float LaunchHour = bStagger
             ? ComputeEvenlySpacedLaunchHour(SlotIndex, TotalSlots)
             : -1.f;
@@ -618,6 +686,27 @@ int32 UMissionManagerSubsystem::ScheduleVehicleMissionsForBase(UStrategyBase* Ba
     }
 
     return ScheduledCount;
+}
+
+void UMissionManagerSubsystem::HandleBaseAttackArrival(UStrategyVehicle* Vehicle, UMissionGroup* Mission)
+{
+    if (!Vehicle || !Mission || Mission->bBaseAttackArrivalLogged || Mission->MissionType != EMissionType::Offensive)
+    {
+        return;
+    }
+
+    Mission->bBaseAttackArrivalLogged = true;
+
+    const FString AttackerName = Vehicle->VehicleDefinition
+        ? Vehicle->VehicleDefinition->VehicleName.ToString()
+        : GetNameSafe(Vehicle);
+    const FString OriginName = Mission->OriginBase ? Mission->OriginBase->BaseName.ToString() : TEXT("Unknown");
+    const FString TargetName = Mission->TargetEnemyBase
+        ? Mission->TargetEnemyBase->BaseName.ToString()
+        : TEXT("enemy base");
+
+    UE_LOG(LogTemp, Display, TEXT("[BASE ATTACK EVENT] %s from '%s' arrived at '%s' — base attack event here"),
+        *AttackerName, *OriginName, *TargetName);
 }
 
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction, float ScheduledLaunchGameHours)
@@ -661,6 +750,11 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         else if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
         {
             Vehicle->HomeHanger = Vehicle->CurrentHanger;
+        }
+
+        if (bDeferLaunch)
+        {
+            Vehicle->InitializeParkedAtBase();
         }
     }
 

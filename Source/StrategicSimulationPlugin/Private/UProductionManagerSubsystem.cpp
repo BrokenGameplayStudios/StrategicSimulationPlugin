@@ -104,7 +104,8 @@ void UProductionManagerSubsystem::CompleteVehicleJob(const FProductionJob& Job, 
     NewVehicle->HomeHanger = Facility;
     NewVehicle->HomeBase = Facility->OwningBase;
     NewVehicle->CurrentHealth = VehDef->MaxHealth;
-    NewVehicle->CurrentRangeLeft = VehDef->MaxRange;   // ← NEW: proper range setup
+    NewVehicle->CurrentRangeLeft = VehDef->MaxRange;
+    NewVehicle->InitializeParkedAtBase();
 
     Facility->ParkedVehicles.Add(NewVehicle);
 

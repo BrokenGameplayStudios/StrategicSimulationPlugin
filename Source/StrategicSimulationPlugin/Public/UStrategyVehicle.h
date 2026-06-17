@@ -69,6 +69,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vehicle|State")
     void DockAtHomeHangar();
 
+    /** Park at home base without clearing an assigned mission (used on build complete and deferred launch queue) */
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|State")
+    void InitializeParkedAtBase();
+
     /** Begin live mission movement toward a target */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void BeginMissionMovement(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget, EMissionType MissionType);
@@ -194,6 +198,14 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "Vehicle|Movement")
     float ReturningPathLength = 0.0f;
 
+    /** Round-trip range budget allocated when the current mission leg began */
+    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Range")
+    float PlannedRoundTripRange = 0.0f;
+
+    /** Distance already flown during the active mission (all phases) */
+    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Range")
+    float RangeTraveledThisMission = 0.0f;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
     float LastPingGameTimeHours = 0.0f;
 
@@ -246,6 +258,8 @@ private:
     float VehicleDetectionCooldownHours = 2.0f;
 
     float GetCruiseSpeed() const;
+    void ConsumeMissionRange(float Distance);
+    bool HasExceededMissionRangeBudget() const;
     void ProcessCombatTick(float DeltaGameHours);
     void UpdatePhaseFromPathProgress(float Progress);
     void AdvanceReturningMovement(float DeltaGameHours);

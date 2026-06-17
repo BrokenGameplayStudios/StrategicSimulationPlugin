@@ -175,6 +175,27 @@ int32 UStrategyVehicle::GetVehicleDefensiveRating() const
     return Rating;
 }
 
+void UStrategyVehicle::InitializeParkedAtBase()
+{
+    if (HomeBase)
+    {
+        CurrentPosition = HomeBase->MapLocation;
+    }
+
+    CurrentPhase = EVehicleMissionPhase::Docked;
+    if (CurrentMission == nullptr)
+    {
+        CurrentBehavior = EVehicleBehavior::Idle;
+    }
+
+    CurrentWaypoints.Empty();
+    ReturningWaypoints.Empty();
+    ReturningDistanceTraveled = 0.0f;
+    ReturningPathLength = 0.0f;
+    PlannedRoundTripRange = 0.0f;
+    RangeTraveledThisMission = 0.0f;
+}
+
 void UStrategyVehicle::DockAtHomeHangar()
 {
     if (HomeBase)
@@ -195,6 +216,8 @@ void UStrategyVehicle::DockAtHomeHangar()
     OutboundTravelTime = 0.0f;
     ReturnTravelTime = 0.0f;
     SearchTimeAtTarget = 0.0f;
+    PlannedRoundTripRange = 0.0f;
+    RangeTraveledThisMission = 0.0f;
 
     CurrentRangeLeft = GetMaxRange();
 
@@ -213,6 +236,14 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
 {
     if (!HomeBase) return;
 
+    if (HomeBase->MapLocation.IsNearlyZero(10.f) || TargetLocation.IsNearlyZero(10.f))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s refused mission movement — invalid origin (%.0f,%.0f) or target (%.0f,%.0f)"),
+            VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
+            HomeBase->MapLocation.X, HomeBase->MapLocation.Y, TargetLocation.X, TargetLocation.Y);
+        return;
+    }
+
     CurrentPosition = HomeBase->MapLocation;
     CurrentWaypoints.Empty();
     CurrentWaypoints.Add(HomeBase->MapLocation);
@@ -223,6 +254,8 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
     LastPingGameTimeHours = CurrentGameHours;
 
     float DistOutbound = FVector2D::Distance(HomeBase->MapLocation, TargetLocation);
+    PlannedRoundTripRange = DistOutbound * 2.0f;
+    RangeTraveledThisMission = 0.0f;
     OutboundTravelTime = DistOutbound / GetCruiseSpeed();
     ReturnTravelTime = OutboundTravelTime;
     SearchTimeAtTarget = SearchHoursAtTarget;
@@ -338,6 +371,21 @@ FVector2D UStrategyVehicle::GetPositionOnReturningPath(float DistanceAlongPath) 
     return ReturningWaypoints.Last();
 }
 
+void UStrategyVehicle::ConsumeMissionRange(float Distance)
+{
+    if (Distance <= 0.0f)
+    {
+        return;
+    }
+
+    RangeTraveledThisMission += Distance;
+}
+
+bool UStrategyVehicle::HasExceededMissionRangeBudget() const
+{
+    return PlannedRoundTripRange > 0.0f && RangeTraveledThisMission > PlannedRoundTripRange * 1.05f;
+}
+
 void UStrategyVehicle::AdvanceReturningMovement(float DeltaGameHours)
 {
     if (!HomeBase)
@@ -355,7 +403,9 @@ void UStrategyVehicle::AdvanceReturningMovement(float DeltaGameHours)
     if (ReturningWaypoints.Num() < 2 || ReturningPathLength <= 0.0f)
     {
         const FVector2D Direction = (HomeBase->MapLocation - CurrentPosition).GetSafeNormal();
+        const FVector2D PreviousPosition = CurrentPosition;
         CurrentPosition += Direction * GetCruiseSpeed() * DeltaGameHours;
+        ConsumeMissionRange(FVector2D::Distance(PreviousPosition, CurrentPosition));
 
         if (FVector2D::Distance(CurrentPosition, HomeBase->MapLocation) <= GetCruiseSpeed() * DeltaGameHours + 1.0f)
         {
@@ -364,7 +414,9 @@ void UStrategyVehicle::AdvanceReturningMovement(float DeltaGameHours)
         return;
     }
 
+    const float PreviousReturningDistance = ReturningDistanceTraveled;
     ReturningDistanceTraveled += GetCruiseSpeed() * DeltaGameHours;
+    ConsumeMissionRange(ReturningDistanceTraveled - PreviousReturningDistance);
 
     if (ReturningDistanceTraveled >= ReturningPathLength)
     {
@@ -405,7 +457,9 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
 
         if (!Direction.IsNearlyZero())
         {
+            const FVector2D PreviousPosition = CurrentPosition;
             CurrentPosition += Direction * GetCruiseSpeed() * DeltaGameHours;
+            ConsumeMissionRange(FVector2D::Distance(PreviousPosition, CurrentPosition));
         }
 
         TickRadarPings(CurrentGameHours);
@@ -417,16 +471,30 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
 
         bool bShouldReturn = false;
 
-        if (CurrentGameHours - CombatBehaviorStartTime >= 1.0f)
+        const bool bMutualCombat = Target->CurrentBehavior == EVehicleBehavior::Attacking
+            && Target->CurrentTargetVehicle.Get() == this;
+        const float CombatDuration = CurrentGameHours - CombatBehaviorStartTime;
+        const float CombatTimeoutHours = bMutualCombat ? 6.0f : 2.0f;
+        if (CombatBehaviorStartTime >= 0.0f && CombatDuration >= CombatTimeoutHours)
         {
+            bShouldReturn = true;
+        }
+
+        if (HasExceededMissionRangeBudget())
+        {
+            UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s returning — mission range budget exceeded (%.0f / %.0f)"),
+                VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
+                RangeTraveledThisMission, PlannedRoundTripRange);
             bShouldReturn = true;
         }
 
         if (HomeBase)
         {
             const float DistanceFromHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
-            const float MaxDistance = GetMaxRange() * 0.9f;
-            if (DistanceFromHome > MaxDistance)
+            const float MaxOutbound = PlannedRoundTripRange > 0.0f
+                ? PlannedRoundTripRange * 0.5f
+                : GetMaxRange() * 0.45f;
+            if (DistanceFromHome > MaxOutbound)
             {
                 bShouldReturn = true;
             }
@@ -454,8 +522,34 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
         ? FMath::Clamp(Elapsed / TotalTravelTimeHours, 0.0f, 1.0f)
         : 0.0f;
 
+    const EVehicleMissionPhase PreviousPhase = CurrentPhase;
     UpdatePhaseFromPathProgress(Progress);
+
+    if (PreviousPhase != EVehicleMissionPhase::OnStation
+        && CurrentPhase == EVehicleMissionPhase::OnStation
+        && CurrentMission
+        && CurrentMission->MissionType == EMissionType::Offensive)
+    {
+        if (UMissionManagerSubsystem* MissionMgr = GetMissionManagerForVehicle(this))
+        {
+            MissionMgr->HandleBaseAttackArrival(this, CurrentMission);
+        }
+    }
+
+    const FVector2D PreviousPosition = CurrentPosition;
     CurrentPosition = GetPositionOnPath(Progress);
+    ConsumeMissionRange(FVector2D::Distance(PreviousPosition, CurrentPosition));
+
+    if (HasExceededMissionRangeBudget())
+    {
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s returning — exceeded planned round-trip range (%.0f / %.0f)"),
+            VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
+            RangeTraveledThisMission, PlannedRoundTripRange);
+        SetBehavior(EVehicleBehavior::Returning);
+        TickRadarPings(CurrentGameHours);
+        return;
+    }
+
     TickRadarPings(CurrentGameHours);
 
     if (Progress >= 1.0f)

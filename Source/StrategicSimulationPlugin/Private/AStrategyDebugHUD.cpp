@@ -510,10 +510,11 @@ void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
 
     // === Proper faint connection line from base to the mission group ===
     // (only draws if the mission has vehicles and at least one is moving)
-    if (Mission->VehiclesInFleet.Num() > 0)
+    if (Mission->bMovementActivated && Mission->VehiclesInFleet.Num() > 0)
     {
         UStrategyVehicle* LeadVehicle = Mission->VehiclesInFleet[0];
-        if (LeadVehicle && LeadVehicle->CurrentMission != nullptr)
+        if (LeadVehicle && LeadVehicle->CurrentMission != nullptr
+            && !LeadVehicle->CurrentPosition.IsNearlyZero(10.f))
         {
             FVector2D VehiclePos = GetScreenPosition(LeadVehicle->CurrentPosition);
 

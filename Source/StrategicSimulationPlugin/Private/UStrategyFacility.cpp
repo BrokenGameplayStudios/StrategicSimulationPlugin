@@ -237,7 +237,8 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
             NewVehicle->HomeHanger = this;
             NewVehicle->HomeBase = UseBase;
             NewVehicle->CurrentHealth = VehDef->MaxHealth;
-            NewVehicle->CurrentRangeLeft = VehDef->MaxRange;   // ← NEW: proper range setup
+            NewVehicle->CurrentRangeLeft = VehDef->MaxRange;
+            NewVehicle->InitializeParkedAtBase();
 
             ParkedVehicles.Add(NewVehicle);
 

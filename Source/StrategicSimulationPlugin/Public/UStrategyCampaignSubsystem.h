@@ -55,6 +55,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | AI")
     bool bStaggerMissionLaunches = true;
 
+    /** In-game day when fighters may begin scheduling Offensive (base attack) missions */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | AI", meta = (ClampMin = "1", ClampMax = "60"))
+    int32 OffensiveMissionsStartDay = 5;
+
+    /** Minimum offensive rating (base + weapons) required before AI engages in vehicular combat */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | AI", meta = (ClampMin = "0", ClampMax = "500"))
+    int32 MinOffenseToEngage = 10;
+
     /** Full reset of the simulation (call from UI for New Game) */
     UFUNCTION(BlueprintCallable, Category = "Simulation")
     void ResetSimulation();

@@ -8,6 +8,9 @@
 #include "UBaseManagerSubsystem.h"
 #include "UAIControllerSubsystem.generated.h"
 
+class UVehicleDefinition;
+class UStrategyVehicle;
+
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UAIControllerSubsystem : public UGameInstanceSubsystem
 {
@@ -76,6 +79,14 @@ private:
     bool TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase = nullptr);
     bool TryResearch(EFactionType Faction);
     bool TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase);
+
+    UVehicleDefinition* SelectVehicleDefinitionToBuild(EFactionType Faction) const;
+    EMissionType PickAIMissionTypeForVehicle(UStrategyVehicle* Vehicle, int32 CurrentDay) const;
+    bool ShouldEngageVehicle(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle) const;
+
+    static bool IsReconVehicleType(EVehicleType Type);
+    static bool IsCombatVehicleType(EVehicleType Type);
+    int32 CountFactionVehiclesOfTypes(EFactionType Faction, const TArray<EVehicleType>& Types) const;
 
     /** Finds a suitable discovered but unused site for AI expansion */
     UStrategySiteDefinition* FindExpansionSiteForAI(EFactionType Faction) const;

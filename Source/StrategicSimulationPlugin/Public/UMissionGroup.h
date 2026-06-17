@@ -83,4 +83,12 @@ public:
     /** True once vehicles have left the hangar and live movement has started */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Schedule")
     bool bMovementActivated = false;
+
+    /** Enemy base targeted by an Offensive mission (AI vs AI simulated assault) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
+    UStrategyBase* TargetEnemyBase = nullptr;
+
+    /** True once the base-attack arrival placeholder has been logged for this mission */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
+    bool bBaseAttackArrivalLogged = false;
 };

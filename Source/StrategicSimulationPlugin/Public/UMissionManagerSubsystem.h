@@ -28,6 +28,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     int32 ScheduleVehicleMissionsForBase(UStrategyBase* Base, EFactionType Faction, EMissionType MissionType = EMissionType::Recon);
 
+    /** Schedule per-vehicle mission types (array must match idle vehicle count) */
+    int32 ScheduleVehicleMissionsForBase(UStrategyBase* Base, EFactionType Faction, const TArray<EMissionType>& PerVehicleMissionTypes);
+
+    /** Returns true if the vehicle has an in-range enemy base it could attack */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
+    bool HasOffensiveTargetInRange(UStrategyVehicle* Vehicle) const;
+
     /** Parked idle vehicles at a base that are ready to fly today */
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     TArray<UStrategyVehicle*> GatherIdleVehiclesAtBase(UStrategyBase* Base) const;
@@ -70,6 +77,9 @@ public:
     /** Called when a vehicle is destroyed during live vehicular combat */
     void HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle);
 
+    /** Log placeholder when an Offensive mission reaches the target base */
+    void HandleBaseAttackArrival(UStrategyVehicle* Vehicle, UMissionGroup* Mission);
+
 private:
     /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
     float CalculateFleetEffectiveness(const UMissionGroup* Mission) const;
@@ -77,7 +87,7 @@ private:
     void ResolveMissionOutcome(UMissionGroup* Mission);
 
     bool TryPickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType, FVector2D& OutTarget,
-        TSet<class UStrategySiteDefinition*>& InOutReservedSites) const;
+        TSet<class UStrategySiteDefinition*>& InOutReservedSites, UStrategyBase** OutTargetBase = nullptr) const;
 
     void GetMapBounds(float& OutWidth, float& OutHeight, float& OutPadding) const;
     void CollectSitesTargetedByActiveMissions(TSet<class UStrategySiteDefinition*>& OutSites, const UMissionGroup* IgnoreMission = nullptr) const;

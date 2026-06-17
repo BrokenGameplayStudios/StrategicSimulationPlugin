@@ -247,7 +247,12 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
                 for (UStrategyVehicle* Vehicle : IdleVehicles)
                 {
-                    if (Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots() && AvailableWeapon)
+                    const bool bWantsWeapons = Vehicle->VehicleDefinition
+                        && IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType);
+
+                    if (bWantsWeapons
+                        && Vehicle->GetEquippedWeapons().Num() < Vehicle->GetMaxWeaponSlots()
+                        && AvailableWeapon)
                     {
                         if (EngMgr->PurchaseAndEquipVehicleWeapon(Faction, Vehicle, AvailableWeapon))
                         {
@@ -270,7 +275,14 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             }
         }
 
-        const int32 ScheduledAtBase = MissionMgr->ScheduleVehicleMissionsForBase(Base, Faction, EMissionType::Recon);
+        TArray<EMissionType> MissionTypes;
+        MissionTypes.Reserve(IdleVehicles.Num());
+        for (UStrategyVehicle* Vehicle : IdleVehicles)
+        {
+            MissionTypes.Add(PickAIMissionTypeForVehicle(Vehicle, CurrentDay));
+        }
+
+        const int32 ScheduledAtBase = MissionMgr->ScheduleVehicleMissionsForBase(Base, Faction, MissionTypes);
         TotalScheduled += ScheduledAtBase;
 
         if (ScheduledAtBase > 0)
@@ -628,7 +640,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
         return false;
     }
 
-    UVehicleDefinition* VehDef = VehicleDB->AvailableVehicles[0].Get();
+    UVehicleDefinition* VehDef = SelectVehicleDefinitionToBuild(Faction);
     if (!VehDef) return false;
 
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
@@ -966,50 +978,245 @@ UStrategySiteDefinition* UAIControllerSubsystem::FindExpansionSiteForAI(EFaction
     return nullptr;
 }
 
+bool UAIControllerSubsystem::IsReconVehicleType(EVehicleType Type)
+{
+    return Type == EVehicleType::Scout || Type == EVehicleType::Transport || Type == EVehicleType::Support;
+}
+
+bool UAIControllerSubsystem::IsCombatVehicleType(EVehicleType Type)
+{
+    return Type == EVehicleType::Gunship || Type == EVehicleType::Heavy;
+}
+
+int32 UAIControllerSubsystem::CountFactionVehiclesOfTypes(EFactionType Faction, const TArray<EVehicleType>& Types) const
+{
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    if (!BaseMgr)
+    {
+        return 0;
+    }
+
+    int32 Count = 0;
+    TSet<UStrategyVehicle*> Counted;
+
+    auto CountIfMatching = [&](UStrategyVehicle* Vehicle)
+    {
+        if (!Vehicle || Vehicle->IsDestroyed() || Counted.Contains(Vehicle))
+        {
+            return;
+        }
+
+        if (Vehicle->VehicleDefinition && Types.Contains(Vehicle->VehicleDefinition->VehicleType))
+        {
+            Counted.Add(Vehicle);
+            Count++;
+        }
+    };
+
+    for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
+    {
+        if (!Base)
+        {
+            continue;
+        }
+
+        for (UStrategyFacility* Facility : Base->Facilities)
+        {
+            if (!Facility || !Facility->FacilityDefinition || Facility->FacilityDefinition->FacilityType != EFacilityType::Hanger)
+            {
+                continue;
+            }
+
+            for (UStrategyVehicle* Vehicle : Facility->ParkedVehicles)
+            {
+                CountIfMatching(Vehicle);
+            }
+        }
+    }
+
+    if (MissionMgr)
+    {
+        for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+        {
+            if (!Mission || !Mission->OriginBase || Mission->OriginBase->OwningFaction != Faction)
+            {
+                continue;
+            }
+
+            for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+            {
+                CountIfMatching(Vehicle);
+            }
+        }
+    }
+
+    return Count;
+}
+
+UVehicleDefinition* UAIControllerSubsystem::SelectVehicleDefinitionToBuild(EFactionType Faction) const
+{
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    if (!Campaign || !ResourceMgr)
+    {
+        return nullptr;
+    }
+
+    UVehicleDatabase* VehicleDB = Campaign->VehicleDatabaseAsset.Get();
+    if (!VehicleDB || VehicleDB->AvailableVehicles.Num() == 0)
+    {
+        return nullptr;
+    }
+
+    TArray<UVehicleDefinition*> ScoutDefs;
+    TArray<UVehicleDefinition*> CombatDefs;
+    TArray<UVehicleDefinition*> OtherDefs;
+
+    for (const TSoftObjectPtr<UVehicleDefinition>& SoftDef : VehicleDB->AvailableVehicles)
+    {
+        UVehicleDefinition* Def = SoftDef.Get();
+        if (!Def)
+        {
+            continue;
+        }
+
+        if (IsReconVehicleType(Def->VehicleType))
+        {
+            ScoutDefs.Add(Def);
+        }
+        else if (IsCombatVehicleType(Def->VehicleType))
+        {
+            CombatDefs.Add(Def);
+        }
+        else
+        {
+            OtherDefs.Add(Def);
+        }
+    }
+
+    const int32 ScoutCount = CountFactionVehiclesOfTypes(Faction, { EVehicleType::Scout, EVehicleType::Transport, EVehicleType::Support });
+    const int32 CombatCount = CountFactionVehiclesOfTypes(Faction, { EVehicleType::Gunship, EVehicleType::Heavy });
+
+    auto FindFirstAffordable = [&](const TArray<UVehicleDefinition*>& Candidates) -> UVehicleDefinition*
+    {
+        for (UVehicleDefinition* Def : Candidates)
+        {
+            if (Def && ResourceMgr->CanAfford(Faction, Def->BuildCost))
+            {
+                return Def;
+            }
+        }
+        return nullptr;
+    };
+
+    UVehicleDefinition* Chosen = nullptr;
+    if (ScoutCount < 1)
+    {
+        Chosen = FindFirstAffordable(ScoutDefs);
+    }
+    else if (CombatCount < ScoutCount)
+    {
+        Chosen = FindFirstAffordable(CombatDefs);
+    }
+
+    if (!Chosen)
+    {
+        Chosen = FindFirstAffordable(CombatDefs);
+    }
+    if (!Chosen)
+    {
+        Chosen = FindFirstAffordable(ScoutDefs);
+    }
+    if (!Chosen)
+    {
+        Chosen = FindFirstAffordable(OtherDefs);
+    }
+
+    if (Chosen)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[AI] %s selected vehicle '%s' (%s) — scouts: %d, combat: %d"),
+            *UEnum::GetValueAsString(Faction), *Chosen->VehicleName.ToString(),
+            *UEnum::GetValueAsString(Chosen->VehicleType), ScoutCount, CombatCount);
+    }
+
+    return Chosen;
+}
+
+EMissionType UAIControllerSubsystem::PickAIMissionTypeForVehicle(UStrategyVehicle* Vehicle, int32 CurrentDay) const
+{
+    if (!Vehicle || !Vehicle->VehicleDefinition)
+    {
+        return EMissionType::Recon;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    const int32 OffensiveStartDay = Campaign ? Campaign->OffensiveMissionsStartDay : 5;
+
+    if (IsReconVehicleType(Vehicle->VehicleDefinition->VehicleType) || CurrentDay < OffensiveStartDay)
+    {
+        return EMissionType::Recon;
+    }
+
+    if (IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType) && MissionMgr && MissionMgr->HasOffensiveTargetInRange(Vehicle))
+    {
+        return EMissionType::Offensive;
+    }
+
+    return EMissionType::Recon;
+}
+
+bool UAIControllerSubsystem::ShouldEngageVehicle(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle) const
+{
+    if (!DetectingVehicle || !DetectedVehicle || DetectedVehicle->IsDestroyed())
+    {
+        return false;
+    }
+
+    if (!DetectingVehicle->HomeBase || !DetectedVehicle->HomeBase)
+    {
+        return false;
+    }
+
+    if (DetectingVehicle->HomeBase->OwningFaction == DetectedVehicle->HomeBase->OwningFaction)
+    {
+        return false;
+    }
+
+    if (DetectingVehicle->GetEquippedWeapons().Num() == 0)
+    {
+        return false;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    const int32 MinOffense = Campaign ? Campaign->MinOffenseToEngage : 10;
+    return DetectingVehicle->GetVehicleOffensiveRating() >= MinOffense;
+}
+
 void UAIControllerSubsystem::HandleVehicleDetection(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle)
 {
     if (!DetectingVehicle || !DetectedVehicle) return;
 
-    UE_LOG(LogTemp, Display, TEXT("[AI] %s detected enemy vehicle: %s"),
-        *GetNameSafe(DetectingVehicle), *GetNameSafe(DetectedVehicle));
+    UE_LOG(LogTemp, Display, TEXT("[DETECT] %s detected enemy vehicle %s (offense: %d, armed: %s)"),
+        DetectingVehicle->VehicleDefinition ? *DetectingVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectingVehicle),
+        DetectedVehicle->VehicleDefinition ? *DetectedVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectedVehicle),
+        DetectingVehicle->GetVehicleOffensiveRating(),
+        DetectingVehicle->GetEquippedWeapons().Num() > 0 ? TEXT("yes") : TEXT("no"));
 
-    EVehicleBehavior chosenBehavior = EVehicleBehavior::Scouting;
-    if (DetectingVehicle->VehicleDefinition)
+    if (ShouldEngageVehicle(DetectingVehicle, DetectedVehicle))
     {
-        chosenBehavior = DetectingVehicle->VehicleDefinition->DefaultBehavior;
+        UE_LOG(LogTemp, Display, TEXT("[COMBAT] Engagement started: %s attacking %s"),
+            DetectingVehicle->VehicleDefinition ? *DetectingVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectingVehicle),
+            DetectedVehicle->VehicleDefinition ? *DetectedVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectedVehicle));
+        DetectingVehicle->SetBehavior(EVehicleBehavior::Attacking, DetectedVehicle);
     }
 
-    // Improved basic decision
-    if (chosenBehavior == EVehicleBehavior::Scouting)
+    if (ShouldEngageVehicle(DetectedVehicle, DetectingVehicle))
     {
-        chosenBehavior = (FMath::RandRange(0, 99) < 12) ? EVehicleBehavior::Attacking : EVehicleBehavior::Ignore;
-    }
-    else if (chosenBehavior == EVehicleBehavior::Attacking)
-    {
-        chosenBehavior = (FMath::RandRange(0, 99) < 55) ? EVehicleBehavior::Attacking : EVehicleBehavior::Ignore;
-    }
-
-    // Apply behavior + target
-    if (chosenBehavior != EVehicleBehavior::Ignore)
-    {
-        DetectingVehicle->SetBehavior(chosenBehavior, DetectedVehicle);
-    }
-
-    // Defender counter-engages when factions are hostile (real vehicular combat only)
-    if (DetectingVehicle->HomeBase && DetectedVehicle->HomeBase
-        && DetectingVehicle->HomeBase->OwningFaction != DetectedVehicle->HomeBase->OwningFaction
-        && !DetectedVehicle->IsDestroyed())
-    {
-        EVehicleBehavior DefenderBehavior = EVehicleBehavior::Scouting;
-        if (DetectedVehicle->VehicleDefinition)
-        {
-            DefenderBehavior = DetectedVehicle->VehicleDefinition->DefaultBehavior;
-        }
-
-        if (DefenderBehavior == EVehicleBehavior::Attacking
-            || (DefenderBehavior == EVehicleBehavior::Scouting && FMath::RandRange(0, 99) < 20))
-        {
-            DetectedVehicle->SetBehavior(EVehicleBehavior::Attacking, DetectingVehicle);
-        }
+        UE_LOG(LogTemp, Display, TEXT("[COMBAT] Counter-engagement: %s attacking %s"),
+            DetectedVehicle->VehicleDefinition ? *DetectedVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectedVehicle),
+            DetectingVehicle->VehicleDefinition ? *DetectingVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectingVehicle));
+        DetectedVehicle->SetBehavior(EVehicleBehavior::Attacking, DetectingVehicle);
     }
 }
