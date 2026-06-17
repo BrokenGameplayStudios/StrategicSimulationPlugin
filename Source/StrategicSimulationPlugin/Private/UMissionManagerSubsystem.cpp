@@ -20,6 +20,7 @@ void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UMissionManagerSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[MISSION] Day %d — SimulateOneDay() called (ActiveMissions: %d)"), NewDay, ActiveMissions.Num());
+    CancelStaleDeferredMissions(NewDay);
     SimulateOneDay();
 }
 
@@ -53,17 +54,11 @@ float UMissionManagerSubsystem::GetCurrentGameHours() const
 {
     UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>();
     if (!TimeMgr)
+    {
         return 0.0f;
+    }
 
-    FDateTime CurrentDate = TimeMgr->GetCurrentGameDate();
-
-    float Hours = CurrentDate.GetHour();
-    float Minutes = CurrentDate.GetMinute() / 60.0f;
-    float Seconds = CurrentDate.GetSecond() / 3600.0f;
-
-    float PreciseHours = Hours + Minutes + Seconds;
-
-    return (TimeMgr->GetTotalSimulationDays() * 24.0f) + PreciseHours;
+    return TimeMgr->GetElapsedSimulationHours();
 }
 
 void UMissionManagerSubsystem::GetMapBounds(float& OutWidth, float& OutHeight, float& OutPadding) const
@@ -516,9 +511,117 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
 
 float UMissionManagerSubsystem::ComputeEvenlySpacedLaunchHour(int32 SlotIndex, int32 TotalSlots) const
 {
-    const float DayStart = FMath::Floor(GetCurrentGameHours() / 24.f) * 24.f;
+    const float CurrentHours = GetCurrentGameHours();
+    const float DayStart = FMath::Floor(CurrentHours / 24.f) * 24.f;
     const int32 SafeTotal = FMath::Max(1, TotalSlots);
-    return DayStart + (static_cast<float>(SlotIndex) + 0.5f) * (24.f / static_cast<float>(SafeTotal));
+    const float SlotOffset = (static_cast<float>(SlotIndex) + 0.5f) * (24.f / static_cast<float>(SafeTotal));
+    const float SlotHour = DayStart + SlotOffset;
+
+    if (SlotHour <= CurrentHours + KINDA_SMALL_NUMBER)
+    {
+        return DayStart + 24.f + SlotOffset;
+    }
+
+    return SlotHour;
+}
+
+bool UMissionManagerSubsystem::IsVehicleCommittedToAnyMission(UStrategyVehicle* Vehicle, const UMissionGroup* IgnoreMission) const
+{
+    if (!Vehicle)
+    {
+        return false;
+    }
+
+    for (const UMissionGroup* Mission : ActiveMissions)
+    {
+        if (!Mission || Mission == IgnoreMission || Mission->Status != EMissionStatus::InProgress)
+        {
+            continue;
+        }
+
+        if (Mission->VehiclesInFleet.Contains(Vehicle))
+        {
+            return true;
+        }
+    }
+
+    if (IgnoreMission && Vehicle->CurrentMission == IgnoreMission)
+    {
+        return false;
+    }
+
+    return Vehicle->CurrentMission != nullptr;
+}
+
+void UMissionManagerSubsystem::CancelStaleDeferredMissions(int32 CurrentSimulationDay)
+{
+    TArray<UMissionGroup*> ToCancel;
+
+    for (UMissionGroup* Mission : ActiveMissions)
+    {
+        if (!Mission || Mission->bMovementActivated || Mission->Status != EMissionStatus::InProgress)
+        {
+            continue;
+        }
+
+        if (Mission->StartDay >= CurrentSimulationDay)
+        {
+            continue;
+        }
+
+        ToCancel.Add(Mission);
+    }
+
+    for (UMissionGroup* Mission : ToCancel)
+    {
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (Vehicle && Vehicle->CurrentMission == Mission)
+            {
+                Vehicle->CurrentMission = nullptr;
+            }
+        }
+
+        ActiveMissions.Remove(Mission);
+        UE_LOG(LogTemp, Display, TEXT("[MISSION] Cancelled stale deferred mission from Day %d (today is Day %d)"),
+            Mission->StartDay, CurrentSimulationDay);
+    }
+}
+
+bool UMissionManagerSubsystem::IsVehicleReadyForMissionLaunch(UStrategyVehicle* Vehicle, const UMissionGroup* Mission) const
+{
+    if (!Vehicle || !Mission || Vehicle->IsDestroyed())
+    {
+        return false;
+    }
+
+    if (Vehicle->CurrentMission != Mission)
+    {
+        return false;
+    }
+
+    if (Vehicle->GetMissionPhase() != EVehicleMissionPhase::Docked)
+    {
+        return false;
+    }
+
+    if (IsVehicleCommittedToAnyMission(Vehicle, Mission))
+    {
+        for (const UMissionGroup* OtherMission : ActiveMissions)
+        {
+            if (!OtherMission || OtherMission == Mission || OtherMission->Status != EMissionStatus::InProgress)
+            {
+                continue;
+            }
+
+            if (OtherMission->VehiclesInFleet.Contains(Vehicle) && OtherMission->bMovementActivated)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 TArray<UStrategyVehicle*> UMissionManagerSubsystem::GatherIdleVehiclesAtBase(UStrategyBase* Base) const
@@ -540,7 +643,12 @@ TArray<UStrategyVehicle*> UMissionManagerSubsystem::GatherIdleVehiclesAtBase(USt
 
         for (UStrategyVehicle* Vehicle : Facility->ParkedVehicles)
         {
-            if (!Vehicle || Vehicle->CurrentMission != nullptr || Vehicle->IsDestroyed())
+            if (!Vehicle || Vehicle->IsDestroyed() || IsVehicleCommittedToAnyMission(Vehicle))
+            {
+                continue;
+            }
+
+            if (Vehicle->CurrentMission && Vehicle->CurrentMission->bMovementActivated)
             {
                 continue;
             }
@@ -598,6 +706,8 @@ void UMissionManagerSubsystem::PrepareVehiclesForDeparture(UMissionGroup* Missio
 
 void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
 {
+    TArray<UMissionGroup*> ToCancel;
+
     for (UMissionGroup* Mission : ActiveMissions)
     {
         if (!Mission || !Mission->bIsLiveMovement || Mission->bMovementActivated)
@@ -610,16 +720,52 @@ void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
             continue;
         }
 
+        TArray<UStrategyVehicle*> ReadyVehicles;
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (IsVehicleReadyForMissionLaunch(Vehicle, Mission))
+            {
+                ReadyVehicles.Add(Vehicle);
+            }
+            else if (Vehicle)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[MISSION] %s not ready for scheduled launch (phase: %s, current mission: %s)"),
+                    Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                    *UEnum::GetValueAsString(Vehicle->GetMissionPhase()),
+                    Vehicle->CurrentMission ? TEXT("set") : TEXT("null"));
+            }
+        }
+
+        if (ReadyVehicles.Num() == 0)
+        {
+            ToCancel.Add(Mission);
+            continue;
+        }
+
+        Mission->VehiclesInFleet = ReadyVehicles;
         PrepareVehiclesForDeparture(Mission);
         ActivateLiveMovementForVehicles(Mission, Mission->MissionType);
         Mission->bMovementActivated = true;
 
-        const float HourOfDay = FMath::Fmod(Mission->ScheduledLaunchGameHours, 24.f);
-        UE_LOG(LogTemp, Display, TEXT("[MISSION] Departing %s mission from '%s' at game hour %.1f (%d vehicles)"),
+        const float HourOfDay = FMath::Fmod(CurrentHours, 24.f);
+        UE_LOG(LogTemp, Display, TEXT("[MISSION] Departing %s mission from '%s' at %.1fh (%d vehicles)"),
             *UEnum::GetValueAsString(Mission->MissionType),
             Mission->OriginBase ? *Mission->OriginBase->BaseName.ToString() : TEXT("Unknown"),
             HourOfDay,
             Mission->VehiclesInFleet.Num());
+    }
+
+    for (UMissionGroup* Mission : ToCancel)
+    {
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (Vehicle && Vehicle->CurrentMission == Mission)
+            {
+                Vehicle->CurrentMission = nullptr;
+            }
+        }
+        ActiveMissions.Remove(Mission);
+        UE_LOG(LogTemp, Warning, TEXT("[MISSION] Cancelled deferred mission — no vehicles ready at launch time"));
     }
 }
 
@@ -713,6 +859,21 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
 
+    for (UStrategyVehicle* Vehicle : Vehicles)
+    {
+        if (!Vehicle)
+        {
+            continue;
+        }
+
+        if (IsVehicleCommittedToAnyMission(Vehicle))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[MISSION] Cannot start mission — %s is already assigned to an active mission"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"));
+            return nullptr;
+        }
+    }
+
     const float CurrentHours = GetCurrentGameHours();
     const bool bLaunchImmediately = (ScheduledLaunchGameHours < 0.f);
     const float EffectiveLaunchHour = bLaunchImmediately ? CurrentHours : ScheduledLaunchGameHours;
@@ -721,7 +882,10 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     UMissionGroup* NewMission = NewObject<UMissionGroup>();
     NewMission->OriginBase = OriginBase;
     NewMission->VehiclesInFleet = Vehicles;
-    NewMission->StartDay = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay();
+    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
+    {
+        NewMission->StartDay = TimeMgr->GetSimulationDayNumber();
+    }
     NewMission->bIsLiveMovement = true;
     NewMission->DurationDays = 0;
     NewMission->Status = EMissionStatus::InProgress;

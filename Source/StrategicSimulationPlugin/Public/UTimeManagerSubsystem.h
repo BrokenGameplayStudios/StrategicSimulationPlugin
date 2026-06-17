@@ -30,9 +30,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Simulation")
     bool IsSimulating() const;
 
-    /** Returns how many days the current simulation run has been active */
+    /** Returns how many full 24-hour periods have elapsed since simulation start (0 on the first day) */
     UFUNCTION(BlueprintCallable, Category = "Simulation")
     int32 GetTotalSimulationDays() const;
+
+    /** 1-based simulation day index (day 1 = first 24 hours after start). Use for AI/mission scheduling. */
+    UFUNCTION(BlueprintCallable, Category = "Simulation")
+    int32 GetSimulationDayNumber() const;
+
+    /** Monotonic hours since SimulationStartDate (0 at start). Use for mission movement timing. */
+    UFUNCTION(BlueprintCallable, Category = "Simulation")
+    float GetElapsedSimulationHours() const;
 
     /** Starts (or resumes) the simulation — does NOT change dates */
     UFUNCTION(BlueprintCallable, Category = "Simulation")
@@ -82,6 +90,8 @@ private:
     bool bIsPaused = true;
 
     FTimerHandle RealTimeTimer;
+
+    int32 LastBroadcastSimulationDay = -1;
 
     void RealTimeTick();
 };

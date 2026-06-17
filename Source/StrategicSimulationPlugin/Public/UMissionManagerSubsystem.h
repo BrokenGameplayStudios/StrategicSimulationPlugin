@@ -98,4 +98,8 @@ private:
     float ComputeEvenlySpacedLaunchHour(int32 SlotIndex, int32 TotalSlots) const;
     void PrepareVehiclesForDeparture(UMissionGroup* Mission);
     void ProcessPendingMissionLaunches(float CurrentHours);
+
+    bool IsVehicleCommittedToAnyMission(UStrategyVehicle* Vehicle, const UMissionGroup* IgnoreMission = nullptr) const;
+    bool IsVehicleReadyForMissionLaunch(UStrategyVehicle* Vehicle, const UMissionGroup* Mission) const;
+    void CancelStaleDeferredMissions(int32 CurrentSimulationDay);
 };

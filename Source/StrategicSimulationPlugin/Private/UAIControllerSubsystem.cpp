@@ -70,7 +70,10 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
 void UAIControllerSubsystem::PerformDailyBuildOrder(EFactionType Faction)
 {
     UE_LOG(LogTemp, Display, TEXT("[PLAYER-CALLABLE] Performing daily build order for %s"), *UEnum::GetValueAsString(Faction));
-    RunAIForFaction(Faction, GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay());
+    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
+    {
+        RunAIForFaction(Faction, TimeMgr->GetSimulationDayNumber());
+    }
 }
 
 // RUN AI FOR FACTION

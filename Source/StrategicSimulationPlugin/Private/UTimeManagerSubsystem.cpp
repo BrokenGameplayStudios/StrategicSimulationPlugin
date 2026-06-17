@@ -11,6 +11,7 @@ void UTimeManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     CurrentGameDate = FDateTime(2026, 1, 1, 0, 0, 0);
     SimulationStartDate = CurrentGameDate;
     PreviousTickGameDate = CurrentGameDate;
+    LastBroadcastSimulationDay = -1;
 
     UE_LOG(LogTemp, Display, TEXT("UTimeManagerSubsystem initialized — Game started on %s (Paused by default)"), *CurrentGameDate.ToString());
 
@@ -21,6 +22,22 @@ void UTimeManagerSubsystem::Deinitialize()
 {
     GetWorld()->GetTimerManager().ClearTimer(RealTimeTimer);
     Super::Deinitialize();
+}
+
+int32 UTimeManagerSubsystem::GetSimulationDayNumber() const
+{
+    return GetTotalSimulationDays() + 1;
+}
+
+float UTimeManagerSubsystem::GetElapsedSimulationHours() const
+{
+    if (SimulationStartDate.GetTicks() == 0)
+    {
+        return 0.0f;
+    }
+
+    const FTimespan Elapsed = GetCurrentGameDate() - SimulationStartDate;
+    return static_cast<float>(Elapsed.GetTotalSeconds()) / 3600.0f;
 }
 
 void UTimeManagerSubsystem::RealTimeTick()
@@ -34,26 +51,19 @@ void UTimeManagerSubsystem::RealTimeTick()
     const FTimespan DeltaSpan = CurrentGameDate - PreviousTickGameDate;
     const float DeltaGameHours = static_cast<float>(DeltaSpan.GetTotalSeconds()) / 3600.0f;
 
-    static int32 LastDay = 0;
-    int32 CurrentDayNum = CurrentGameDate.GetDay();
-
-    if (CurrentDayNum != LastDay)
-    {
-        OnDayPassed.Broadcast(CurrentDayNum);
-        LastDay = CurrentDayNum;
-
-        if (UAIControllerSubsystem* AI = GetGameInstance()->GetSubsystem<UAIControllerSubsystem>())
-        {
-            if (AI->IsAIEnabled())
-            {
-                AI->RunAIForFaction(EFactionType::Enemy, CurrentDayNum);
-            }
-        }
-    }
-
     if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
     {
         MissionMgr->UpdateAllLiveVehicles(DeltaGameHours);
+    }
+
+    const int32 CurrentSimulationDay = GetTotalSimulationDays();
+    if (CurrentSimulationDay > LastBroadcastSimulationDay)
+    {
+        const int32 SimulationDayNumber = CurrentSimulationDay + 1;
+        UE_LOG(LogTemp, Display, TEXT("[TIME] Simulation day advanced → Day %d at %.2f elapsed hours (period %d)"),
+            SimulationDayNumber, GetElapsedSimulationHours(), CurrentSimulationDay);
+        OnDayPassed.Broadcast(SimulationDayNumber);
+        LastBroadcastSimulationDay = CurrentSimulationDay;
     }
 }
 
@@ -85,9 +95,12 @@ void UTimeManagerSubsystem::SetStartingDate(FDateTime NewStartDate)
     CurrentGameDate = NewStartDate;
     SimulationStartDate = NewStartDate;
     PreviousTickGameDate = NewStartDate;
+    LastBroadcastSimulationDay = GetTotalSimulationDays();
 
-    UE_LOG(LogTemp, Display, TEXT("Starting date set to %s"), *CurrentGameDate.ToString());
-    OnSimulationStarted.Broadcast();   // UI / systems can now reset soldiers, resources, etc.
+    UE_LOG(LogTemp, Display, TEXT("Starting date set to %s — simulation Day %d begins"),
+        *CurrentGameDate.ToString(), GetSimulationDayNumber());
+    OnDayPassed.Broadcast(GetSimulationDayNumber());
+    OnSimulationStarted.Broadcast();
 }
 
 void UTimeManagerSubsystem::StopSimulation()
@@ -101,9 +114,15 @@ void UTimeManagerSubsystem::AdvanceDays(int32 NumDays)
     if (NumDays <= 0) return;
 
     CurrentGameDate += FTimespan::FromDays(NumDays);
-    OnDayPassed.Broadcast(CurrentGameDate.GetDay());
 
-    UE_LOG(LogTemp, Display, TEXT("Advanced %d days — Current Day: %d"), NumDays, CurrentGameDate.GetDay());
+    const int32 NewSimulationDay = GetTotalSimulationDays();
+    while (NewSimulationDay > LastBroadcastSimulationDay)
+    {
+        ++LastBroadcastSimulationDay;
+        OnDayPassed.Broadcast(LastBroadcastSimulationDay + 1);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("Advanced %d days — Simulation day: %d"), NumDays, GetSimulationDayNumber());
 }
 
 void UTimeManagerSubsystem::SetTimeScale(float NewScale)

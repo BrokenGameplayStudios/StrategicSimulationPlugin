@@ -112,27 +112,7 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("[DAILY SIM] Both factions — Medical Bays can heal %d soldiers | Vehicle Repair Shops can repair %d vehicles (+25 HP)"),
         TotalMedical, TotalRepair);
 
-    // === AI CALLS ===
-    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Checking AI simulation toggles..."));
-
-    if (UAIControllerSubsystem* AI = GetAIController())
-    {
-        if (AI->bSimulateHumanAI)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Human AI enabled — calling RunAIForFaction"));
-            AI->RunAIForFaction(EFactionType::Human, NewDay);
-        }
-
-        if (AI->bSimulateEnemyAI)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] → Enemy AI enabled — calling RunAIForFaction"));
-            AI->RunAIForFaction(EFactionType::Enemy, NewDay);
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[CAMPAIGN] Could not find AIControllerSubsystem!"));
-    }
+    // AI daily orders are handled by UAIControllerSubsystem::OnDayPassed (single binding).
 }
 
 void UStrategyCampaignSubsystem::ResetSimulation()

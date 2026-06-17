@@ -50,7 +50,22 @@ bool UStrategyVehicle::HasEnoughRangeForMission(float RequiredDistance) const
 
 bool UStrategyVehicle::IsMissionFinished() const
 {
-    return IsDestroyed() || (CurrentPhase == EVehicleMissionPhase::Docked && CurrentMission != nullptr);
+    if (IsDestroyed())
+    {
+        return true;
+    }
+
+    if (!CurrentMission)
+    {
+        return false;
+    }
+
+    if (!CurrentMission->bMovementActivated)
+    {
+        return false;
+    }
+
+    return CurrentPhase == EVehicleMissionPhase::Docked;
 }
 
 void UStrategyVehicle::ApplyDamage(int32 DamageAmount)
