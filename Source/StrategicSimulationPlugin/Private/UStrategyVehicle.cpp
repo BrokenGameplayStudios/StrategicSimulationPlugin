@@ -46,9 +46,14 @@ bool UStrategyVehicle::HasEnoughRangeForMission(float RequiredDistance) const
     return CurrentRangeLeft >= RequiredDistance;
 }
 
+bool UStrategyVehicle::IsMissionFinished() const
+{
+    return IsDestroyed() || (CurrentPhase == EVehicleMissionPhase::Docked && CurrentMission != nullptr);
+}
+
 void UStrategyVehicle::ApplyDamage(int32 DamageAmount)
 {
-    if (DamageAmount <= 0) return;
+    if (DamageAmount <= 0 || IsDestroyed()) return;
 
     CurrentHealth = FMath::Max(0, CurrentHealth - DamageAmount);
     UpdateDamageStateFromHealth();
@@ -391,6 +396,8 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
             CombatBehaviorStartTime = CurrentGameHours;
         }
 
+        ProcessCombatTick(DeltaGameHours);
+
         const FVector2D Direction = (CurrentBehavior == EVehicleBehavior::Attacking)
             ? (Target->CurrentPosition - CurrentPosition).GetSafeNormal()
             : (CurrentPosition - Target->CurrentPosition).GetSafeNormal();
@@ -401,6 +408,11 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
         }
 
         TickRadarPings(CurrentGameHours);
+
+        if (IsDestroyed())
+        {
+            return;
+        }
 
         bool bShouldReturn = false;
 
@@ -657,6 +669,68 @@ void UStrategyVehicle::HandleVehicleDetected(UStrategyVehicle* DetectedVehicle)
         if (UAIControllerSubsystem* AI = GI->GetSubsystem<UAIControllerSubsystem>())
         {
             AI->HandleVehicleDetection(this, DetectedVehicle);
+        }
+    }
+}
+
+static UMissionManagerSubsystem* GetMissionManagerForVehicle(UStrategyVehicle* Vehicle)
+{
+    if (!Vehicle) return nullptr;
+
+    UGameInstance* GI = Vehicle->GetTypedOuter<UGameInstance>();
+    if (!GI)
+    {
+        if (UWorld* World = Vehicle->GetWorld())
+        {
+            GI = World->GetGameInstance();
+        }
+    }
+    return GI ? GI->GetSubsystem<UMissionManagerSubsystem>() : nullptr;
+}
+
+void UStrategyVehicle::ProcessCombatTick(float DeltaGameHours)
+{
+    if (CurrentPhase != EVehicleMissionPhase::Combat || !CurrentTargetVehicle.IsValid() || IsDestroyed())
+    {
+        return;
+    }
+
+    UStrategyVehicle* Target = CurrentTargetVehicle.Get();
+    if (!Target || Target->IsDestroyed())
+    {
+        SetBehavior(EVehicleBehavior::Returning);
+        return;
+    }
+
+    const float CombatRange = GetRadarRange();
+    const float Distance = FVector2D::Distance(CurrentPosition, Target->CurrentPosition);
+    if (Distance > CombatRange * 1.5f)
+    {
+        return;
+    }
+
+    const float DamageScale = 0.35f;
+    UMissionManagerSubsystem* MissionMgr = GetMissionManagerForVehicle(this);
+
+    if (CurrentBehavior == EVehicleBehavior::Attacking)
+    {
+        const int32 DamageDealt = FMath::Max(1, FMath::RoundToInt(GetVehicleOffensiveRating() * DamageScale * DeltaGameHours));
+        Target->ApplyDamage(DamageDealt);
+
+        if (Target->IsDestroyed() && MissionMgr)
+        {
+            MissionMgr->HandleVehicleDestroyedInCombat(Target);
+        }
+    }
+
+    if (Target->CurrentBehavior == EVehicleBehavior::Attacking && Target->CurrentTargetVehicle.Get() == this)
+    {
+        const int32 DamageReceived = FMath::Max(1, FMath::RoundToInt(Target->GetVehicleOffensiveRating() * DamageScale * DeltaGameHours));
+        ApplyDamage(DamageReceived);
+
+        if (IsDestroyed() && MissionMgr)
+        {
+            MissionMgr->HandleVehicleDestroyedInCombat(this);
         }
     }
 }

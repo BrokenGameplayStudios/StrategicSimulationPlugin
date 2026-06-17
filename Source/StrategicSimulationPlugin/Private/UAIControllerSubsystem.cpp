@@ -1088,4 +1088,22 @@ void UAIControllerSubsystem::HandleVehicleDetection(UStrategyVehicle* DetectingV
     {
         DetectingVehicle->SetBehavior(chosenBehavior, DetectedVehicle);
     }
+
+    // Defender counter-engages when factions are hostile (real vehicular combat only)
+    if (DetectingVehicle->HomeBase && DetectedVehicle->HomeBase
+        && DetectingVehicle->HomeBase->OwningFaction != DetectedVehicle->HomeBase->OwningFaction
+        && !DetectedVehicle->IsDestroyed())
+    {
+        EVehicleBehavior DefenderBehavior = EVehicleBehavior::Scouting;
+        if (DetectedVehicle->VehicleDefinition)
+        {
+            DefenderBehavior = DetectedVehicle->VehicleDefinition->DefaultBehavior;
+        }
+
+        if (DefenderBehavior == EVehicleBehavior::Attacking
+            || (DefenderBehavior == EVehicleBehavior::Scouting && FMath::RandRange(0, 99) < 20))
+        {
+            DetectedVehicle->SetBehavior(EVehicleBehavior::Attacking, DetectingVehicle);
+        }
+    }
 }

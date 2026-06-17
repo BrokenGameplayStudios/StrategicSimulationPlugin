@@ -44,36 +44,76 @@ void AStrategyGameInitializer::BeginPlay()
         }
     }
 
-    if (UFacilityDatabase* FacDB = FacilityDatabaseAsset.Get())
+    if (FacilityDatabaseAsset.IsValid())
     {
-        for (auto& Soft : FacDB->AvailableFacilities)
-            Soft.LoadSynchronous();
         Campaign->FacilityDatabaseAsset = FacilityDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("Loaded %d facilities from FacilityDatabase"), FacDB->AvailableFacilities.Num());
+    }
+    else if (!FacilityDatabaseAsset.IsNull())
+    {
+        if (UFacilityDatabase* FacDB = FacilityDatabaseAsset.LoadSynchronous())
+        {
+            for (auto& Soft : FacDB->AvailableFacilities)
+                Soft.LoadSynchronous();
+            Campaign->FacilityDatabaseAsset = FacilityDatabaseAsset;
+            UE_LOG(LogTemp, Display, TEXT("Loaded %d facilities from FacilityDatabase"), FacDB->AvailableFacilities.Num());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[FACILITY DATABASE] FacilityDatabaseAsset is NULL!"));
     }
 
-    if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.Get())
+    if (SoldierClassDatabaseAsset.IsValid())
     {
-        for (auto& Soft : SoldierDB->AvailableSoldierClasses)
-            Soft.LoadSynchronous();
         Campaign->SoldierClassDatabaseAsset = SoldierClassDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("Loaded %d soldier classes from SoldierClassDatabase"), SoldierDB->AvailableSoldierClasses.Num());
+    }
+    else if (!SoldierClassDatabaseAsset.IsNull())
+    {
+        if (USoldierClassDatabase* SoldierDB = SoldierClassDatabaseAsset.LoadSynchronous())
+        {
+            for (auto& Soft : SoldierDB->AvailableSoldierClasses)
+                Soft.LoadSynchronous();
+            Campaign->SoldierClassDatabaseAsset = SoldierClassDatabaseAsset;
+            UE_LOG(LogTemp, Display, TEXT("Loaded %d soldier classes from SoldierClassDatabase"), SoldierDB->AvailableSoldierClasses.Num());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SOLDIER DATABASE] SoldierClassDatabaseAsset is NULL!"));
     }
 
-    if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.Get())
+    if (ResearchDatabaseAsset.IsValid())
     {
-        for (auto& Soft : ResearchDB->AvailableTechs)
-            Soft.LoadSynchronous();
         Campaign->ResearchDatabaseAsset = ResearchDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("Loaded %d research projects from ResearchDatabase"), ResearchDB->AvailableTechs.Num());
+    }
+    else if (!ResearchDatabaseAsset.IsNull())
+    {
+        if (UResearchDatabase* ResearchDB = ResearchDatabaseAsset.LoadSynchronous())
+        {
+            for (auto& Soft : ResearchDB->AvailableTechs)
+                Soft.LoadSynchronous();
+            Campaign->ResearchDatabaseAsset = ResearchDatabaseAsset;
+            UE_LOG(LogTemp, Display, TEXT("Loaded %d research projects from ResearchDatabase"), ResearchDB->AvailableTechs.Num());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RESEARCH DATABASE] ResearchDatabaseAsset is NULL!"));
     }
 
-    if (UVehicleDatabase* VehicleDB = VehicleDatabaseAsset.Get())
+    if (VehicleDatabaseAsset.IsValid())
     {
-        for (auto& Soft : VehicleDB->AvailableVehicles)
-            Soft.LoadSynchronous();
         Campaign->VehicleDatabaseAsset = VehicleDatabaseAsset;
-        UE_LOG(LogTemp, Display, TEXT("Loaded %d vehicles from VehicleDatabase"), VehicleDB->AvailableVehicles.Num());
+    }
+    else if (!VehicleDatabaseAsset.IsNull())
+    {
+        if (UVehicleDatabase* VehicleDB = VehicleDatabaseAsset.LoadSynchronous())
+        {
+            for (auto& Soft : VehicleDB->AvailableVehicles)
+                Soft.LoadSynchronous();
+            Campaign->VehicleDatabaseAsset = VehicleDatabaseAsset;
+            UE_LOG(LogTemp, Display, TEXT("Loaded %d vehicles from VehicleDatabase"), VehicleDB->AvailableVehicles.Num());
+        }
     }
     else
     {

@@ -1,4 +1,6 @@
 #include "UBaseManagerSubsystem.h"
+#include "UStrategyVehicle.h"
+#include "UVehicleDefinition.h"
 #include "UStrategyEventDispatcher.h"
 #include "Engine/Engine.h"
 #include "UFacilityDatabase.h"
@@ -798,6 +800,42 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
         *UEnum::GetValueAsString(Faction), Location.X, Location.Y);
 
     return ExistingSite;
+}
+
+UStrategySiteDefinition* UBaseManagerSubsystem::CreateSalvageSite(FVector2D Location, UStrategyVehicle* DestroyedVehicle)
+{
+    UStrategySiteDefinition* Site = NewObject<UStrategySiteDefinition>(this);
+    Site->Location = Location;
+    Site->SiteType = EStrategySiteType::SalvageSite;
+    Site->bHasBeenUsed = false;
+
+    if (DestroyedVehicle && DestroyedVehicle->VehicleDefinition)
+    {
+        const FText& VehicleName = DestroyedVehicle->VehicleDefinition->VehicleName;
+        Site->SiteName = FString::Printf(TEXT("Wreck: %s"), *VehicleName.ToString());
+
+        const FResourceStockpile& BuildCost = DestroyedVehicle->VehicleDefinition->BuildCost;
+        Site->MaxResources.Metals = FMath::Max(100, BuildCost.Metals / 2);
+        Site->MaxResources.Chemicals = FMath::Max(50, BuildCost.Chemicals / 2);
+        Site->MaxResources.Money = FMath::Max(200, BuildCost.Money / 4);
+        Site->MaxResources.ExoticMaterial = BuildCost.ExoticMaterial / 4;
+        Site->CurrentResources = Site->MaxResources;
+    }
+    else
+    {
+        Site->SiteName = TEXT("Vehicle Wreck");
+        Site->MaxResources.Metals = 400;
+        Site->MaxResources.Chemicals = 150;
+        Site->MaxResources.Money = 500;
+        Site->CurrentResources = Site->MaxResources;
+    }
+
+    AllPotentialSites.Add(Site);
+
+    UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Wreck site created at (%.0f, %.0f) — discoverable via radar"),
+        Location.X, Location.Y);
+
+    return Site;
 }
 
 void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistanceBetweenSites,

@@ -132,6 +132,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Damage & Repair")
     int32 CurrentHealth = 100;
 
+    /** True once a salvage wreck site has been created for this destroyed vehicle */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Damage & Repair")
+    bool bWreckSalvageProcessed = false;
+
     UFUNCTION(BlueprintCallable, Category = "Vehicle")
     bool IsAtHome() const { return CurrentPhase == EVehicleMissionPhase::Docked && CurrentMission == nullptr; }
 
@@ -143,6 +147,13 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void UpdateDamageStateFromHealth();
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
+    bool IsDestroyed() const { return DamageState == EVehicleDamageState::Destroyed; }
+
+    /** Returns true if this vehicle finished its mission (docked or destroyed in combat) */
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|State")
+    bool IsMissionFinished() const;
 
     // ===========================================================================
     // === NEW: LIVE MOVEMENT + RADAR PING SYSTEM 
@@ -235,6 +246,7 @@ private:
     float VehicleDetectionCooldownHours = 2.0f;
 
     float GetCruiseSpeed() const;
+    void ProcessCombatTick(float DeltaGameHours);
     void UpdatePhaseFromPathProgress(float Progress);
     void AdvanceReturningMovement(float DeltaGameHours);
     float GetReturningPathLength() const;

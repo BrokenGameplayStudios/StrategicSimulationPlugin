@@ -83,6 +83,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Expansion")
     UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type = EStrategySiteType::PotentialBase, float OptionalScore = 0.0f);
 
+    /** Spawns a salvage site at a destroyed vehicle wreck (discoverable via radar) */
+    UFUNCTION(BlueprintCallable, Category = "Expansion")
+    UStrategySiteDefinition* CreateSalvageSite(FVector2D Location, class UStrategyVehicle* DestroyedVehicle);
+
     /** Attempts to build a new base on a discovered site. Returns true if successful. */
     UFUNCTION(BlueprintCallable, Category = "Base Expansion")
     bool TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName);

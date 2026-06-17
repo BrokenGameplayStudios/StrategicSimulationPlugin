@@ -59,6 +59,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
     void UpdateAllLiveVehicles(float DeltaGameHours);
 
+    /** Called when a vehicle is destroyed during live vehicular combat */
+    void HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle);
+
 private:
     /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
     float CalculateFleetEffectiveness(const UMissionGroup* Mission) const;
