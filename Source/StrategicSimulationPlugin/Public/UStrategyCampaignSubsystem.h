@@ -51,6 +51,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | AI")
     int32 MaxAIBases = 4;
 
+    /** When true, AI schedules each vehicle departure evenly across the 24-hour game day */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | AI")
+    bool bStaggerMissionLaunches = true;
+
     /** Full reset of the simulation (call from UI for New Game) */
     UFUNCTION(BlueprintCallable, Category = "Simulation")
     void ResetSimulation();

@@ -65,6 +65,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "1", ClampMax = "20"))
     int32 MaxFactionBases = 4;
 
+    /** Spread each base's daily vehicle launches evenly across the 24-hour game day */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Simulation")
+    bool bStaggerMissionLaunches = true;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;

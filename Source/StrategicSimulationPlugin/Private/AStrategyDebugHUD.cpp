@@ -531,8 +531,17 @@ FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& LogicalPos) cons
         return (LogicalPos * MapScale) + MapOffset;
     }
 
-    const float LogicalWidth = 1920.0f;
-    const float LogicalHeight = 1080.0f;
+    float LogicalWidth = 1920.0f;
+    float LogicalHeight = 1080.0f;
+
+    if (UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr)
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            LogicalWidth = Campaign->LogicalMapWidth;
+            LogicalHeight = Campaign->LogicalMapHeight;
+        }
+    }
 
     float UniformScale = GetCurrentMapScale();
 
@@ -551,8 +560,17 @@ float AStrategyDebugHUD::GetCurrentMapScale() const
         return 1.0f;
     }
 
-    const float LogicalWidth = 1920.0f;
-    const float LogicalHeight = 1080.0f;
+    float LogicalWidth = 1920.0f;
+    float LogicalHeight = 1080.0f;
+
+    if (UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr)
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            LogicalWidth = Campaign->LogicalMapWidth;
+            LogicalHeight = Campaign->LogicalMapHeight;
+        }
+    }
 
     float ScaleX = Canvas->SizeX / LogicalWidth;
     float ScaleY = Canvas->SizeY / LogicalHeight;

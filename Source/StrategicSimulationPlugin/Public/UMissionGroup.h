@@ -75,4 +75,12 @@ public:
 
     UPROPERTY()
     bool bIsLiveMovement = false;
+
+    /** Absolute game-hour timestamp when fleet departs (used for staggered daily launches) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Schedule")
+    float ScheduledLaunchGameHours = 0.f;
+
+    /** True once vehicles have left the hangar and live movement has started */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Schedule")
+    bool bMovementActivated = false;
 };

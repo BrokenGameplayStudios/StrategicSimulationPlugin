@@ -6,6 +6,7 @@
 #include "UFacilityDatabase.h"
 #include "UFacilityDefinition.h"
 #include "UMissionManagerSubsystem.h"
+#include "UStrategyVehicle.h"
 #include "Engine/Engine.h"          // ← Added for GEngine
 #include "Kismet/GameplayStatics.h" // ← Added for safety
 
@@ -479,9 +480,18 @@ int32 UStrategyBase::GetVehiclesOnMissionCount() const
             {
                 for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
                 {
-                    if (Mission && Mission->OriginBase == this)
+                    if (!Mission || Mission->OriginBase != this || !Mission->bMovementActivated)
                     {
-                        Count += Mission->VehiclesInFleet.Num();
+                        continue;
+                    }
+
+                    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+                    {
+                        if (Vehicle && !Vehicle->IsDestroyed() &&
+                            Vehicle->GetMissionPhase() != EVehicleMissionPhase::Docked)
+                        {
+                            Count++;
+                        }
                     }
                 }
             }

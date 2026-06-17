@@ -775,15 +775,16 @@ FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) con
 // ==================== PASTE THIS FULL FUNCTION (replace the old AddDiscoveredSite) ====================
 UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type, float OptionalScore)
 {
-    // Find existing site in AllPotentialSites (exact or nearest match)
+    // Match an existing generated site only when the ping is close to that node
     UStrategySiteDefinition* ExistingSite = nullptr;
-    float BestDist = MAX_FLT;
+    const float MatchTolerance = 128.f;
+    float BestDist = MatchTolerance;
 
     for (UStrategySiteDefinition* Site : AllPotentialSites)
     {
-        if (!Site) continue;
+        if (!Site || Site->Location.IsNearlyZero(10.f)) continue;
         float Dist = FVector2D::Distance(Site->Location, Location);
-        if (Dist < BestDist)
+        if (Dist <= BestDist)
         {
             BestDist = Dist;
             ExistingSite = Site;

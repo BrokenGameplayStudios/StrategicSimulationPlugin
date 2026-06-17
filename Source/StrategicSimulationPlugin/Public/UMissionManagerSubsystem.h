@@ -22,7 +22,15 @@ public:
 
     // Update: Added SoldiersToAssign parameter to StartMission for better soldier management and assignment during mission launch
     UFUNCTION(BlueprintCallable, Category = "Mission")
-    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType = EMissionType::Offensive, EFactionType AttackingFaction = EFactionType::Enemy);
+    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType = EMissionType::Offensive, EFactionType AttackingFaction = EFactionType::Enemy, float ScheduledLaunchGameHours = -1.f);
+
+    /** Schedule one mission per idle vehicle at a base, evenly spaced across the 24-hour day */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
+    int32 ScheduleVehicleMissionsForBase(UStrategyBase* Base, EFactionType Faction, EMissionType MissionType = EMissionType::Recon);
+
+    /** Parked idle vehicles at a base that are ready to fly today */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
+    TArray<UStrategyVehicle*> GatherIdleVehiclesAtBase(UStrategyBase* Base) const;
 
     UFUNCTION(BlueprintCallable, Category = "Mission")
     void SimulateOneDay();
@@ -68,6 +76,16 @@ private:
 
     void ResolveMissionOutcome(UMissionGroup* Mission);
 
-    FVector2D PickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType) const;
+    bool TryPickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType, FVector2D& OutTarget,
+        TSet<class UStrategySiteDefinition*>& InOutReservedSites) const;
+
     void GetMapBounds(float& OutWidth, float& OutHeight, float& OutPadding) const;
+    void CollectSitesTargetedByActiveMissions(TSet<class UStrategySiteDefinition*>& OutSites, const UMissionGroup* IgnoreMission = nullptr) const;
+    class UStrategySiteDefinition* FindSiteAtLocation(const FVector2D& Location, float Tolerance = 25.f) const;
+    FVector2D PickPatrolPointWithinRange(const FVector2D& Origin, float MaxRoundTripRange, float MinX, float MinY, float MaxX, float MaxY) const;
+    static bool IsValidMapLocation(const FVector2D& Location, float MinX, float MinY, float MaxX, float MaxY);
+
+    float ComputeEvenlySpacedLaunchHour(int32 SlotIndex, int32 TotalSlots) const;
+    void PrepareVehiclesForDeparture(UMissionGroup* Mission);
+    void ProcessPendingMissionLaunches(float CurrentHours);
 };
