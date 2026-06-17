@@ -204,8 +204,9 @@ void UStrategyVehicle::DockAtHomeHangar()
         HomeHanger->ParkedVehicles.AddUnique(this);
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s docked at home base"),
-        VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this));
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s docked at base '%s'"),
+        VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
+        HomeBase ? *HomeBase->BaseName.ToString() : TEXT("Unknown"));
 }
 
 void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget, EMissionType MissionType)

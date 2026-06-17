@@ -287,6 +287,39 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
     ActiveMissions.Add(NewMission);
 
+    UStrategyFacility* OriginHangar = OriginBase->FindFirstOperationalHangar();
+
+    for (UStrategyVehicle* Vehicle : Vehicles)
+    {
+        if (!Vehicle) continue;
+
+        Vehicle->CurrentPassengers.Empty();
+        Vehicle->CurrentMission = NewMission;
+
+        UStrategyFacility* PreviousHomeHanger = Vehicle->HomeHanger;
+
+        Vehicle->HomeBase = OriginBase;
+        if (OriginHangar)
+        {
+            Vehicle->HomeHanger = OriginHangar;
+        }
+        else if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
+        {
+            Vehicle->HomeHanger = Vehicle->CurrentHanger;
+        }
+
+        if (PreviousHomeHanger && PreviousHomeHanger != Vehicle->HomeHanger)
+        {
+            PreviousHomeHanger->ParkedVehicles.Remove(Vehicle);
+        }
+
+        if (Vehicle->CurrentHanger)
+        {
+            Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
+            Vehicle->CurrentHanger = nullptr;
+        }
+    }
+
     USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
     if (SoldierMgr)
     {
@@ -300,8 +333,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
         for (UStrategyVehicle* Vehicle : Vehicles)
         {
-            Vehicle->CurrentPassengers.Empty();
-            Vehicle->CurrentMission = NewMission;
+            if (!Vehicle) continue;
 
             int32 Capacity = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->SoldierCapacity : 4;
             for (int32 i = 0; i < Capacity && SoldierIndex < SoldiersToUse.Num(); ++i)
@@ -321,15 +353,6 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
                         }
                     }
                 }
-            }
-
-            if (Vehicle->CurrentHanger && !Vehicle->HomeHanger)
-                Vehicle->HomeHanger = Vehicle->CurrentHanger;
-
-            if (Vehicle->CurrentHanger)
-            {
-                Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
-                Vehicle->CurrentHanger = nullptr;
             }
         }
     }
@@ -442,7 +465,8 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
     {
         for (UStrategyFacility* Facility : OriginBase->Facilities)
         {
-            if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+            if (Facility && Facility->bIsOperational && Facility->FacilityDefinition &&
+                Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
             {
                 VehiclesToLaunch.Append(Facility->ParkedVehicles);
             }

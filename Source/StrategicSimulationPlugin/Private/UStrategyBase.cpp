@@ -431,14 +431,26 @@ int32 UStrategyBase::GetSoldiersOnMissionCount() const
     return Count;
 }
 
+UStrategyFacility* UStrategyBase::FindFirstOperationalHangar() const
+{
+    for (UStrategyFacility* Facility : Facilities)
+    {
+        if (Facility && Facility->bIsOperational && Facility->FacilityDefinition &&
+            Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+        {
+            return Facility;
+        }
+    }
+    return nullptr;
+}
+
 int32 UStrategyBase::GetStationedVehiclesCount() const
 {
     int32 Count = 0;
 
     for (UStrategyFacility* Facility : Facilities)
     {
-        if (Facility && Facility->BuildProgressDays <= 0 &&
-            Facility->FacilityDefinition &&
+        if (Facility && Facility->bIsOperational && Facility->FacilityDefinition &&
             Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
         {
             Count += Facility->ParkedVehicles.Num();

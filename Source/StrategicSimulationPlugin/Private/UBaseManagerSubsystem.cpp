@@ -408,6 +408,7 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
                 bAnyCompletedThisTick = true;
 
                 Fac->bIsOperational = true;
+                Fac->BuildProgressDays = 0;
 
                 int32 PowerImpact = Fac->FacilityDefinition->PowerProvided - Fac->FacilityDefinition->PowerDraw;
 
@@ -605,7 +606,8 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
         int32 VehiclesStationed = 0;
         for (UStrategyFacility* Fac : B->Facilities)
         {
-            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+            if (Fac && Fac->bIsOperational && Fac->FacilityDefinition &&
+                Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                 VehiclesStationed += Fac->ParkedVehicles.Num();
         }
 
@@ -692,7 +694,8 @@ FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) con
         // Vehicles stationed
         int32 VehiclesStationed = 0;
         for (UStrategyFacility* Fac : B->Facilities)
-            if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+            if (Fac && Fac->bIsOperational && Fac->FacilityDefinition &&
+                Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                 VehiclesStationed += Fac->ParkedVehicles.Num();
 
         // Vehicles on mission from this base

@@ -276,6 +276,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     else if (Job.Type == EProductionType::Facility)
     {
         bIsOperational = true;
+        BuildProgressDays = 0;
         if (EventDisp)
             EventDisp->OnFacilityCompleted.Broadcast(JobFaction, this);
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] %s completed and is now operational"), *FacilityDefinition->FacilityName.ToString());

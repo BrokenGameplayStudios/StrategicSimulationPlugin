@@ -100,9 +100,8 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
             int32 VehiclesStationed = 0;
             for (UStrategyFacility* Fac : Base->Facilities)
             {
-                if (Fac && Fac->FacilityDefinition &&
-                    Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger &&
-                    Fac->BuildProgressDays <= 0)
+                if (Fac && Fac->bIsOperational && Fac->FacilityDefinition &&
+                    Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
                 {
                     VehiclesStationed += Fac->ParkedVehicles.Num();
                 }

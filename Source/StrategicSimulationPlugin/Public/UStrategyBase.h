@@ -147,4 +147,8 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Base|Vehicles")
     int32 GetVehiclesOnMissionCount() const;
+
+    /** First operational hangar at this base, or nullptr */
+    UFUNCTION(BlueprintCallable, Category = "Base|Vehicles")
+    UStrategyFacility* FindFirstOperationalHangar() const;
 };
