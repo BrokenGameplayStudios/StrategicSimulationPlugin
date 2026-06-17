@@ -1,0 +1,488 @@
+# Strategic Simulation Plugin
+
+> Unreal Engine 5 strategic layer plugin (XCOM-style geoscape): bases, economy, research, live vehicle missions, and AI vs AI.
+
+**Broken Gameplay Studios** · Runtime module · Requires **CommonUI**
+
+| Audience | Section |
+|----------|---------|
+| **Designers / level setup** | [Part I — Designer Guide](#part-i--designer-guide) |
+| **Developers / extenders** | [Part II — Developer Reference](#part-ii--developer-reference) |
+
+---
+
+## Part 0 — Overview & Current Status
+
+### What it is
+
+This plugin implements a turn-of-time strategic simulation layer: factions build bases and facilities, recruit soldiers, research technology, produce vehicles, and run live map missions. Vehicles move across a logical 2D map, use radar to discover sites and enemy contacts, and can engage in abstract vehicular combat. The daily loop is driven by AI for both Human and Enemy factions (configurable).
+
+### What works today
+
+- Dual-faction simulation with daily AI (build, recruit, research, equip, missions)
+- Logical map (default 1920×1080) with generated sites and two starting Command Centers
+- Live vehicle movement with range budgeting, phased pathing (outbound → on-station → return)
+- Radar discovery of potential base sites and resource nodes
+- AI vehicle production by **Vehicle Type** (Scout first, then Gunship/Heavy fighters)
+- Staggered daily mission launches (one slot per idle vehicle per base, spread across 24h)
+- Armed vehicular combat (Gunship/Heavy with equipped weapons and sufficient offensive rating)
+- Offensive base-attack missions after a configurable start day (default: day 5)
+- Base attack flow: fighter flies to enemy base, logs `[BASE ATTACK EVENT]` on launch and arrival
+- Salvage sites created when vehicles are destroyed in combat
+- Save/load hooks on the campaign subsystem
+- Debug strategic map HUD (bases, vehicles, paths, radar circles)
+- Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
+
+### What is not implemented yet
+
+- Base attack **outcome** (no strategic damage to enemy bases — arrival is log-only)
+- Tactical map load for player PvE fights
+- POW recovery missions, gear-based combat resolution, faction-specific technology trees
+- `Defensive` and `Interception` mission types (targeting logic exists; AI does not schedule them)
+- Abstract mission day countdown (`SimulateOneDay`) — all new missions use live movement
+- Research unlock gating (`HasCompletedResearch` is a stub)
+- Soldier casualties on mission resolution (always zero)
+- Ammo depletion (`MaxAmmo == 0` treated as infinite)
+
+---
+
+## Part I — Designer Guide
+
+*For level designers and gameplay tuners. No C++ required.*
+
+### 1.1 Prerequisites
+
+- Host Unreal project with this plugin enabled
+- **CommonUI** plugin enabled (hard dependency)
+- Recommended test content:
+  - `Content/StratTestGameMode.uasset`
+  - `Content/UI/WBP_StrategicHUD.uasset`
+
+### 1.2 Level setup checklist
+
+```
+[ ] Place AStrategyGameInitializer in the level
+[ ] Assign all 6 database assets on the initializer (see 1.3)
+[ ] Tune map and AI settings on the initializer (see 1.4)
+[ ] Set starting resources for Human and Enemy factions
+[ ] (Optional) Place AStrategyTestActor — auto-spawns WBP_StrategicHUD on play
+[ ] (Optional) Set GameMode HUD class to AStrategyDebugHUD for map overlay
+```
+
+### 1.3 Wiring data assets
+
+On **`AStrategyGameInitializer`** (Details panel), assign these soft references:
+
+| Property | Typical asset | Contains |
+|----------|---------------|----------|
+| Item Database Asset | `Content/Data/DA_ItemDatabase` | Soldier gear |
+| Facility Database Asset | `Content/Data/DA_FacilityDatabase` | All facility types |
+| Soldier Class Database Asset | `Content/Data/DA_SoldierDatabase` | Soldier classes |
+| Research Database Asset | `Content/Data/DA_ResearchDatabase` | Research projects |
+| Vehicle Database Asset | `Content/Data/DA_VehicleDatabase` | Vehicle definitions |
+| Vehicle Item Database Asset | `Content/Data/DA_Vehicle_Items` | Vehicle weapons and ammo |
+
+Individual definition assets live under `Content/Data/DA/`:
+
+| Folder | Examples |
+|--------|----------|
+| `Fac/` | Command Center, Hanger, Laboratory, Medical Bay, Vehicle Repair |
+| `Veh/` | `DA_Veh_BRT-4` (recon), `DA_Veh_BT-8` (fighter) |
+| `Sol/` | Commander, Grunt |
+| `Item/` | M16, Basic Armor, grenades |
+| `Res/` | Research project definitions |
+| `Tech/` | Unlock tech definitions |
+
+**Vehicle behavior is controlled by Vehicle Type on each `UVehicleDefinition`**, not by array order in the database:
+
+| Vehicle Type | AI behavior |
+|--------------|-------------|
+| Scout, Transport, Support | Recon missions only |
+| Gunship, Heavy | Armed, may run Offensive missions and engage in combat |
+
+Open each vehicle asset in the editor and verify **Vehicle Type** is set correctly.
+
+### 1.4 Tuning gameplay
+
+All properties below are on **`AStrategyGameInitializer`** and are copied to `UStrategyCampaignSubsystem` at level start.
+
+#### Map Generation
+
+| Property | Default | What it does |
+|----------|---------|--------------|
+| Number Of Strategic Sites | 25 | Count of potential base/resource nodes (5–100) |
+| Minimum Distance Between Sites | 350 | Minimum spacing between nodes |
+| Logical Map Width | 1920 | Logical X coordinate space |
+| Logical Map Height | 1080 | Logical Y coordinate space |
+| Map Border Padding | 100 | Inset from map edges for playable area |
+| Min Distance Between Factions | 700 | Minimum separation of Human and Enemy Command Centers |
+| Max Faction Bases | 4 | Maximum bases per faction (expansion cap) |
+
+#### AI Simulation
+
+| Property | Default | What it does |
+|----------|---------|--------------|
+| Start With Human AI | true | Run daily AI for the Human faction |
+| Start With Enemy AI | true | Run daily AI for the Enemy faction |
+| Stagger Mission Launches | true | Spread vehicle departures evenly across the 24-hour game day |
+| Offensive Missions Start Day | 5 | First day Gunship/Heavy may schedule base-attack missions |
+| Min Offense To Engage | 10 | Minimum offensive rating (base + weapons) required to start combat |
+
+#### Starting Resources
+
+Set `HumanStartingStockpile` and `EnemyStartingStockpile` (Money, Metals, Biologicals, Chemicals, Exotic Material, Research Points).
+
+#### Debug
+
+| Property | Default | What it does |
+|----------|---------|--------------|
+| Verbose Logging | false | Extra subsystem logs |
+| Show Unlock Messages | true | `[UNLOCK]` console messages |
+| Show Facility Ticks | false | Per-facility tick logs (very noisy) |
+
+### 1.5 Running the simulation
+
+```mermaid
+flowchart TD
+    Play[Press Play in editor] --> Init[AStrategyGameInitializer BeginPlay]
+    Init --> Config[Settings and databases applied]
+    Config --> Wait[Clock paused — map not generated yet]
+    Wait --> Start[UI calls Campaign.StartSimulation]
+    Start --> Map[Sites generated + Command Centers placed]
+    Start --> Unpause[Unpause time manager]
+    Unpause --> Run[Time advances — daily AI — vehicles fly]
+```
+
+**Steps:**
+
+1. **Play in editor.** The initializer runs automatically. Look for: *"Simulation INITIALIZED — Press Start to generate map and begin"*.
+2. **Start the campaign.** From `WBP_StrategicHUD` or Blueprint, call `UStrategyCampaignSubsystem::StartSimulation()`. This generates the map and places both Command Centers.
+3. **Unpause time.** `StartSimulation` sets time scale to 1.0 but does **not** clear the paused flag. Also call one of:
+   - `UTimeManagerSubsystem::TogglePause()`
+   - `UTimeManagerSubsystem::StartSimulation()`
+   
+   Without this step, the real-time tick loop will not advance and vehicles will not move.
+4. **Control time** via `WBP_TimeControl` (if wired): pause, resume, adjust time scale.
+
+**Manual AI trigger (testing):**
+
+- Blueprint: `UStrategyCampaignSubsystem::Debug_RunAI()`
+- Or: `UAIControllerSubsystem::Debug_RunAI()` (runs both factions if enabled)
+
+### 1.6 Watching the simulation
+
+#### Debug map HUD (`AStrategyDebugHUD`)
+
+Set as the level GameMode HUD class, then use console commands:
+
+| Command | Effect |
+|---------|--------|
+| `ToggleDebugHUD` | Toggle master debug visibility |
+| `ToggleStrategyMap` | Toggle logical map overlay |
+| `ShowSiteInfo 0` | Print info for site index 0 |
+| `ClearSiteInfo` | Clear site inspector |
+
+Editor properties on the HUD:
+
+- `bShowVehiclePaths` — yellow outbound paths, orange return paths
+- `bShowStrategyMap` — draw sites and bases on canvas
+- Vehicles show cyan radar radius circles and phase/behavior labels
+
+#### Output Log filters
+
+All tags use `LogTemp`. Filter in the Output Log window:
+
+| Filter | What you will see |
+|--------|-------------------|
+| `[AI]` / `[AI TICK]` | Daily AI: builds, vehicles, missions, expansion |
+| `[MISSION]` | Mission queued or departed |
+| `[MISSION TARGET]` | Recon or patrol target coordinates |
+| `[LIVE MISSION]` | Movement activated, range checks, completion |
+| `[BASE ATTACK EVENT]` | Fighter assigned to or arrived at enemy base |
+| `[DETECT]` | Radar contact with enemy vehicle |
+| `[COMBAT]` | Engagement started, damage, destruction |
+| `[DISCOVERY]` | New site revealed by recon radar |
+| `[SALVAGE]` | Wreck site created after combat loss |
+| `[EXPANSION DEBUG]` | Preconditions for AI base expansion |
+| `[CAMPAIGN]` | Day rollover and repair summary |
+| `[MAP]` / `[BASE INIT]` | Map generation and starting base placement |
+
+### 1.7 Designer workflow tips
+
+- **Days 1–4 (default):** Only recon missions. Scouts discover undiscovered nodes on the map.
+- **Day 5+:** Gunship/Heavy vehicles with an in-range enemy base schedule `Offensive` missions. Watch for `[MISSION] Scheduled ... Offensive`.
+- **No combat?** Confirm the fighter log shows `[AI] equipped vehicle weapon` and that `Min Offense To Engage` is not set too high for your weapon stats.
+- **Expansion:** AI builds a new base when every existing base owns a vehicle, faction Money > 9500, and a discovered unused site is available.
+- **Pacing:** Lower `Offensive Missions Start Day` for earlier attacks. Increase `Number Of Strategic Sites` for more expansion options. Increase `Min Distance Between Factions` for a slower opening.
+- **Vehicle range:** If missions are skipped, check `[LIVE MISSION] ... insufficient range` — targets may be beyond the vehicle's `MaxRange`.
+
+---
+
+## Part II — Developer Reference
+
+*For engineers extending or integrating systems.*
+
+### 2.1 Repository layout
+
+```
+StrategicSimulationPlugin/
+├── StrategicSimulationPlugin.uplugin
+├── README.md
+├── Content/
+│   ├── Data/                  # Aggregate database assets
+│   │   └── DA/                # Individual definitions (Fac, Veh, Sol, Item, Res, Tech)
+│   ├── UI/                    # WBP_StrategicHUD, time control, roster widgets
+│   └── StratTestGameMode.uasset
+├── Source/StrategicSimulationPlugin/
+│   ├── Public/                # Subsystem and domain headers
+│   ├── Private/               # Implementations
+│   └── StrategicSimulationPlugin.Build.cs
+└── Resources/
+    └── Icon128.png
+```
+
+### 2.2 Architecture
+
+All simulation state lives on **GameInstance subsystems** (access via `GetGameInstance()->GetSubsystem<T>()`).
+
+```mermaid
+flowchart TB
+    Campaign[UStrategyCampaignSubsystem]
+    Time[UTimeManagerSubsystem]
+    Base[UBaseManagerSubsystem]
+    Mission[UMissionManagerSubsystem]
+    AI[UAIControllerSubsystem]
+    Resource[UResourceManagerSubsystem]
+    Soldier[USoldierManagerSubsystem]
+    Research[UResearchManagerSubsystem]
+    Eng[UEngineeringManagerSubsystem]
+    Prod[UProductionManagerSubsystem]
+    Events[UStrategyEventDispatcher]
+
+    Time -->|OnDayPassed| Campaign
+    Time -->|RealTimeTick| Mission
+    Campaign --> AI
+    Campaign --> Base
+    AI --> Mission
+    AI --> Eng
+    Mission --> Base
+    Prod --> Base
+    Events -.->|Blueprint delegates| UI[WBP widgets]
+```
+
+| Subsystem | Header | Responsibility |
+|-----------|--------|----------------|
+| Campaign | `UStrategyCampaignSubsystem.h` | Start/stop/reset, save/load, settings, daily orchestration, DB accessors |
+| Time | `UTimeManagerSubsystem.h` | Game calendar, pause/scale, `OnDayPassed`, real-time tick |
+| Base | `UBaseManagerSubsystem.h` | Site generation, bases, facilities, power, repairs, expansion, salvage |
+| Mission | `UMissionManagerSubsystem.h` | Mission launch/scheduling, live movement, combat outcomes |
+| AI | `UAIControllerSubsystem.h` | Per-faction daily decisions (`RunAIForFaction`) |
+| Resource | `UResourceManagerSubsystem.h` | Faction stockpiles, affordability, income |
+| Soldier | `USoldierManagerSubsystem.h` | Roster, recruit, training, POW |
+| Research | `UResearchManagerSubsystem.h` | Active projects, tech progression |
+| Engineering | `UEngineeringManagerSubsystem.h` | Item purchase, vehicle weapons, workshop production |
+| Production | `UProductionManagerSubsystem.h` | Job completion (soldier, vehicle, facility, research) |
+| Events | `UStrategyEventDispatcher.h` | UI-facing multicast delegates |
+
+**Domain objects (UObjects):**
+
+| Class | Role |
+|-------|------|
+| `UStrategyBase` | Faction base instance |
+| `UStrategyFacility` | Built facility; hangars hold parked vehicles |
+| `UStrategyVehicle` | Vehicle instance; live movement, radar, combat |
+| `UStrategySoldier` | Soldier instance |
+| `UMissionGroup` | Active mission group |
+| `UStrategySiteDefinition` | Map site (potential base, resource, salvage) |
+
+**Level actors:**
+
+| Actor | File | Role |
+|-------|------|------|
+| `AStrategyGameInitializer` | `AStrategyGameInitializer.cpp` | `BeginPlay`: loads DBs, copies settings to campaign |
+| `AStrategyDebugHUD` | `AStrategyDebugHUD.cpp` | Canvas overlay for map, bases, vehicles, paths |
+| `AStrategyTestActor` | `StrategyTestActor.cpp` | Spawns `WBP_StrategicHUD`, binds event dispatcher |
+
+**Shared types:** `Source/StrategicSimulationPlugin/Public/StrategicSimulationTypes.h`
+
+Key enums: `EFactionType`, `EMissionType`, `EVehicleType`, `EVehicleBehavior`, `EVehicleMissionPhase`, `EStrategySiteType`, `FResourceStockpile`
+
+### 2.3 Simulation lifecycle
+
+| Step | What happens |
+|------|--------------|
+| 1. Module init | `UStrategyCampaignSubsystem::Initialize` binds `OnDayPassed` to campaign and mission manager |
+| 2. Level load | `AStrategyGameInitializer::BeginPlay` copies DB refs and settings; time manager starts **paused** at 2026-01-01 |
+| 3. Start | `UStrategyCampaignSubsystem::StartSimulation` → `GenerateInitialSites`, `InitializeStartingBases`, `SetTimeScale(1)` |
+| 4. Tick | `UTimeManagerSubsystem::RealTimeTick` advances calendar, calls `UMissionManagerSubsystem::UpdateAllLiveVehicles` |
+| 5. Day rollover | `OnDayPassed` broadcast on calendar day change |
+| 6. Daily sim | Campaign: repairs; AI: `RunAIForFaction` for each enabled faction |
+| 7. Stop | `StopSimulation` sets time scale to 0; `ResetSimulation` clears state |
+
+**Duplicate AI guard:** `UAIControllerSubsystem::LastProcessedDayPerFaction` prevents running the same faction twice on the same calendar day (both AI and Campaign subsystems bind `OnDayPassed`).
+
+### 2.4 Mission system
+
+#### Mission types (`EMissionType`)
+
+| Type | AI schedules? | Target selection |
+|------|---------------|------------------|
+| Recon | Yes (scouts, fallback) | Nearest undiscovered `PotentialBase` / `ResourceNode` in range; patrol if none |
+| Offensive | Yes (fighters, day ≥ N) | Random in-range enemy base |
+| Defensive | No | In-range enemy base (same as Offensive branch) |
+| Interception | No | Nearest enemy vehicle in flight, else enemy base |
+
+#### Scheduling flow
+
+```
+RunAIForFaction
+  → GatherIdleVehiclesAtBase (per base with operational Hanger)
+  → PickAIMissionTypeForVehicle (per vehicle)
+  → ScheduleVehicleMissionsForBase (one mission per vehicle, optional 24h stagger)
+  → StartMission (deferred or immediate)
+  → ProcessPendingMissionLaunches (on RealTimeTick)
+  → ActivateLiveMovementForVehicles
+  → TryPickMissionTarget → BeginMissionMovement
+```
+
+**Idle vehicle criteria** (`GatherIdleVehiclesAtBase`):
+
+- Parked in operational Hanger
+- No current mission, not destroyed
+- `CurrentRangeLeft > 0`, not needing repair
+- Health ≥ 95% of max
+
+#### Vehicle movement phases (`EVehicleMissionPhase`)
+
+```
+Docked → EnRoute → OnStation → EnRoute (return) → Docked
+              ↓                      ↑
+           Combat ←→ Returning ───────┘
+```
+
+- **Recon** launches with `Scouting` behavior; **Offensive** with `Attacking`
+- Offensive **OnStation** triggers `HandleBaseAttackArrival` (log placeholder)
+- Range: round-trip deducted at launch; `PlannedRoundTripRange` and `RangeTraveledThisMission` enforced during flight and combat
+
+#### Mission resolution
+
+When all vehicles in a fleet are docked or destroyed, `ResolveMissionOutcome` runs:
+
+- Recon: 200–500 research points
+- Other types: money/metals by outcome tier
+- `OnMissionCompleted` delegate broadcast
+
+### 2.5 AI daily loop (`RunAIForFaction`)
+
+Order of operations per faction per day:
+
+1. Advance facility construction
+2. Apply facility income
+3. Facility build wave (all bases): Command → Barracks → Lab → Workshop → Hanger → Medical → Repair → Containment/Autopsy
+4. Vehicle production (`SelectVehicleDefinitionToBuild` by `EVehicleType`)
+5. Per-base mission prep: equip weapons on Gunship/Heavy, refill ammo, schedule missions
+6. Recruit soldiers (barracks-cap aware)
+7. Start research (if Laboratory free)
+8. Buy and equip soldier gear
+9. Workshop production
+10. Expansion check (all bases have vehicles, Money > 9500, discovered site available)
+
+**Vehicle build priority** (`SelectVehicleDefinitionToBuild`):
+
+1. If faction has no Scout/Transport/Support → build affordable scout-type
+2. Else if combat count < scout count → build affordable Gunship/Heavy
+3. Fallback: any affordable type in DB
+
+### 2.6 Combat and detection
+
+```
+PerformRadarPing (every PingIntervalHours, default 0.5 game hours)
+  → site discovery (undiscovered nodes within radar range)
+  → TryDetectVehicle (enemy parked + in-flight vehicles)
+    → HandleVehicleDetected → UAIControllerSubsystem::HandleVehicleDetection
+      → ShouldEngageVehicle?
+        → SetBehavior(Attacking) → EVehicleMissionPhase::Combat
+          → ProcessCombatTick (offensiveRating × 0.35 × deltaHours damage)
+            → HandleVehicleDestroyedInCombat → CreateSalvageSite
+```
+
+**Engagement requirements** (`ShouldEngageVehicle`):
+
+- Different factions
+- At least one equipped weapon
+- `GetVehicleOffensiveRating() >= MinOffenseToEngage` (campaign setting, default 10)
+
+**Combat end conditions:** target destroyed, combat timeout (2h one-sided / 6h mutual), range budget exceeded, or too far from planned outbound distance.
+
+### 2.7 UI integration
+
+**Base widget classes:**
+
+- `UStrategyUserWidget` — extends `UCommonUserWidget`
+- `UStrategyActivatableWidget` — extends `UCommonActivatableWidget`
+
+**Event dispatcher** (`UStrategyEventDispatcher`) — Blueprint-assignable delegates:
+
+- `OnSoldierRecruited`, `OnResearchCompleted`, `OnVehicleCompleted`, `OnFacilityCompleted`, `OnProductionCompleted`, and others
+
+**Content widgets** (`Content/UI/`):
+
+- `WBP_StrategicHUD` — main HUD (spawned by `AStrategyTestActor`)
+- `WBP_TimeControl` — pause/speed
+- `WBP_ResourcePanel`, `WBP_RosterScreen` — resource and soldier displays
+
+### 2.8 Extension hooks
+
+| Goal | Primary files to change |
+|------|-------------------------|
+| New mission type | `StrategicSimulationTypes.h`, `UMissionManagerSubsystem.cpp`, `UAIControllerSubsystem.cpp`, `UStrategyVehicle.cpp` |
+| Base attack resolution | `UMissionManagerSubsystem::HandleBaseAttackArrival` |
+| AI build priority | `UAIControllerSubsystem::SelectVehicleDefinitionToBuild` |
+| Engagement rules | `UAIControllerSubsystem::ShouldEngageVehicle` |
+| Mission rewards / casualties | `UMissionManagerSubsystem::ResolveMissionOutcome` |
+| Research gating | `UStrategyCampaignSubsystem::HasCompletedResearch` |
+| Player tactical fights | Branch in mission resolver when attacker faction is Human player |
+| New facility behavior | `UStrategyFacility.cpp`, `UFacilityDefinition.h` |
+| UI reactions | Subscribe to `UStrategyEventDispatcher` delegates in Widget Blueprints |
+
+### 2.9 Known technical debt
+
+| Issue | Location / notes |
+|-------|------------------|
+| `StartSimulation` does not unpause time manager | `UStrategyCampaignSubsystem.cpp` — `bIsPaused` starts `true` |
+| Duplicate `OnDayPassed` bindings | Both `UAIControllerSubsystem` and `UStrategyCampaignSubsystem` call AI; guarded by day-per-faction map |
+| Day rollover uses calendar day-of-month | `UTimeManagerSubsystem::RealTimeTick` uses `FDateTime::GetDay()`, not elapsed simulation days |
+| Abstract `SimulateOneDay` path unused | All `StartMission` calls set `bIsLiveMovement = true` |
+| `CalculateFleetEffectiveness` unused | Defined in mission manager; not called in live resolution |
+| Salvage sites not auto-discovered | Added to `AllPotentialSites`; must be found via recon radar |
+| `HasCompletedResearch` stub | Always returns `true` in campaign subsystem |
+| `SoldiersKilled` always 0 | `ResolveMissionOutcome` — no abstract casualties |
+| Ammo infinite when `MaxAmmo == 0` | `UItemDefinition` stub |
+| `Defensive` / `Interception` not scheduled by AI | Targeting exists in `TryPickMissionTarget` only |
+| Base attack is log-only | `HandleBaseAttackArrival` — placeholder for future resolver |
+
+### 2.10 Build dependencies
+
+`Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
+
+- **Public:** `Core`, `CoreUObject`, `Engine`, `UMG`, `CommonUI`, `CommonInput`
+
+Plugin dependency in `.uplugin`: **CommonUI** (must be enabled in host project).
+
+---
+
+## Quick reference — key Blueprint calls
+
+| Action | Call |
+|--------|------|
+| Start campaign / generate map | `UStrategyCampaignSubsystem::StartSimulation` |
+| Unpause simulation | `UTimeManagerSubsystem::TogglePause` or `StartSimulation` |
+| Stop simulation | `UStrategyCampaignSubsystem::StopSimulation` |
+| Reset all state | `UStrategyCampaignSubsystem::ResetSimulation` |
+| Save / load | `SaveCampaign` / `LoadCampaign` |
+| Force AI tick | `Debug_RunAI` on Campaign or AI subsystem |
+| Get managers | `GetResourceManager`, `GetBaseManager`, `GetMissionManager`, etc. on Campaign |
+
+---
+
+*Strategic Simulation Plugin v1.0 — Broken Gameplay Studios*
