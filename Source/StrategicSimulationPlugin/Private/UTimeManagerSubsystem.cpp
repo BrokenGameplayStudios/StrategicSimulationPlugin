@@ -10,6 +10,7 @@ void UTimeManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     CurrentGameDate = FDateTime(2026, 1, 1, 0, 0, 0);
     SimulationStartDate = CurrentGameDate;
+    PreviousTickGameDate = CurrentGameDate;
 
     UE_LOG(LogTemp, Display, TEXT("UTimeManagerSubsystem initialized — Game started on %s (Paused by default)"), *CurrentGameDate.ToString());
 
@@ -27,7 +28,11 @@ void UTimeManagerSubsystem::RealTimeTick()
     if (bIsPaused || TimeScale <= 0.0f) return;
 
     float DeltaSeconds = 0.016f * TimeScale;
+    PreviousTickGameDate = CurrentGameDate;
     CurrentGameDate += FTimespan::FromSeconds(DeltaSeconds);
+
+    const FTimespan DeltaSpan = CurrentGameDate - PreviousTickGameDate;
+    const float DeltaGameHours = static_cast<float>(DeltaSpan.GetTotalSeconds()) / 3600.0f;
 
     static int32 LastDay = 0;
     int32 CurrentDayNum = CurrentGameDate.GetDay();
@@ -46,12 +51,9 @@ void UTimeManagerSubsystem::RealTimeTick()
         }
     }
 
-    // === NEW: Keep live vehicle positions and radar pings updated every frame ===
-    // This makes the detection radius circle move with the vehicle and allows
-    // site discovery along the actual flight path (not just at the base).
     if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
     {
-        MissionMgr->UpdateAllLiveVehicles();
+        MissionMgr->UpdateAllLiveVehicles(DeltaGameHours);
     }
 }
 
@@ -82,6 +84,7 @@ void UTimeManagerSubsystem::SetStartingDate(FDateTime NewStartDate)
 {
     CurrentGameDate = NewStartDate;
     SimulationStartDate = NewStartDate;
+    PreviousTickGameDate = NewStartDate;
 
     UE_LOG(LogTemp, Display, TEXT("Starting date set to %s"), *CurrentGameDate.ToString());
     OnSimulationStarted.Broadcast();   // UI / systems can now reset soldiers, resources, etc.

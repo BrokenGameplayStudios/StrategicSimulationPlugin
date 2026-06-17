@@ -46,17 +46,32 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
     TArray<class UStrategySoldier*> CurrentPassengers;
 
-	//=== Behavuior & State ===
+	//=== Behavior & State ===
 
-    /** Current behavior state of this vehicle */
+    /** Movement lifecycle phase — drives positioning */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|State")
+    EVehicleMissionPhase CurrentPhase = EVehicleMissionPhase::Docked;
+
+    /** Tactical behavior (AI decisions) */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Behavior")
-    EVehicleBehavior CurrentBehavior = EVehicleBehavior::Scouting;
+    EVehicleBehavior CurrentBehavior = EVehicleBehavior::Idle;
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Behavior")
     void SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicle* Target = nullptr);
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Behavior")
     EVehicleBehavior GetBehavior() const { return CurrentBehavior; }
+
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|State")
+    EVehicleMissionPhase GetMissionPhase() const { return CurrentPhase; }
+
+    /** Dock at home hangar: repark, refuel, reset movement state (keeps CurrentMission for manager resolution) */
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|State")
+    void DockAtHomeHangar();
+
+    /** Begin live mission movement toward a target */
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
+    void BeginMissionMovement(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget, EMissionType MissionType);
 
     /** Current target vehicle (used when Attacking or Evading) */
     UPROPERTY(VisibleAnywhere, Category = "Vehicle|Behavior")
@@ -118,7 +133,7 @@ public:
     int32 CurrentHealth = 100;
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle")
-    bool IsAtHome() const { return CurrentMission == nullptr; }
+    bool IsAtHome() const { return CurrentPhase == EVehicleMissionPhase::Docked && CurrentMission == nullptr; }
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void ApplyDamage(int32 DamageAmount);
@@ -160,9 +175,13 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "Vehicle|Movement")
     TArray<FVector2D> ReturningWaypoints;
 
-    /** Current progress along the returning waypoints */
+    /** Distance traveled along the returning waypoints (game-hour speed based) */
     UPROPERTY(VisibleAnywhere, Category = "Vehicle|Movement")
-    float ReturningProgress = 0.0f;
+    float ReturningDistanceTraveled = 0.0f;
+
+    /** Total length of the returning path in map pixels */
+    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Movement")
+    float ReturningPathLength = 0.0f;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
     float LastPingGameTimeHours = 0.0f;
@@ -182,7 +201,7 @@ public:
     void LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget = 3.0f);
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
-    void UpdatePositionAndPings(float CurrentGameHours);
+    void UpdatePositionAndPings(float CurrentGameHours, float DeltaGameHours);
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
     void PerformRadarPing();
@@ -208,13 +227,19 @@ public:
     void TryDetectVehicle(UStrategyVehicle* OtherVehicle);
 private:
 
-    /** Tracks vehicles we've recently detected to avoid spamming the delegate */
-    UPROPERTY(VisibleAnywhere, Category = "Vehicle|Detection")
-    TArray<TWeakObjectPtr<UStrategyVehicle>> RecentlyDetectedVehicles;
+    /** Game hour when each vehicle was last detected (for cooldown) */
+    TMap<TWeakObjectPtr<UStrategyVehicle>, float> LastDetectedGameHour;
 
     /** How long (in game hours) before we can detect the same vehicle again */
     UPROPERTY(EditAnywhere, Category = "Vehicle|Detection")
     float VehicleDetectionCooldownHours = 2.0f;
+
+    float GetCruiseSpeed() const;
+    void UpdatePhaseFromPathProgress(float Progress);
+    void AdvanceReturningMovement(float DeltaGameHours);
+    float GetReturningPathLength() const;
+    FVector2D GetPositionOnReturningPath(float DistanceAlongPath) const;
+    void TickRadarPings(float CurrentGameHours);
 
     /** Called when this vehicle detects another vehicle.
  *  Decision logic lives in UAIControllerSubsystem (or player UI).

@@ -8,6 +8,7 @@
 #include "UStrategySoldier.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UBaseManagerSubsystem.h"
+#include "StrategicSiteDefinition.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -20,7 +21,6 @@ void UMissionManagerSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[MISSION] Day %d — SimulateOneDay() called (ActiveMissions: %d)"), NewDay, ActiveMissions.Num());
     SimulateOneDay();
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Day %d passed — all live vehicles updated"), NewDay);
 }
 
 void UMissionManagerSubsystem::SimulateOneDay()
@@ -31,7 +31,6 @@ void UMissionManagerSubsystem::SimulateOneDay()
     {
         if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
 
-        // Skip all live movement missions completely
         if (Mission->bIsLiveMovement)
             continue;
 
@@ -48,13 +47,8 @@ void UMissionManagerSubsystem::SimulateOneDay()
     {
         ActiveMissions.Remove(Mission);
     }
-
-    UpdateAllLiveVehicles();
 }
 
-// ===========================================================================
-// NEW HELPER: GetCurrentGameHours (used by live movement)
-// ===========================================================================
 float UMissionManagerSubsystem::GetCurrentGameHours() const
 {
     UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>();
@@ -63,7 +57,6 @@ float UMissionManagerSubsystem::GetCurrentGameHours() const
 
     FDateTime CurrentDate = TimeMgr->GetCurrentGameDate();
 
-    // Precise version: includes minutes and seconds for smooth movement
     float Hours = CurrentDate.GetHour();
     float Minutes = CurrentDate.GetMinute() / 60.0f;
     float Seconds = CurrentDate.GetSecond() / 3600.0f;
@@ -73,35 +66,210 @@ float UMissionManagerSubsystem::GetCurrentGameHours() const
     return (TimeMgr->GetTotalSimulationDays() * 24.0f) + PreciseHours;
 }
 
-// ===========================================================================
-// NEW: Activate live movement on every vehicle in the fleet
-// ===========================================================================
-void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(const TArray<UStrategyVehicle*>& Vehicles, EMissionType MissionType)
+void UMissionManagerSubsystem::GetMapBounds(float& OutWidth, float& OutHeight, float& OutPadding) const
 {
+    OutWidth = 1920.0f;
+    OutHeight = 1080.0f;
+    OutPadding = 100.0f;
+}
+
+FVector2D UMissionManagerSubsystem::PickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType) const
+{
+    float MapWidth, MapHeight, MapPadding;
+    GetMapBounds(MapWidth, MapHeight, MapPadding);
+
+    const float MinX = MapPadding;
+    const float MaxX = MapWidth - MapPadding;
+    const float MinY = MapPadding;
+    const float MaxY = MapHeight - MapPadding;
+
+    auto RandomMapPoint = [&]()
+    {
+        return FVector2D(FMath::RandRange(MinX, MaxX), FMath::RandRange(MinY, MaxY));
+    };
+
+    if (!Vehicle || !Vehicle->HomeBase)
+    {
+        return RandomMapPoint();
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr)
+    {
+        return RandomMapPoint();
+    }
+
+    const EFactionType Faction = Vehicle->HomeBase->OwningFaction;
+    const EFactionType EnemyFaction = (Faction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
+    const FVector2D Origin = Vehicle->HomeBase->MapLocation;
+
+    switch (MissionType)
+    {
+    case EMissionType::Recon:
+    {
+        UStrategySiteDefinition* BestSite = nullptr;
+        float BestDist = MAX_FLT;
+
+        for (UStrategySiteDefinition* Site : BaseMgr->AllPotentialSites)
+        {
+            if (!Site || Site->bHasBeenUsed) continue;
+
+            const TArray<UStrategySiteDefinition*>& Discovered =
+                (Faction == EFactionType::Human) ? BaseMgr->DiscoveredSitesHuman : BaseMgr->DiscoveredSitesEnemy;
+
+            if (Discovered.Contains(Site)) continue;
+
+            const float Dist = FVector2D::Distance(Origin, Site->Location);
+            const float RoundTrip = Dist * 2.0f;
+            if (Dist < BestDist && Vehicle->HasEnoughRangeForMission(RoundTrip))
+            {
+                BestDist = Dist;
+                BestSite = Site;
+            }
+        }
+
+        if (BestSite)
+        {
+            return BestSite->Location;
+        }
+        break;
+    }
+
+    case EMissionType::Offensive:
+    case EMissionType::Defensive:
+    {
+        const TArray<UStrategyBase*>& EnemyBases = BaseMgr->GetBases(EnemyFaction);
+        if (EnemyBases.Num() > 0)
+        {
+            UStrategyBase* TargetBase = EnemyBases[FMath::RandRange(0, EnemyBases.Num() - 1)];
+            if (TargetBase)
+            {
+                return TargetBase->MapLocation;
+            }
+        }
+        break;
+    }
+
+    case EMissionType::Interception:
+    {
+        UStrategyVehicle* NearestEnemy = nullptr;
+        float NearestDist = MAX_FLT;
+
+        for (UMissionGroup* Mission : ActiveMissions)
+        {
+            if (!Mission || !Mission->OriginBase) continue;
+            if (Mission->OriginBase->OwningFaction != EnemyFaction) continue;
+
+            for (UStrategyVehicle* EnemyVehicle : Mission->VehiclesInFleet)
+            {
+                if (!EnemyVehicle) continue;
+                if (EnemyVehicle->CurrentPhase == EVehicleMissionPhase::Docked) continue;
+
+                const float Dist = FVector2D::Distance(Origin, EnemyVehicle->CurrentPosition);
+                if (Dist < NearestDist)
+                {
+                    NearestDist = Dist;
+                    NearestEnemy = EnemyVehicle;
+                }
+            }
+        }
+
+        if (NearestEnemy)
+        {
+            return NearestEnemy->CurrentPosition;
+        }
+
+        const TArray<UStrategyBase*>& EnemyBases = BaseMgr->GetBases(EnemyFaction);
+        if (EnemyBases.Num() > 0 && EnemyBases[0])
+        {
+            return EnemyBases[0]->MapLocation;
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    return RandomMapPoint();
+}
+
+void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mission, EMissionType MissionType)
+{
+    if (!Mission) return;
+
     float CurrentHours = GetCurrentGameHours();
 
-    for (UStrategyVehicle* Vehicle : Vehicles)
+    float SearchHours = 3.0f;
+    switch (MissionType)
+    {
+    case EMissionType::Recon:
+        SearchHours = 3.0f;
+        break;
+    case EMissionType::Interception:
+        SearchHours = 0.5f;
+        break;
+    case EMissionType::Offensive:
+    case EMissionType::Defensive:
+        SearchHours = 1.5f;
+        break;
+    default:
+        SearchHours = 2.0f;
+        break;
+    }
+
+    TArray<UStrategyVehicle*> LaunchedVehicles;
+
+    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
         if (!Vehicle || !Vehicle->HomeBase) continue;
 
-        // For now we pick a random target somewhere on the 1920x1080 map
-        // (later we'll replace this with zone-based targets)
-        FVector2D TargetLocation(
-            FMath::RandRange(200.0f, 1720.0f),
-            FMath::RandRange(200.0f, 880.0f)
-        );
+        const FVector2D TargetLocation = PickMissionTarget(Vehicle, MissionType);
+        const float OutboundDist = FVector2D::Distance(Vehicle->HomeBase->MapLocation, TargetLocation);
+        const float RoundTripDist = OutboundDist * 2.0f;
 
-        // Launch the live scouting system (3-hour search time at target is a good default)
-        Vehicle->LaunchScoutingMission(TargetLocation, CurrentHours, 3.0f);
+        if (!Vehicle->HasEnoughRangeForMission(RoundTripDist))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[LIVE MISSION] %s skipped — insufficient range (need %.0f, have %.0f)"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                RoundTripDist, Vehicle->CurrentRangeLeft);
 
-        UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Activated live movement for %s (target: %.0f,%.0f)"),
-            *Vehicle->VehicleDefinition->VehicleName.ToString(), TargetLocation.X, TargetLocation.Y);
+            for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+            {
+                if (Soldier)
+                {
+                    Soldier->CurrentMission = nullptr;
+                }
+            }
+            Vehicle->CurrentPassengers.Empty();
+            Vehicle->CurrentMission = nullptr;
+            if (Vehicle->HomeHanger)
+            {
+                Vehicle->CurrentHanger = Vehicle->HomeHanger;
+                Vehicle->HomeHanger->ParkedVehicles.AddUnique(Vehicle);
+            }
+            continue;
+        }
+
+        Vehicle->CurrentRangeLeft = FMath::Max(0.0f, Vehicle->CurrentRangeLeft - RoundTripDist);
+        Vehicle->BeginMissionMovement(TargetLocation, CurrentHours, SearchHours, MissionType);
+        LaunchedVehicles.Add(Vehicle);
+
+        UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Activated %s for %s (target: %.0f,%.0f, range left: %.0f)"),
+            *UEnum::GetValueAsString(MissionType),
+            Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+            TargetLocation.X, TargetLocation.Y, Vehicle->CurrentRangeLeft);
+    }
+
+    Mission->VehiclesInFleet = LaunchedVehicles;
+
+    if (Mission->VehiclesInFleet.Num() == 0)
+    {
+        ActiveMissions.Remove(Mission);
+        UE_LOG(LogTemp, Warning, TEXT("[LIVE MISSION] No vehicles launched — mission cancelled"));
     }
 }
 
-// ===========================================================================
-// Updated StartMission — long duration for live missions (old system no longer kills them early)
-// ===========================================================================
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
@@ -110,11 +278,8 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->OriginBase = OriginBase;
     NewMission->VehiclesInFleet = Vehicles;
     NewMission->StartDay = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>()->GetCurrentDay();
-
-    // === FIXED: Live missions stay alive in the old system for 30 days ===
-    // The live movement system will resolve them early when the vehicle returns
-    NewMission->DurationDays = (MissionType == EMissionType::Recon) ? 30 : DurationDays;
-
+    NewMission->bIsLiveMovement = true;
+    NewMission->DurationDays = 0;
     NewMission->Status = EMissionStatus::InProgress;
     NewMission->Outcome = EMissionOutcome::Success;
     NewMission->MissionType = MissionType;
@@ -122,7 +287,6 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
 
     ActiveMissions.Add(NewMission);
 
-    // === soldier assignment code (keep your existing block exactly as-is) ===
     USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
     if (SoldierMgr)
     {
@@ -144,6 +308,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
             {
                 UStrategySoldier* Soldier = SoldiersToUse[SoldierIndex++];
                 Vehicle->CurrentPassengers.Add(Soldier);
+                Soldier->CurrentMission = NewMission;
 
                 if (Soldier->HomeBarracks == nullptr)
                 {
@@ -152,7 +317,6 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
                         if (Barracks && Barracks->FacilityDefinition && Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
                         {
                             Soldier->HomeBarracks = Barracks;
-                            UE_LOG(LogTemp, Verbose, TEXT("[MISSION] Soldier %s → HomeBarracks assigned to %s"), *Soldier->SoldierName, *Barracks->FacilityDefinition->FacilityName.ToString());
                             break;
                         }
                     }
@@ -170,74 +334,83 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         }
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched %s mission for faction %s with %d vehicles from base '%s' (live system active, duration: %d days)"),
-        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString(), NewMission->DurationDays);
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched live %s mission for faction %s with %d vehicles from base '%s'"),
+        *UEnum::GetValueAsString(MissionType), *UEnum::GetValueAsString(AttackingFaction), Vehicles.Num(), *OriginBase->BaseName.ToString());
 
-    ActivateLiveMovementForVehicles(Vehicles, MissionType);
+    ActivateLiveMovementForVehicles(NewMission, MissionType);
+
+    if (!ActiveMissions.Contains(NewMission))
+    {
+        return nullptr;
+    }
 
     return NewMission;
 }
 
-// ===========================================================================
-// Updated UpdateAllLiveVehicles — now cleans up finished live missions
-// ===========================================================================
-void UMissionManagerSubsystem::UpdateAllLiveVehicles()
+void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
 {
+    if (DeltaGameHours <= 0.0f)
+    {
+        return;
+    }
+
     float CurrentHours = GetCurrentGameHours();
 
     for (int32 i = ActiveMissions.Num() - 1; i >= 0; --i)
     {
         UMissionGroup* Mission = ActiveMissions[i];
-        if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
+        if (!Mission || Mission->Status != EMissionStatus::InProgress || !Mission->bIsLiveMovement) continue;
 
-        bool bAllVehiclesStillActive = false;
+        bool bAllDocked = Mission->VehiclesInFleet.Num() > 0;
 
         for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
         {
-            if (Vehicle)
+            if (!Vehicle)
             {
-                Vehicle->UpdatePositionAndPings(CurrentHours);
+                continue;
+            }
 
-                if (Vehicle->CurrentMission != nullptr ||
-                    Vehicle->CurrentBehavior == EVehicleBehavior::Attacking ||
-                    Vehicle->CurrentBehavior == EVehicleBehavior::Evading ||
-                    Vehicle->CurrentBehavior == EVehicleBehavior::Returning)
-                {
-                    bAllVehiclesStillActive = true;
-                }
+            Vehicle->UpdatePositionAndPings(CurrentHours, DeltaGameHours);
+
+            if (Vehicle->GetMissionPhase() != EVehicleMissionPhase::Docked)
+            {
+                bAllDocked = false;
             }
         }
 
-        if (!bAllVehiclesStillActive)
+        if (bAllDocked)
         {
             ResolveMissionOutcome(Mission);
             ActiveMissions.RemoveAt(i);
-            UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Mission fully completed and removed by live movement system"));
+            UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Mission fully completed — all vehicles docked"));
         }
     }
 }
 
-// ===========================================================================
-// Updated LaunchMissionFromBase — now forces short live missions for both factions
-// ===========================================================================
-UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType)
+UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType, const TArray<UStrategyVehicle*>& VehiclesOverride)
 {
     if (!OriginBase) return nullptr;
 
-    // Get all parked vehicles in this base's hangars
-    TArray<UStrategyVehicle*> AvailableVehicles;
-    for (UStrategyFacility* Facility : OriginBase->Facilities)
+    TArray<UStrategyVehicle*> VehiclesToLaunch;
+
+    if (VehiclesOverride.Num() > 0)
     {
-        if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+        VehiclesToLaunch = VehiclesOverride;
+    }
+    else
+    {
+        for (UStrategyFacility* Facility : OriginBase->Facilities)
         {
-            AvailableVehicles.Append(Facility->ParkedVehicles);
+            if (Facility && Facility->FacilityDefinition && Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
+            {
+                VehiclesToLaunch.Append(Facility->ParkedVehicles);
+            }
         }
     }
 
-    if (AvailableVehicles.Num() == 0) return nullptr;
+    if (VehiclesToLaunch.Num() == 0) return nullptr;
 
-    // Use the main StartMission path (this is what forces the live system)
-    return StartMission(OriginBase, AvailableVehicles, DurationDays, {}, MissionType, OriginBase->OwningFaction);
+    return StartMission(OriginBase, VehiclesToLaunch, DurationDays, {}, MissionType, OriginBase->OwningFaction);
 }
 
 void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
@@ -255,7 +428,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     bool bIsRecon = (Mission->MissionType == EMissionType::Recon);
 
-    // === Mission type logging ===
     if (bIsRecon)
     {
         UE_LOG(LogTemp, Display, TEXT("[RECON] Recon mission launched from base '%s'"), *Mission->OriginBase->BaseName.ToString());
@@ -281,7 +453,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
     }
 
-    // === Outcome roll (Recon is intentionally safer) ===
     const int32 Roll = FMath::RandRange(1, 100);
     float SuccessChance = bIsRecon ? 75.0f : FMath::Clamp(FleetEffectiveness * 0.8f + 20.0f, 40.0f, 85.0f);
 
@@ -297,13 +468,10 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     Mission->Outcome = Outcome;
 
-    // === Rewards ===
     FResourceStockpile Reward;
     if (bIsRecon)
     {
-        // Recon is now pure intel gathering — discovery happens LIVE via vehicle radar pings
         Reward.ResearchPoints = FMath::RandRange(200, 500);
-
         UE_LOG(LogTemp, Display, TEXT("[RECON] Mission complete — intel gathered via live radar pings"));
     }
     else
@@ -342,7 +510,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     EFactionType Attacker = Mission->AttackingFaction;
     EFactionType Defender = (Attacker == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-    // === Vehicle & Soldier losses + return logic ===
     int32 TotalVehiclesLost = 0;
     TArray<UStrategySoldier*> AllLostSoldiers;
     int32 TotalCaptured = 0;
@@ -355,13 +522,15 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
         if (FMath::RandRange(1, 100) > SurvivalChance)
         {
-            // Vehicle is destroyed (only on very bad rolls)
             TotalVehiclesLost++;
-            UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' DESTROYED"), *Vehicle->VehicleDefinition->VehicleName.ToString());
+            UE_LOG(LogTemp, Display, TEXT("[MISSION] Vehicle '%s' DESTROYED"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Unknown"));
 
             for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
             {
                 if (!Soldier) continue;
+
+                Soldier->CurrentMission = nullptr;
 
                 bool bCaptured = false;
                 if (Outcome == EMissionOutcome::Failure || Outcome == EMissionOutcome::CatastrophicFailure)
@@ -395,12 +564,16 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
         else
         {
-            // Vehicle survives — NO DAMAGE is applied anymore
-            if (Vehicle->HomeHanger)
+            if (Vehicle->GetMissionPhase() != EVehicleMissionPhase::Docked)
+            {
+                Vehicle->DockAtHomeHangar();
+            }
+            else if (Vehicle->HomeHanger)
             {
                 Vehicle->CurrentHanger = Vehicle->HomeHanger;
                 Vehicle->HomeHanger->ParkedVehicles.AddUnique(Vehicle);
             }
+
             Vehicle->CurrentMission = nullptr;
         }
     }
@@ -408,7 +581,6 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->VehiclesLost = TotalVehiclesLost;
     Mission->SoldiersKilled = AllLostSoldiers.Num();
 
-    // === Victory-side POW/KIA (Recon has lower chance) ===
     if (Outcome == EMissionOutcome::Success || Outcome == EMissionOutcome::PartialSuccess)
     {
         int32 NumToProcess = bIsRecon ? FMath::RandRange(0, 2) : FMath::RandRange(1, 4);
@@ -446,16 +618,23 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
     }
 
-    // === Apply rewards ===
     UResourceManagerSubsystem* ResourceMgr = GetResourceManager();
     if (ResourceMgr)
     {
         ResourceMgr->AddResources(Mission->AttackingFaction, Reward);
     }
 
-    // Clean up
     for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
     {
+        if (!Vehicle) continue;
+
+        for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+        {
+            if (Soldier)
+            {
+                Soldier->CurrentMission = nullptr;
+            }
+        }
         Vehicle->CurrentPassengers.Empty();
     }
 

@@ -30,9 +30,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Mission")
     FOnMissionCompleted OnMissionCompleted;
 
-    /** Launches a simple mission with all parked vehicles in a base (used by AI) */
-    UFUNCTION(BlueprintCallable, Category = "Mission")
-    UMissionGroup* LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType = EMissionType::Offensive);
+    /** Launches a mission from a base. Pass VehiclesOverride to launch a specific subset; empty = all parked vehicles. */
+    UFUNCTION(BlueprintCallable, Category = "Mission", meta = (AutoCreateRefTerm = "VehiclesOverride"))
+    UMissionGroup* LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType, const TArray<UStrategyVehicle*>& VehiclesOverride);
 
     UPROPERTY(VisibleAnywhere, Transient, Category = "Missions")
     TArray<UMissionGroup*> ActiveMissions;
@@ -51,17 +51,20 @@ public:
     float GetCurrentGameHours() const;
 
     UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
-    void ActivateLiveMovementForVehicles(const TArray<UStrategyVehicle*>& Vehicles, EMissionType MissionType);
+    void ActivateLiveMovementForVehicles(UMissionGroup* Mission, EMissionType MissionType);
 
     // ===========================================================================
     // NEW: Live movement integration (keep all vehicles updated)
     // ===========================================================================
     UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
-    void UpdateAllLiveVehicles();
+    void UpdateAllLiveVehicles(float DeltaGameHours);
 
 private:
     /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
     float CalculateFleetEffectiveness(const UMissionGroup* Mission) const;
 
     void ResolveMissionOutcome(UMissionGroup* Mission);
+
+    FVector2D PickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType) const;
+    void GetMapBounds(float& OutWidth, float& OutHeight, float& OutPadding) const;
 };

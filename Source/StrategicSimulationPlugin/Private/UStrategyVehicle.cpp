@@ -1,6 +1,5 @@
 #include "UStrategyVehicle.h"
 #include "UStrategyBase.h"
-//#include "UStrategyCampaignSubsystem.h"
 #include "UAIControllerSubsystem.h"
 #include "UStrategyFacility.h"
 #include "UMissionGroup.h"
@@ -16,8 +15,9 @@ UStrategyVehicle::UStrategyVehicle()
     CurrentRangeLeft = 0.0f;
     CurrentHealth = 100;
     DamageState = EVehicleDamageState::Undamaged;
+    CurrentPhase = EVehicleMissionPhase::Docked;
+    CurrentBehavior = EVehicleBehavior::Idle;
 
-    // Movement defaults
     CurrentPosition = FVector2D::ZeroVector;
     CurrentWaypoints.Empty();
     LaunchGameTimeHours = 0.0f;
@@ -25,6 +25,15 @@ UStrategyVehicle::UStrategyVehicle()
     LastPingGameTimeHours = 0.0f;
     CruiseSpeedPixelsPerHour = 180.0f;
     PingIntervalHours = 0.5f;
+}
+
+float UStrategyVehicle::GetCruiseSpeed() const
+{
+    if (CruiseSpeedPixelsPerHour > 0.0f)
+    {
+        return CruiseSpeedPixelsPerHour;
+    }
+    return 180.0f;
 }
 
 float UStrategyVehicle::GetMaxRange() const
@@ -45,7 +54,7 @@ void UStrategyVehicle::ApplyDamage(int32 DamageAmount)
     UpdateDamageStateFromHealth();
 
     UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s took %d damage → Health: %d/%d (%s)"),
-        *VehicleDefinition->VehicleName.ToString(),
+        VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : TEXT("Unknown"),
         DamageAmount, CurrentHealth,
         VehicleDefinition ? VehicleDefinition->MaxHealth : 100,
         *UEnum::GetValueAsString(DamageState));
@@ -78,7 +87,6 @@ bool UStrategyVehicle::NeedsRepair() const
 
     if (bNeeds && CurrentHealth >= MaxH)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[VEHICLE] %s NeedsRepair() returned true even at full health! Forcing false."), *VehicleDefinition->VehicleName.ToString());
         return false;
     }
     return bNeeds;
@@ -108,7 +116,8 @@ bool UStrategyVehicle::EquipWeapon(UItemDefinition* Weapon)
     WeaponAmmoCounts.Add(Weapon->MaxAmmo);
 
     UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s equipped weapon '%s' (ammo: %d)"),
-        *VehicleDefinition->VehicleName.ToString(), *Weapon->ItemName.ToString(), Weapon->MaxAmmo);
+        VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : TEXT("Unknown"),
+        *Weapon->ItemName.ToString(), Weapon->MaxAmmo);
     return true;
 }
 
@@ -119,7 +128,8 @@ bool UStrategyVehicle::EquipDefenseSystem(UItemDefinition* DefenseItem)
 
     EquippedDefenseSystems.Add(DefenseItem);
     UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s equipped defense system '%s'"),
-        *VehicleDefinition->VehicleName.ToString(), *DefenseItem->ItemName.ToString());
+        VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : TEXT("Unknown"),
+        *DefenseItem->ItemName.ToString());
     return true;
 }
 
@@ -160,77 +170,238 @@ int32 UStrategyVehicle::GetVehicleDefensiveRating() const
     return Rating;
 }
 
-// ===========================================================================
-// Updated LaunchScoutingMission — now uses realistic scale + 1 hour at target
-// ===========================================================================
-void UStrategyVehicle::LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget)
+void UStrategyVehicle::DockAtHomeHangar()
+{
+    if (HomeBase)
+    {
+        CurrentPosition = HomeBase->MapLocation;
+    }
+
+    CurrentPhase = EVehicleMissionPhase::Docked;
+    CurrentBehavior = EVehicleBehavior::Idle;
+    CurrentTargetVehicle = nullptr;
+    CombatBehaviorStartTime = -1.0f;
+
+    CurrentWaypoints.Empty();
+    ReturningWaypoints.Empty();
+    ReturningDistanceTraveled = 0.0f;
+    ReturningPathLength = 0.0f;
+    TotalTravelTimeHours = 0.0f;
+    OutboundTravelTime = 0.0f;
+    ReturnTravelTime = 0.0f;
+    SearchTimeAtTarget = 0.0f;
+
+    CurrentRangeLeft = GetMaxRange();
+
+    if (HomeHanger)
+    {
+        CurrentHanger = HomeHanger;
+        HomeHanger->ParkedVehicles.AddUnique(this);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s docked at home base"),
+        VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this));
+}
+
+void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget, EMissionType MissionType)
 {
     if (!HomeBase) return;
 
     CurrentPosition = HomeBase->MapLocation;
     CurrentWaypoints.Empty();
-    CurrentWaypoints.Add(HomeBase->MapLocation);      // 0 = Base
-    CurrentWaypoints.Add(TargetLocation);             // 1 = Target
-    CurrentWaypoints.Add(HomeBase->MapLocation);      // 2 = Base
+    CurrentWaypoints.Add(HomeBase->MapLocation);
+    CurrentWaypoints.Add(TargetLocation);
+    CurrentWaypoints.Add(HomeBase->MapLocation);
 
     LaunchGameTimeHours = CurrentGameHours;
     LastPingGameTimeHours = CurrentGameHours;
 
     float DistOutbound = FVector2D::Distance(HomeBase->MapLocation, TargetLocation);
-    OutboundTravelTime = DistOutbound / CruiseSpeedPixelsPerHour;
-    ReturnTravelTime = OutboundTravelTime;           // assume same speed back
+    OutboundTravelTime = DistOutbound / GetCruiseSpeed();
+    ReturnTravelTime = OutboundTravelTime;
     SearchTimeAtTarget = SearchHoursAtTarget;
-
     TotalTravelTimeHours = OutboundTravelTime + SearchTimeAtTarget + ReturnTravelTime;
 
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s launched mission — travel out: %.1f hrs | search: %.1f hrs | return: %.1f hrs"),
-        *VehicleDefinition->VehicleName.ToString(),
+    CurrentPhase = EVehicleMissionPhase::EnRoute;
+    ReturningWaypoints.Empty();
+    ReturningDistanceTraveled = 0.0f;
+    ReturningPathLength = 0.0f;
+    CombatBehaviorStartTime = -1.0f;
+    CurrentTargetVehicle = nullptr;
+
+    switch (MissionType)
+    {
+    case EMissionType::Recon:
+        CurrentBehavior = EVehicleBehavior::Scouting;
+        break;
+    case EMissionType::Interception:
+    case EMissionType::Offensive:
+        CurrentBehavior = EVehicleBehavior::Attacking;
+        break;
+    case EMissionType::Defensive:
+        CurrentBehavior = EVehicleBehavior::Patrolling;
+        break;
+    default:
+        CurrentBehavior = EVehicleBehavior::Scouting;
+        break;
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s began %s movement — out: %.1f hrs | search: %.1f hrs | return: %.1f hrs"),
+        VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
+        *UEnum::GetValueAsString(MissionType),
         OutboundTravelTime, SearchTimeAtTarget, ReturnTravelTime);
 }
 
-void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
+void UStrategyVehicle::LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget)
 {
-    if (CurrentMission == nullptr) return;
+    BeginMissionMovement(TargetLocation, CurrentGameHours, SearchHoursAtTarget, EMissionType::Recon);
+}
 
-    float Elapsed = CurrentGameHours - LaunchGameTimeHours;
-    float Progress = (TotalTravelTimeHours > 0.0f)
-        ? FMath::Clamp(Elapsed / TotalTravelTimeHours, 0.0f, 1.0f)
-        : 0.0f;
+void UStrategyVehicle::UpdatePhaseFromPathProgress(float Progress)
+{
+    if (TotalTravelTimeHours <= 0.0f || CurrentWaypoints.Num() < 3)
+    {
+        return;
+    }
 
-    FVector2D NewPosition;
+    float MovingTime = Progress * TotalTravelTimeHours;
 
-    // === ATTACKING / EVADING BEHAVIOR ===
-    if ((CurrentBehavior == EVehicleBehavior::Attacking || CurrentBehavior == EVehicleBehavior::Evading)
-        && CurrentTargetVehicle.IsValid())
+    if (MovingTime <= OutboundTravelTime)
+    {
+        CurrentPhase = EVehicleMissionPhase::EnRoute;
+    }
+    else if (MovingTime <= OutboundTravelTime + SearchTimeAtTarget)
+    {
+        CurrentPhase = EVehicleMissionPhase::OnStation;
+    }
+    else
+    {
+        CurrentPhase = EVehicleMissionPhase::EnRoute;
+    }
+}
+
+void UStrategyVehicle::TickRadarPings(float CurrentGameHours)
+{
+    while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
+    {
+        LastPingGameTimeHours += PingIntervalHours;
+        PerformRadarPing();
+    }
+}
+
+float UStrategyVehicle::GetReturningPathLength() const
+{
+    if (ReturningWaypoints.Num() < 2)
+    {
+        return 0.0f;
+    }
+
+    float TotalLength = 0.0f;
+    for (int32 i = 0; i < ReturningWaypoints.Num() - 1; ++i)
+    {
+        TotalLength += FVector2D::Distance(ReturningWaypoints[i], ReturningWaypoints[i + 1]);
+    }
+    return TotalLength;
+}
+
+FVector2D UStrategyVehicle::GetPositionOnReturningPath(float DistanceAlongPath) const
+{
+    if (ReturningWaypoints.Num() < 2)
+    {
+        return CurrentPosition;
+    }
+
+    float Remaining = DistanceAlongPath;
+    for (int32 i = 0; i < ReturningWaypoints.Num() - 1; ++i)
+    {
+        const float SegmentLength = FVector2D::Distance(ReturningWaypoints[i], ReturningWaypoints[i + 1]);
+        if (SegmentLength <= 0.0f)
+        {
+            continue;
+        }
+
+        if (Remaining <= SegmentLength)
+        {
+            const float T = Remaining / SegmentLength;
+            return FMath::Lerp(ReturningWaypoints[i], ReturningWaypoints[i + 1], T);
+        }
+
+        Remaining -= SegmentLength;
+    }
+
+    return ReturningWaypoints.Last();
+}
+
+void UStrategyVehicle::AdvanceReturningMovement(float DeltaGameHours)
+{
+    if (!HomeBase)
+    {
+        CurrentPhase = EVehicleMissionPhase::Docked;
+        CurrentBehavior = EVehicleBehavior::Idle;
+        return;
+    }
+
+    if (ReturningWaypoints.Num() == 0)
+    {
+        GenerateReturnPath();
+    }
+
+    if (ReturningWaypoints.Num() < 2 || ReturningPathLength <= 0.0f)
+    {
+        const FVector2D Direction = (HomeBase->MapLocation - CurrentPosition).GetSafeNormal();
+        CurrentPosition += Direction * GetCruiseSpeed() * DeltaGameHours;
+
+        if (FVector2D::Distance(CurrentPosition, HomeBase->MapLocation) <= GetCruiseSpeed() * DeltaGameHours + 1.0f)
+        {
+            DockAtHomeHangar();
+        }
+        return;
+    }
+
+    ReturningDistanceTraveled += GetCruiseSpeed() * DeltaGameHours;
+
+    if (ReturningDistanceTraveled >= ReturningPathLength)
+    {
+        DockAtHomeHangar();
+        return;
+    }
+
+    CurrentPosition = GetPositionOnReturningPath(ReturningDistanceTraveled);
+}
+
+void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float DeltaGameHours)
+{
+    if (CurrentMission == nullptr || CurrentPhase == EVehicleMissionPhase::Docked)
+    {
+        return;
+    }
+
+    if (DeltaGameHours <= 0.0f)
+    {
+        return;
+    }
+
+    // === COMBAT ===
+    if (CurrentPhase == EVehicleMissionPhase::Combat && CurrentTargetVehicle.IsValid())
     {
         UStrategyVehicle* Target = CurrentTargetVehicle.Get();
 
         if (CombatBehaviorStartTime < 0.0f)
+        {
             CombatBehaviorStartTime = CurrentGameHours;
+        }
 
-        FVector2D Direction = (CurrentBehavior == EVehicleBehavior::Attacking)
-            ? (Target->CurrentPosition - CurrentPosition)
-            : (CurrentPosition - Target->CurrentPosition);
+        const FVector2D Direction = (CurrentBehavior == EVehicleBehavior::Attacking)
+            ? (Target->CurrentPosition - CurrentPosition).GetSafeNormal()
+            : (CurrentPosition - Target->CurrentPosition).GetSafeNormal();
 
         if (!Direction.IsNearlyZero())
         {
-            Direction.Normalize();
-            NewPosition = CurrentPosition + Direction * 180.0f;
-        }
-        else
-        {
-            NewPosition = CurrentPosition;
+            CurrentPosition += Direction * GetCruiseSpeed() * DeltaGameHours;
         }
 
-        CurrentPosition = NewPosition;
+        TickRadarPings(CurrentGameHours);
 
-        while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
-        {
-            LastPingGameTimeHours += PingIntervalHours;
-            PerformRadarPing();
-        }
-
-        // Exit conditions
         bool bShouldReturn = false;
 
         if (CurrentGameHours - CombatBehaviorStartTime >= 1.0f)
@@ -240,9 +411,8 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
 
         if (HomeBase)
         {
-            float DistanceFromHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
-            float MaxDistance = VehicleDefinition ? VehicleDefinition->MaxRange * 0.9f : 700.0f;
-
+            const float DistanceFromHome = FVector2D::Distance(CurrentPosition, HomeBase->MapLocation);
+            const float MaxDistance = GetMaxRange() * 0.9f;
             if (DistanceFromHome > MaxDistance)
             {
                 bShouldReturn = true;
@@ -252,107 +422,34 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours)
         if (bShouldReturn)
         {
             SetBehavior(EVehicleBehavior::Returning);
-            CombatBehaviorStartTime = -1.0f;
         }
 
         return;
     }
 
-    // === RETURNING BEHAVIOR (Waypoint-based) ===
-    else if (CurrentBehavior == EVehicleBehavior::Returning)
+    // === RETURNING ===
+    if (CurrentPhase == EVehicleMissionPhase::Returning)
     {
-        if (!HomeBase)
-        {
-            CurrentBehavior = EVehicleBehavior::Idle;
-            return;
-        }
-
-        if (ReturningWaypoints.Num() == 0)
-        {
-            GenerateReturnPath();
-        }
-
-        if (ReturningWaypoints.Num() == 0)
-        {
-            // Fallback direct movement
-            FVector2D Direction = HomeBase->MapLocation - CurrentPosition;
-            if (!Direction.IsNearlyZero())
-            {
-                Direction.Normalize();
-                CurrentPosition += Direction * 200.0f;
-            }
-        }
-        else
-        {
-            ReturningProgress = FMath::Clamp(ReturningProgress + 0.012f, 0.0f, 1.0f);
-
-            float TotalSegments = ReturningWaypoints.Num() - 1;
-            float ScaledProgress = ReturningProgress * TotalSegments;
-            int32 CurrentIndex = FMath::FloorToInt(ScaledProgress);
-            float SegmentProgress = ScaledProgress - CurrentIndex;
-
-            if (CurrentIndex >= ReturningWaypoints.Num() - 1)
-            {
-                CurrentPosition = HomeBase->MapLocation;
-
-                UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s has RETURNED to base"), *GetNameSafe(this));
-
-                CurrentBehavior = EVehicleBehavior::Idle;
-                CurrentTargetVehicle = nullptr;
-                CurrentMission = nullptr;
-                CurrentWaypoints.Empty();
-                ReturningWaypoints.Empty();
-                TotalTravelTimeHours = 0.0f;
-                ReturningProgress = 0.0f;
-                CombatBehaviorStartTime = -1.0f;
-
-                if (HomeHanger)
-                {
-                    CurrentHanger = HomeHanger;
-                    HomeHanger->ParkedVehicles.AddUnique(this);
-                }
-            }
-            else
-            {
-                FVector2D Start = ReturningWaypoints[CurrentIndex];
-                FVector2D End = ReturningWaypoints[CurrentIndex + 1];
-                CurrentPosition = FMath::Lerp(Start, End, SegmentProgress);
-            }
-        }
-
-        while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
-        {
-            LastPingGameTimeHours += PingIntervalHours;
-            PerformRadarPing();
-        }
-
+        AdvanceReturningMovement(DeltaGameHours);
+        TickRadarPings(CurrentGameHours);
         return;
     }
 
     // === NORMAL MISSION PATHING ===
+    const float Elapsed = CurrentGameHours - LaunchGameTimeHours;
+    const float Progress = (TotalTravelTimeHours > 0.0f)
+        ? FMath::Clamp(Elapsed / TotalTravelTimeHours, 0.0f, 1.0f)
+        : 0.0f;
+
+    UpdatePhaseFromPathProgress(Progress);
     CurrentPosition = GetPositionOnPath(Progress);
+    TickRadarPings(CurrentGameHours);
 
-    while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
+    if (Progress >= 1.0f)
     {
-        LastPingGameTimeHours += PingIntervalHours;
-        PerformRadarPing();
-    }
-
-    if (Progress >= 1.0f &&
-        CurrentBehavior != EVehicleBehavior::Attacking &&
-        CurrentBehavior != EVehicleBehavior::Evading &&
-        CurrentBehavior != EVehicleBehavior::Returning)
-    {
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission COMPLETE — returned to base"), *GetNameSafe(this));
-
-        CurrentMission = nullptr;
-        CurrentWaypoints.Empty();
-        TotalTravelTimeHours = 0.0f;
-        CurrentPosition = HomeBase ? HomeBase->MapLocation : CurrentPosition;
-        CurrentBehavior = EVehicleBehavior::Idle;
-        CurrentTargetVehicle = nullptr;
-        ReturningWaypoints.Empty();
-        CombatBehaviorStartTime = -1.0f;
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission path complete — docking"),
+            VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this));
+        DockAtHomeHangar();
     }
 }
 
@@ -372,7 +469,6 @@ void UStrategyVehicle::PerformRadarPing()
 
     if (UBaseManagerSubsystem* BaseManager = GI->GetSubsystem<UBaseManagerSubsystem>())
     {
-        // === SITE DETECTION ===
         for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
         {
             if (!Site || Site->bHasBeenUsed) continue;
@@ -391,8 +487,6 @@ void UStrategyVehicle::PerformRadarPing()
             }
         }
 
-        // === VEHICLE DETECTION ===
-        // 1. Check parked vehicles in enemy hangers
         TArray<UStrategyBase*> EnemyBases = BaseManager->GetBases(
             (VehicleFaction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human);
 
@@ -415,14 +509,12 @@ void UStrategyVehicle::PerformRadarPing()
             }
         }
 
-        // 2. Check vehicles currently on active missions
         if (UMissionManagerSubsystem* MissionMgr = GI->GetSubsystem<UMissionManagerSubsystem>())
         {
             for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
             {
                 if (!Mission) continue;
 
-                // Only check enemy missions
                 if (Mission->OriginBase && Mission->OriginBase->OwningFaction == VehicleFaction)
                     continue;
 
@@ -433,50 +525,37 @@ void UStrategyVehicle::PerformRadarPing()
             }
         }
     }
-
-    // Simple cleanup
-    if (RecentlyDetectedVehicles.Num() > 20)
-    {
-        RecentlyDetectedVehicles.Empty();
-    }
 }
 
 FVector2D UStrategyVehicle::GetPositionOnPath(float Progress) const
 {
     if (CurrentWaypoints.Num() < 3) return CurrentPosition;
 
-    // Remap progress so we dwell at the target during search time
     float TravelPortion = OutboundTravelTime + ReturnTravelTime;
-    if (TravelPortion <= 0.0f) return CurrentWaypoints[1]; // safety
+    if (TravelPortion <= 0.0f) return CurrentWaypoints[1];
 
-    // Time spent moving vs searching
     float MovingTime = Progress * TotalTravelTimeHours;
 
     if (MovingTime <= OutboundTravelTime)
     {
-        // Going to target (first segment)
-        float t = MovingTime / OutboundTravelTime;
+        float t = OutboundTravelTime > 0.0f ? MovingTime / OutboundTravelTime : 1.0f;
         return FMath::Lerp(CurrentWaypoints[0], CurrentWaypoints[1], t);
     }
     else if (MovingTime <= OutboundTravelTime + SearchTimeAtTarget)
     {
-        // Waiting at target
         return CurrentWaypoints[1];
     }
     else
     {
-        // Returning home (second segment)
         float ReturnElapsed = MovingTime - (OutboundTravelTime + SearchTimeAtTarget);
-        float t = ReturnElapsed / ReturnTravelTime;
+        float t = ReturnTravelTime > 0.0f ? ReturnElapsed / ReturnTravelTime : 1.0f;
         return FMath::Lerp(CurrentWaypoints[1], CurrentWaypoints[2], t);
     }
 }
 
 bool UStrategyVehicle::IsMissionComplete(float CurrentGameHours) const
 {
-    if (TotalTravelTimeHours <= 0.0f) return true;
-    float Elapsed = CurrentGameHours - LaunchGameTimeHours;
-    return Elapsed >= TotalTravelTimeHours;
+    return CurrentPhase == EVehicleMissionPhase::Docked && CurrentMission != nullptr;
 }
 
 float UStrategyVehicle::GetRadarRange() const
@@ -485,7 +564,7 @@ float UStrategyVehicle::GetRadarRange() const
     {
         return VehicleDefinition->RadarRangePixels;
     }
-    return 64.0f; // Safe fallback
+    return 64.0f;
 }
 
 void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
@@ -495,28 +574,35 @@ void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
     float Distance = FVector2D::Distance(OtherVehicle->CurrentPosition, CurrentPosition);
     if (Distance > GetRadarRange()) return;
 
-    // Check if we already detected this vehicle recently
-    bool bAlreadyDetected = false;
-    for (int32 i = RecentlyDetectedVehicles.Num() - 1; i >= 0; i--)
+    UGameInstance* GI = GetTypedOuter<UGameInstance>();
+    if (!GI)
     {
-        if (!RecentlyDetectedVehicles[i].IsValid())
+        if (UWorld* World = GetWorld())
+            GI = World->GetGameInstance();
+    }
+
+    float CurrentGameHours = 0.0f;
+    if (GI)
+    {
+        if (UMissionManagerSubsystem* MissionMgr = GI->GetSubsystem<UMissionManagerSubsystem>())
         {
-            RecentlyDetectedVehicles.RemoveAt(i);
-            continue;
-        }
-        if (RecentlyDetectedVehicles[i].Get() == OtherVehicle)
-        {
-            bAlreadyDetected = true;
-            break;
+            CurrentGameHours = MissionMgr->GetCurrentGameHours();
         }
     }
 
-    if (!bAlreadyDetected)
+    const TWeakObjectPtr<UStrategyVehicle> OtherKey(OtherVehicle);
+
+    if (const float* LastDetected = LastDetectedGameHour.Find(OtherKey))
     {
-        RecentlyDetectedVehicles.Add(OtherVehicle);
-        OnVehicleDetected.Broadcast(this, OtherVehicle);
-        HandleVehicleDetected(OtherVehicle);
+        if (CurrentGameHours - *LastDetected < VehicleDetectionCooldownHours)
+        {
+            return;
+        }
     }
+
+    LastDetectedGameHour.Add(OtherKey, CurrentGameHours);
+    OnVehicleDetected.Broadcast(this, OtherVehicle);
+    HandleVehicleDetected(OtherVehicle);
 }
 
 void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicle* Target)
@@ -533,21 +619,25 @@ void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicl
         *UEnum::GetValueAsString(PreviousBehavior),
         *UEnum::GetValueAsString(NewBehavior));
 
-    // Clear old returning path
-    ReturningWaypoints.Empty();
-    ReturningProgress = 0.0f;
-
-    if (NewBehavior == EVehicleBehavior::Returning && HomeBase)
-    {
-        // Generate waypoints from current position back to home base
-        GenerateReturnPath();
-    }
-
     if (NewBehavior == EVehicleBehavior::Attacking || NewBehavior == EVehicleBehavior::Evading)
     {
-        CurrentWaypoints.Empty(); // Interrupt normal mission
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s interrupting mission for combat behavior"),
-            *GetNameSafe(this));
+        CurrentPhase = EVehicleMissionPhase::Combat;
+        CombatBehaviorStartTime = -1.0f;
+        CurrentWaypoints.Empty();
+        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s entering combat phase"), *GetNameSafe(this));
+    }
+    else if (NewBehavior == EVehicleBehavior::Returning)
+    {
+        CurrentPhase = EVehicleMissionPhase::Returning;
+        ReturningDistanceTraveled = 0.0f;
+        GenerateReturnPath();
+    }
+    else if (NewBehavior == EVehicleBehavior::Idle)
+    {
+        if (CurrentMission == nullptr)
+        {
+            CurrentPhase = EVehicleMissionPhase::Docked;
+        }
     }
 }
 
@@ -555,9 +645,6 @@ void UStrategyVehicle::HandleVehicleDetected(UStrategyVehicle* DetectedVehicle)
 {
     if (!DetectedVehicle || DetectedVehicle == this) return;
 
-    OnVehicleDetected.Broadcast(this, DetectedVehicle);
-
-    // Notify the AI Controller (this is where decision logic lives)
     UGameInstance* GI = GetTypedOuter<UGameInstance>();
     if (!GI)
     {
@@ -577,24 +664,22 @@ void UStrategyVehicle::HandleVehicleDetected(UStrategyVehicle* DetectedVehicle)
 void UStrategyVehicle::GenerateReturnPath()
 {
     ReturningWaypoints.Empty();
+    ReturningDistanceTraveled = 0.0f;
 
     if (!HomeBase) return;
 
     FVector2D Start = CurrentPosition;
     FVector2D End = HomeBase->MapLocation;
 
-    // Create a simple path with a few waypoints (you can increase this for smoother paths)
-    int32 NumWaypoints = 4;
-
+    const int32 NumWaypoints = 4;
     for (int32 i = 0; i <= NumWaypoints; i++)
     {
         float Alpha = (float)i / (float)NumWaypoints;
-        FVector2D Waypoint = FMath::Lerp(Start, End, Alpha);
-        ReturningWaypoints.Add(Waypoint);
+        ReturningWaypoints.Add(FMath::Lerp(Start, End, Alpha));
     }
 
-    ReturningProgress = 0.0f;
+    ReturningPathLength = GetReturningPathLength();
 
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s generated return path with %d waypoints"),
-        *GetNameSafe(this), ReturningWaypoints.Num());
+    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s generated return path (%.0f px)"),
+        *GetNameSafe(this), ReturningPathLength);
 }

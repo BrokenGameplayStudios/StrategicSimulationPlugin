@@ -315,12 +315,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
             if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
             {
-                // Consume range when launching
-                for (UStrategyVehicle* Vehicle : AvailableVehicles)
-                {
-                    Vehicle->CurrentRangeLeft = 0.0f; // will be refueled on return
-                }
-
                 if (UMissionGroup* Mission = MissionMgr->StartMission(MissionLaunchBase, AvailableVehicles, 15, TArray<UStrategySoldier*>(), ChosenType, Faction))
                 {
                     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI launched %s mission from base '%s' with %d vehicles"),
@@ -462,7 +456,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
             UE_LOG(LogTemp, Display, TEXT("[AI] %s launching %d recon mission(s) from base '%s'"),
                 *UEnum::GetValueAsString(Faction), IdleHealthyVehicles.Num(), *Base->BaseName.ToString());
 
-            MissionMgr->LaunchMissionFromBase(Base, 1, EMissionType::Recon);
+            MissionMgr->LaunchMissionFromBase(Base, 1, EMissionType::Recon, IdleHealthyVehicles);
             ReconLaunched += IdleHealthyVehicles.Num();
         }
     }

@@ -76,6 +76,7 @@ public:
 
 private:
     FDateTime CurrentGameDate;
+    FDateTime PreviousTickGameDate;
 
     float TimeScale = 1.0f;
     bool bIsPaused = true;

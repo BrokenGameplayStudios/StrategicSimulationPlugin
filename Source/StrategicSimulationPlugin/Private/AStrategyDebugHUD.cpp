@@ -8,6 +8,7 @@
 #include "UStrategyBase.h"
 #include "UMissionGroup.h"
 #include "UMissionManagerSubsystem.h"
+#include "UStrategyVehicle.h"
 #include "Engine/Canvas.h"
 
 AStrategyDebugHUD::AStrategyDebugHUD()
@@ -402,22 +403,7 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
 
     float Scale = GetCurrentMapScale();
 
-    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
-    float CurrentHours = MissionMgr ? MissionMgr->GetCurrentGameHours() : 0.0f;
-
-    // === Use freshly calculated position every frame for smooth visuals ===
-    FVector2D CurrentVisualPosition = Vehicle->CurrentPosition;
-
-    if (Vehicle->TotalTravelTimeHours > 0.0f && Vehicle->CurrentMission != nullptr)
-    {
-        float Progress = FMath::Clamp(
-            (CurrentHours - Vehicle->LaunchGameTimeHours) / Vehicle->TotalTravelTimeHours,
-            0.0f, 1.0f);
-
-        CurrentVisualPosition = Vehicle->GetPositionOnPath(Progress);
-    }
-
-    FVector2D ScreenPos = GetScreenPosition(CurrentVisualPosition);
+    FVector2D ScreenPos = GetScreenPosition(Vehicle->CurrentPosition);
 
     // Faction color
     FLinearColor VehicleColor = FLinearColor::Red;
@@ -435,25 +421,32 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
         ScreenPos.X + (12.0f * Scale), ScreenPos.Y - (8.0f * Scale),
         0.7f, 0.7f, FFontRenderInfo());
 
-    // Yellow paths + progress dot (unchanged)
-    if (bShowVehiclePaths && Vehicle->CurrentWaypoints.Num() >= 2)
+    FString StateText = FString::Printf(TEXT("%s / %s"),
+        *UEnum::GetValueAsString(Vehicle->GetMissionPhase()),
+        *UEnum::GetValueAsString(Vehicle->GetBehavior()));
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(StateText),
+        ScreenPos.X + (12.0f * Scale), ScreenPos.Y + (4.0f * Scale),
+        0.55f, 0.55f, FFontRenderInfo());
+
+    if (bShowVehiclePaths)
     {
-        for (int32 i = 0; i < Vehicle->CurrentWaypoints.Num() - 1; ++i)
+        if (Vehicle->GetMissionPhase() == EVehicleMissionPhase::Returning && Vehicle->ReturningWaypoints.Num() >= 2)
         {
-            FVector2D A = GetScreenPosition(Vehicle->CurrentWaypoints[i]);
-            FVector2D B = GetScreenPosition(Vehicle->CurrentWaypoints[i + 1]);
-            Canvas->K2_DrawLine(A, B, 1.5f * Scale, FLinearColor::Yellow);
+            for (int32 i = 0; i < Vehicle->ReturningWaypoints.Num() - 1; ++i)
+            {
+                FVector2D A = GetScreenPosition(Vehicle->ReturningWaypoints[i]);
+                FVector2D B = GetScreenPosition(Vehicle->ReturningWaypoints[i + 1]);
+                Canvas->K2_DrawLine(A, B, 1.5f * Scale, FLinearColor(1.0f, 0.5f, 0.0f, 1.0f));
+            }
         }
-
-        if (Vehicle->TotalTravelTimeHours > 0.0f)
+        else if (Vehicle->CurrentWaypoints.Num() >= 2)
         {
-            float Progress = FMath::Clamp((CurrentHours - Vehicle->LaunchGameTimeHours) / Vehicle->TotalTravelTimeHours, 0.0f, 1.0f);
-            FVector2D ProgressPos = Vehicle->GetPositionOnPath(Progress);
-            FVector2D ScreenProgress = GetScreenPosition(ProgressPos);
-
-            float ProgressSize = 6.0f * Scale;
-            Canvas->K2_DrawBox(ScreenProgress - FVector2D(ProgressSize * 0.5f, ProgressSize * 0.5f),
-                FVector2D(ProgressSize, ProgressSize), 1.5f * Scale, VehicleColor);
+            for (int32 i = 0; i < Vehicle->CurrentWaypoints.Num() - 1; ++i)
+            {
+                FVector2D A = GetScreenPosition(Vehicle->CurrentWaypoints[i]);
+                FVector2D B = GetScreenPosition(Vehicle->CurrentWaypoints[i + 1]);
+                Canvas->K2_DrawLine(A, B, 1.5f * Scale, FLinearColor::Yellow);
+            }
         }
     }
         

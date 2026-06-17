@@ -214,3 +214,14 @@ enum class EVehicleBehavior : uint8
     Idle            UMETA(DisplayName = "Idle"),
     Ignore          UMETA(DisplayName = "Ignore")
 };
+
+/** Movement lifecycle phase — drives positioning; separate from tactical EVehicleBehavior */
+UENUM(BlueprintType)
+enum class EVehicleMissionPhase : uint8
+{
+    Docked      UMETA(DisplayName = "Docked"),
+    EnRoute     UMETA(DisplayName = "En Route"),
+    OnStation   UMETA(DisplayName = "On Station"),
+    Combat      UMETA(DisplayName = "Combat"),
+    Returning   UMETA(DisplayName = "Returning")
+};
