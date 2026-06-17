@@ -57,6 +57,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "50.0", ClampMax = "300.0"))
     float MapBorderPadding = 100.0f;
 
+    /** Minimum distance between Human and Enemy starting Command Centers */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "200.0", ClampMax = "1500.0"))
+    float MinDistanceBetweenFactions = 700.0f;
+
+    /** Maximum bases each faction can own (AI expansion and base-building checks) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "1", ClampMax = "20"))
+    int32 MaxFactionBases = 4;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;

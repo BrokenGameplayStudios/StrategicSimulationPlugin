@@ -457,7 +457,17 @@ void UBaseManagerSubsystem::OnDayPassed(int32 NewDay)
 bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const
 {
     const TArray<UStrategyBase*>& Bases = GetBasesInternal(Faction);
-    if (Bases.Num() >= 10)
+
+    int32 MaxFactionBases = 10;
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            MaxFactionBases = Campaign->MaxAIBases;
+        }
+    }
+
+    if (Bases.Num() >= MaxFactionBases)
     {
         return false;
     }

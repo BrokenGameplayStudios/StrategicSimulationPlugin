@@ -28,9 +28,28 @@ class STRATEGICSIMULATIONPLUGIN_API UStrategyCampaignSubsystem : public UGameIns
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
+    // === Map generation (overridden by AStrategyGameInitializer in the level) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Map Generation")
+    int32 NumberOfStrategicSites = 25;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Map Generation")
+    float MinimumDistanceBetweenSites = 350.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Map Generation")
+    float LogicalMapWidth = 1920.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Map Generation")
+    float LogicalMapHeight = 1080.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Map Generation")
+    float MapBorderPadding = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Map Generation")
+    float MinDistanceBetweenFactions = 700.0f;
+
     // === AI / Simulation Settings ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | AI")
-    int32 MaxAIBases = 4;   // ← change this in the editor / BP to control AI expansion globally
+    int32 MaxAIBases = 4;
 
     /** Full reset of the simulation (call from UI for New Game) */
     UFUNCTION(BlueprintCallable, Category = "Simulation")

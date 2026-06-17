@@ -1,5 +1,6 @@
 #include "AStrategyGameInitializer.h"
 #include "UStrategyCampaignSubsystem.h"
+#include "UAIControllerSubsystem.h"
 #include "Engine/Engine.h"
 
 AStrategyGameInitializer::AStrategyGameInitializer()
@@ -140,14 +141,28 @@ void AStrategyGameInitializer::BeginPlay()
         UE_LOG(LogTemp, Warning, TEXT("[VEHICLE ITEMS] VehicleItemDatabaseAsset is NULL!"));
     }
 
+    Campaign->NumberOfStrategicSites = NumberOfStrategicSites;
+    Campaign->MinimumDistanceBetweenSites = MinimumDistanceBetweenSites;
+    Campaign->LogicalMapWidth = LogicalMapWidth;
+    Campaign->LogicalMapHeight = LogicalMapHeight;
+    Campaign->MapBorderPadding = MapBorderPadding;
+    Campaign->MinDistanceBetweenFactions = MinDistanceBetweenFactions;
+    Campaign->MaxAIBases = MaxFactionBases;
+
+    UE_LOG(LogTemp, Display, TEXT("[MAP] Initializer applied map settings → Sites: %d | Site spacing: %.0f | Map: %.0fx%.0f | Border: %.0f | Faction separation: %.0f | Max bases/faction: %d"),
+        NumberOfStrategicSites, MinimumDistanceBetweenSites, LogicalMapWidth, LogicalMapHeight,
+        MapBorderPadding, MinDistanceBetweenFactions, MaxFactionBases);
+
     UAIControllerSubsystem* AIController = GetWorld()->GetGameInstance()->GetSubsystem<UAIControllerSubsystem>();
     if (AIController)
     {
         AIController->SetSimulateHumanAI(bStartWithHumanAI);
         AIController->SetSimulateEnemyAI(bStartWithEnemyAI);
-        UE_LOG(LogTemp, Display, TEXT("AStrategyGameInitializer: Applied AI simulation settings - Human: %s | Enemy: %s"),
+        AIController->MaxBases = MaxFactionBases;
+        UE_LOG(LogTemp, Display, TEXT("AStrategyGameInitializer: Applied AI simulation settings - Human: %s | Enemy: %s | MaxBases: %d"),
             bStartWithHumanAI ? TEXT("ON") : TEXT("OFF"),
-            bStartWithEnemyAI ? TEXT("ON") : TEXT("OFF"));
+            bStartWithEnemyAI ? TEXT("ON") : TEXT("OFF"),
+            MaxFactionBases);
     }
 
     UResourceManagerSubsystem* ResourceMgr = GetWorld()->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
@@ -158,16 +173,5 @@ void AStrategyGameInitializer::BeginPlay()
         UE_LOG(LogTemp, Display, TEXT("AStrategyGameInitializer: Applied custom starting resources"));
     }
 
-    // === START THE SIMULATION ===
-    //Campaign->StartSimulation();
-
-    // === NEW: Generate strategic sites using values from this actor ===
-    //if (UBaseManagerSubsystem* BaseManager = GetWorld()->GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
-    //{
-        //BaseManager->GenerateInitialSites(NumberOfStrategicSites, MinimumDistanceBetweenSites, LogicalMapWidth, LogicalMapHeight, MapBorderPadding);
-        //UE_LOG(LogTemp, Display, TEXT("[MAP] Applied 1920x1080 logical map → %d sites, border %.0f px"),
-            //NumberOfStrategicSites, MapBorderPadding);
-    //}
-
-    UE_LOG(LogTemp, Display, TEXT("Simulation INITIALIZED Press Start — AI will act every day"));
+    UE_LOG(LogTemp, Display, TEXT("Simulation INITIALIZED — Press Start to generate map and begin"));
 }

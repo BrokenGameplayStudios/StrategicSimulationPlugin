@@ -71,6 +71,16 @@ void UMissionManagerSubsystem::GetMapBounds(float& OutWidth, float& OutHeight, f
     OutWidth = 1920.0f;
     OutHeight = 1080.0f;
     OutPadding = 100.0f;
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            OutWidth = Campaign->LogicalMapWidth;
+            OutHeight = Campaign->LogicalMapHeight;
+            OutPadding = Campaign->MapBorderPadding;
+        }
+    }
 }
 
 FVector2D UMissionManagerSubsystem::PickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType) const

@@ -180,14 +180,20 @@ void UStrategyCampaignSubsystem::StartSimulation()
         UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] AI MaxBases set to %d (campaign setting)"), AIController->MaxBases);
     }
 
-    // === NEW: Generate sites and place initial Command Centers on random nodes ===
+    // === Generate sites and place initial Command Centers using campaign / initializer settings ===
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
     {
-        // Generate the map nodes first
-        BaseMgr->GenerateInitialSites(25, 180.0f, 1920.0f, 1080.0f, 100.0f);
+        BaseMgr->GenerateInitialSites(
+            NumberOfStrategicSites,
+            MinimumDistanceBetweenSites,
+            LogicalMapWidth,
+            LogicalMapHeight,
+            MapBorderPadding);
 
-        // Place Human and Enemy Command Centers on random sites (with distance separation)
-        BaseMgr->InitializeStartingBases(700);   // 700 = minimum distance between factions
+        BaseMgr->InitializeStartingBases(FMath::RoundToInt(MinDistanceBetweenFactions));
+
+        UE_LOG(LogTemp, Display, TEXT("[MAP] StartSimulation generated %d sites on %.0fx%.0f map (max %d bases per faction)"),
+            BaseMgr->AllPotentialSites.Num(), LogicalMapWidth, LogicalMapHeight, MaxAIBases);
     }
 
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));
