@@ -88,6 +88,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
     UStrategyBase* TargetEnemyBase = nullptr;
 
+    /** Salvage wreck targeted by a Salvage mission */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
+    class UStrategySiteDefinition* TargetSalvageSite = nullptr;
+
     /** True once the base-attack arrival placeholder has been logged for this mission */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
     bool bBaseAttackArrivalLogged = false;

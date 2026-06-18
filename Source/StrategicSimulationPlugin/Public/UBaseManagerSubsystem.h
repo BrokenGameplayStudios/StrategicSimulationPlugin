@@ -111,7 +111,11 @@ public:
     int32 GetSalvageDaysRemaining(const UStrategySiteDefinition* Site) const;
 
     UFUNCTION(BlueprintCallable, Category = "Expansion|Salvage")
-    void RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired = false);
+    void RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired = false,
+        EFactionType LastSalvagingFaction = EFactionType::Neutral);
+
+    UFUNCTION(BlueprintPure, Category = "Expansion")
+    UStrategySiteDefinition* FindSiteAtLocation(FVector2D Location, float Tolerance = 128.f) const;
 
     void ProcessSalvageSiteExpiry(int32 CurrentSimulationDay);
 

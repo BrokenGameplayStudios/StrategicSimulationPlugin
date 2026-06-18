@@ -54,6 +54,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display")
     static FLinearColor GetSalvageWreckColor(EFactionType WreckOwnerFaction);
 
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Salvage")
+    static bool IsSalvageCapableVehicleType(EVehicleType VehicleType);
+
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display")
     static bool ShouldShowSalvageToFaction(const class UStrategySiteDefinition* Site, EFactionType ViewerFaction,
         const class UBaseManagerSubsystem* BaseManager);

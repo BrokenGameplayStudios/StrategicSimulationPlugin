@@ -30,6 +30,7 @@ This plugin implements a turn-of-time strategic simulation layer: factions build
 - Base attack flow: fighter flies to enemy base, logs `[BASE ATTACK EVENT]` on launch and arrival
 - Salvage sites created when vehicles are destroyed; combat participants know wreck location immediately (`KnownFactions`)
 - Site-map save/load round-trip (`SaveCampaign` / `LoadCampaign`, schema v2) for QA — not a playable Continue Game
+- Salvage missions (`EMissionType::Salvage`) — Transport/Support/Scout recover wreck resources hourly
 - Debug strategic map HUD (bases, vehicles, paths, radar circles)
 - Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
 
@@ -454,7 +455,7 @@ PerformRadarPing (every PingIntervalHours, default 0.5 game hours)
 | Day rollover uses calendar day-of-month | `UTimeManagerSubsystem::RealTimeTick` uses `FDateTime::GetDay()`, not elapsed simulation days |
 | Abstract `SimulateOneDay` path unused | All `StartMission` calls set `bIsLiveMovement = true` |
 | `CalculateFleetEffectiveness` unused | Defined in mission manager; not called in live resolution |
-| Salvage missions | PR-6 in `docs/design-salvage-sites.md` |
+| Salvage AI prioritization / balance | PR-7 in `docs/design-salvage-sites.md` |
 | `HasCompletedResearch` stub | Always returns `true` in campaign subsystem |
 | `SoldiersKilled` always 0 | `ResolveMissionOutcome` — no abstract casualties |
 | Ammo infinite when `MaxAmmo == 0` | `UItemDefinition` stub |
@@ -499,7 +500,19 @@ After load, `GetBases(Human).Num() == 0` — log warns: *Simulation NOT runnable
 
 Blueprint helpers: `BuildSalvageMapMarkers`, `GetVisibleSalvageSitesForFaction`, `IsPlayerSalvageMapLayerEnabled`. To embed in a custom HUD, add `UStrategySalvageMapWidget` as a full-screen child or call the helpers from `WBP_StrategicHUD`.
 
-### 2.12 Build dependencies
+### 2.12 Salvage missions (PR-6)
+
+`EMissionType::Salvage` sends Transport / Support / Scout vehicles to known active wrecks. Gunship and Heavy cannot salvage (`IsSalvageCapableVehicleType`).
+
+| Setting | Default |
+|---------|---------|
+| `bSalvageMissionsEnabled` | `true` — set `false` to block new salvage scheduling |
+| `SalvageOnStationHours` | `4.0` — on-station extraction window |
+| `SalvageEfficiencyMultiplier` | `1.0` — hourly extraction rate scale |
+
+Flow: schedule → fly to wreck → hourly `ProcessSalvageExtractionTick` → faction resources increase / wreck decreases → depletion calls `RemoveSalvageSite`. Resources are credited during extraction ticks (not again at mission resolve).
+
+### 2.13 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 

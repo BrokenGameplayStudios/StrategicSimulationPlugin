@@ -180,7 +180,8 @@ enum class EMissionType : uint8
     Interception      UMETA(DisplayName = "Interception"),   // Vehicle-to-vehicle encounter in transit
     Defensive         UMETA(DisplayName = "Defensive"),      // Defend a location from attackers
     Offensive         UMETA(DisplayName = "Offensive"),      // Attack/destroy enemy location/base
-    Recon             UMETA(DisplayName = "Recon")      // New: Scouting / exploration mission
+    Recon             UMETA(DisplayName = "Recon"),      // Scouting / exploration mission
+    Salvage           UMETA(DisplayName = "Salvage")     // Recover resources from vehicle wrecks
 };
 
 // Vehicle stats (used by UVehicleDefinition and UStrategyVehicle)

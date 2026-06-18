@@ -2,6 +2,7 @@
 #include "StrategicSiteDefinition.h"
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyCampaignSubsystem.h"
+#include "UVehicleDefinition.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
@@ -66,6 +67,13 @@ FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(const UStra
     default:
         return Site->bHasBeenUsed ? TEXT("Used") : TEXT("Available");
     }
+}
+
+bool UStrategicSimulationDisplayHelpers::IsSalvageCapableVehicleType(EVehicleType VehicleType)
+{
+    return VehicleType == EVehicleType::Transport
+        || VehicleType == EVehicleType::Support
+        || VehicleType == EVehicleType::Scout;
 }
 
 FLinearColor UStrategicSimulationDisplayHelpers::GetSalvageWreckColor(EFactionType WreckOwnerFaction)

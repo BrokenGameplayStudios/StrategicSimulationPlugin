@@ -8,6 +8,10 @@
 #include "UBaseManagerSubsystem.h"
 #include "UMissionManagerSubsystem.h"
 #include "StrategicSiteDefinition.h"
+#include "UStrategyCampaignSubsystem.h"
+#include "UResourceManagerSubsystem.h"
+#include "USoldierManagerSubsystem.h"
+#include "UStrategicSimulationDisplayHelpers.h"
 #include "Engine/Engine.h"
 
 static UMissionManagerSubsystem* GetMissionManagerForVehicle(UStrategyVehicle* Vehicle);
@@ -244,6 +248,8 @@ void UStrategyVehicle::DockAtHomeHangar()
         HomeHanger->ParkedVehicles.AddUnique(this);
     }
 
+    ActiveSalvageSite = nullptr;
+
     UE_LOG(LogTemp, Verbose, TEXT("[VEHICLE] %s docked at base '%s'"),
         VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
         HomeBase ? *HomeBase->BaseName.ToString() : TEXT("Unknown"));
@@ -284,11 +290,33 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
     ReturningPathLength = 0.0f;
     CombatBehaviorStartTime = -1.0f;
     CurrentTargetVehicle = nullptr;
+    SalvageExtractedThisMission = FResourceStockpile();
+    ActiveSalvageSite = nullptr;
 
     switch (MissionType)
     {
     case EMissionType::Recon:
         CurrentBehavior = EVehicleBehavior::Scouting;
+        break;
+    case EMissionType::Salvage:
+        CurrentBehavior = EVehicleBehavior::Scouting;
+        {
+            UGameInstance* GI = GetTypedOuter<UGameInstance>();
+            if (!GI)
+            {
+                if (UWorld* World = GetWorld())
+                {
+                    GI = World->GetGameInstance();
+                }
+            }
+            if (GI)
+            {
+                if (UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>())
+                {
+                    ActiveSalvageSite = BaseMgr->FindSiteAtLocation(TargetLocation);
+                }
+            }
+        }
         break;
     case EMissionType::Interception:
     case EMissionType::Offensive:
@@ -567,6 +595,16 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
         return;
     }
 
+    if (CurrentPhase == EVehicleMissionPhase::OnStation
+        && CurrentMission
+        && CurrentMission->MissionType == EMissionType::Salvage)
+    {
+        if (!ProcessSalvageExtractionTick(DeltaGameHours))
+        {
+            SetBehavior(EVehicleBehavior::Returning);
+        }
+    }
+
     TickRadarPings(CurrentGameHours);
 
     if (Progress >= 1.0f)
@@ -575,6 +613,117 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
             VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this));
         DockAtHomeHangar();
     }
+}
+
+bool UStrategyVehicle::ProcessSalvageExtractionTick(float DeltaGameHours)
+{
+    if (DeltaGameHours <= 0.0f || !HomeBase || !CurrentMission
+        || CurrentMission->MissionType != EMissionType::Salvage)
+    {
+        return true;
+    }
+
+    UGameInstance* GI = GetTypedOuter<UGameInstance>();
+    if (!GI)
+    {
+        if (UWorld* World = GetWorld())
+        {
+            GI = World->GetGameInstance();
+        }
+    }
+    if (!GI)
+    {
+        return true;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>();
+    UResourceManagerSubsystem* ResourceMgr = GI->GetSubsystem<UResourceManagerSubsystem>();
+    if (!BaseMgr || !ResourceMgr)
+    {
+        return true;
+    }
+
+    UStrategySiteDefinition* Site = ActiveSalvageSite;
+    if (!Site)
+    {
+        Site = BaseMgr->FindSiteAtLocation(CurrentPosition);
+        ActiveSalvageSite = Site;
+    }
+
+    const EFactionType SalvagingFaction = HomeBase->OwningFaction;
+    if (!Site || !BaseMgr->CanSalvageSite(SalvagingFaction, Site, this))
+    {
+        return false;
+    }
+
+    float EstimatedHours = 4.0f;
+    float Efficiency = 1.0f;
+    if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+    {
+        EstimatedHours = FMath::Max(0.5f, Campaign->SalvageOnStationHours);
+        Efficiency = FMath::Max(0.1f, Campaign->SalvageEfficiencyMultiplier);
+    }
+
+    const float HourlyRate = (0.25f / EstimatedHours) * Efficiency;
+    const float TransferScale = HourlyRate * DeltaGameHours;
+
+    FResourceStockpile Extracted;
+    auto TransferField = [&](int32& SiteValue, int32& ExtractedValue)
+    {
+        const int32 Amount = FMath::Clamp(
+            FMath::RoundToInt(static_cast<float>(SiteValue) * TransferScale),
+            0,
+            SiteValue);
+        SiteValue -= Amount;
+        ExtractedValue = Amount;
+    };
+
+    TransferField(Site->CurrentResources.Money, Extracted.Money);
+    TransferField(Site->CurrentResources.Metals, Extracted.Metals);
+    TransferField(Site->CurrentResources.Chemicals, Extracted.Chemicals);
+    TransferField(Site->CurrentResources.Biologicals, Extracted.Biologicals);
+    TransferField(Site->CurrentResources.ExoticMaterial, Extracted.ExoticMaterial);
+
+    if (Extracted.Money > 0 || Extracted.Metals > 0 || Extracted.Chemicals > 0
+        || Extracted.Biologicals > 0 || Extracted.ExoticMaterial > 0)
+    {
+        ResourceMgr->AddResources(SalvagingFaction, Extracted);
+        SalvageExtractedThisMission.Add(Extracted);
+
+        UE_LOG(LogTemp, Verbose, TEXT("[SALVAGE] %s extracted M:%d Mt:%d Chem:%d from '%s' (wreck M:%d Mt:%d Chem:%d remaining)"),
+            VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
+            Extracted.Money, Extracted.Metals, Extracted.Chemicals,
+            *Site->SiteName,
+            Site->CurrentResources.Money, Site->CurrentResources.Metals, Site->CurrentResources.Chemicals);
+    }
+
+    if (Site->CurrentResources.IsEmpty())
+    {
+        Site->SalvageState = ESalvageSiteState::Depleted;
+        Site->bHasBeenUsed = true;
+
+        if (USoldierManagerSubsystem* SoldierMgr = GI->GetSubsystem<USoldierManagerSubsystem>())
+        {
+            if (Site->WreckOwnerFaction == SalvagingFaction)
+            {
+                SoldierMgr->RescueMIAsFromWreck(SalvagingFaction, Site, HomeBase);
+            }
+            else
+            {
+                SoldierMgr->ProcessMIAsOnOpposingSalvage(SalvagingFaction, Site);
+            }
+        }
+
+        BaseMgr->RemoveSalvageSite(Site, false, SalvagingFaction);
+        ActiveSalvageSite = nullptr;
+
+        UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Wreck '%s' depleted by %s — removed from map"),
+            *Site->SiteName, *UEnum::GetValueAsString(SalvagingFaction));
+
+        return false;
+    }
+
+    return true;
 }
 
 void UStrategyVehicle::PerformRadarPing()

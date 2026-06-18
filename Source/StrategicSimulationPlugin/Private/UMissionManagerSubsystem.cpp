@@ -10,6 +10,7 @@
 #include "UBaseManagerSubsystem.h"
 #include "StrategicSiteDefinition.h"
 #include "USoldierManagerSubsystem.h"
+#include "UStrategicSimulationDisplayHelpers.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -263,6 +264,27 @@ bool UMissionManagerSubsystem::HasOffensiveTargetInRange(UStrategyVehicle* Vehic
     return TryPickMissionTarget(Vehicle, EMissionType::Offensive, DummyTarget, DummyReserved, nullptr);
 }
 
+bool UMissionManagerSubsystem::HasSalvageTargetInRange(UStrategyVehicle* Vehicle) const
+{
+    if (!Vehicle || !Vehicle->VehicleDefinition
+        || !UStrategicSimulationDisplayHelpers::IsSalvageCapableVehicleType(Vehicle->VehicleDefinition->VehicleType))
+    {
+        return false;
+    }
+
+    if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+    {
+        if (!Campaign->bSalvageMissionsEnabled || !Campaign->bSalvageSitesEnabled)
+        {
+            return false;
+        }
+    }
+
+    FVector2D DummyTarget;
+    TSet<UStrategySiteDefinition*> DummyReserved;
+    return TryPickMissionTarget(Vehicle, EMissionType::Salvage, DummyTarget, DummyReserved, nullptr);
+}
+
 bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType, FVector2D& OutTarget,
     TSet<UStrategySiteDefinition*>& InOutReservedSites, UStrategyBase** OutTargetBase) const
 {
@@ -460,6 +482,56 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
         break;
     }
 
+    case EMissionType::Salvage:
+    {
+        UStrategySiteDefinition* BestSite = nullptr;
+        float BestScore = -MAX_FLT;
+
+        for (UStrategySiteDefinition* Site : BaseMgr->AllPotentialSites)
+        {
+            if (!Site || !BaseMgr->CanSalvageSite(Faction, Site, Vehicle))
+            {
+                continue;
+            }
+
+            if (InOutReservedSites.Contains(Site))
+            {
+                continue;
+            }
+
+            if (!IsValidMapLocation(Site->Location, MinX, MinY, MaxX, MaxY))
+            {
+                continue;
+            }
+
+            float Score = static_cast<float>(Site->CurrentResources.Metals + Site->CurrentResources.Chemicals);
+            if (Site->WreckOwnerFaction != Faction)
+            {
+                Score += 500.0f;
+            }
+
+            const float Dist = FVector2D::Distance(Origin, Site->Location);
+            Score -= Dist * 0.1f;
+
+            if (Score > BestScore)
+            {
+                BestScore = Score;
+                BestSite = Site;
+            }
+        }
+
+        if (BestSite)
+        {
+            OutTarget = BestSite->Location;
+            InOutReservedSites.Add(BestSite);
+            UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → salvage wreck '%s' at (%.0f, %.0f)"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                *BestSite->SiteName, OutTarget.X, OutTarget.Y);
+            return true;
+        }
+        break;
+    }
+
     default:
         break;
     }
@@ -485,6 +557,16 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
     case EMissionType::Offensive:
     case EMissionType::Defensive:
         SearchHours = 1.5f;
+        break;
+    case EMissionType::Salvage:
+        if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            SearchHours = FMath::Max(0.5f, Campaign->SalvageOnStationHours);
+        }
+        else
+        {
+            SearchHours = 4.0f;
+        }
         break;
     default:
         SearchHours = 2.0f;
@@ -582,6 +664,13 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
         if (TargetEnemyBase)
         {
             Mission->TargetEnemyBase = TargetEnemyBase;
+        }
+        if (MissionType == EMissionType::Salvage)
+        {
+            if (UStrategySiteDefinition* WreckSite = FindSiteAtLocation(TargetLocation))
+            {
+                Mission->TargetSalvageSite = WreckSite;
+            }
         }
         LaunchedVehicles.Add(Vehicle);
 
@@ -1220,6 +1309,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         return;
 
     const bool bIsRecon = (Mission->MissionType == EMissionType::Recon);
+    const bool bIsSalvage = (Mission->MissionType == EMissionType::Salvage);
 
     int32 SurvivingVehicles = 0;
     int32 DestroyedVehicles = 0;
@@ -1256,6 +1346,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         }
         Vehicle->CurrentPassengers.Empty();
         Vehicle->CurrentMission = nullptr;
+        Vehicle->ActiveSalvageSite = nullptr;
     }
 
     Mission->VehiclesLost = DestroyedVehicles;
@@ -1273,7 +1364,21 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     Mission->Outcome = Outcome;
 
     FResourceStockpile Reward;
-    if (bIsRecon)
+    if (bIsSalvage)
+    {
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (Vehicle)
+            {
+                Reward.Add(Vehicle->SalvageExtractedThisMission);
+                Vehicle->SalvageExtractedThisMission = FResourceStockpile();
+            }
+        }
+
+        UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Mission complete — recovered M:%d Mt:%d Chem:%d Exo:%d"),
+            Reward.Money, Reward.Metals, Reward.Chemicals, Reward.ExoticMaterial);
+    }
+    else if (bIsRecon)
     {
         Reward.ResearchPoints = FMath::RandRange(200, 500);
         UE_LOG(LogTemp, Verbose, TEXT("[RECON] Mission complete — intel gathered via live radar pings"));
@@ -1302,7 +1407,10 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 
     if (UResourceManagerSubsystem* ResourceMgr = GetResourceManager())
     {
-        ResourceMgr->AddResources(Mission->AttackingFaction, Reward);
+        if (!bIsSalvage)
+        {
+            ResourceMgr->AddResources(Mission->AttackingFaction, Reward);
+        }
     }
 
     UE_LOG(LogTemp, Verbose, TEXT("[MISSION] %s resolved as %s — Survived: %d | Combat losses: %d (no abstract casualties)"),

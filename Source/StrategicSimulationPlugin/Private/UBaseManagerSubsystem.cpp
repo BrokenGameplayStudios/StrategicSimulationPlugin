@@ -12,6 +12,7 @@
 #include "UMissionManagerSubsystem.h"
 #include "UTimeManagerSubsystem.h"
 #include "UStrategySaveGame.h"
+#include "UStrategicSimulationDisplayHelpers.h"
 
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -475,7 +476,8 @@ int32 UBaseManagerSubsystem::GetSalvageDaysRemaining(const UStrategySiteDefiniti
     return FMath::Max(0, Site->SalvageExpiresOnDay - CurrentDay);
 }
 
-void UBaseManagerSubsystem::RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired)
+void UBaseManagerSubsystem::RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired,
+    EFactionType LastSalvagingFaction)
 {
     if (!Site || Site->SiteType != EStrategySiteType::SalvageSite)
     {
@@ -483,7 +485,6 @@ void UBaseManagerSubsystem::RemoveSalvageSite(UStrategySiteDefinition* Site, boo
     }
 
     const FGuid RemovedSiteId = Site->SiteId;
-    const EFactionType LastSalvagingFaction = EFactionType::Neutral;
 
     if (USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
     {
@@ -1173,10 +1174,39 @@ bool UBaseManagerSubsystem::IsSiteKnownToFaction(EFactionType Faction, const USt
     return Discovered.Contains(Site);
 }
 
+UStrategySiteDefinition* UBaseManagerSubsystem::FindSiteAtLocation(FVector2D Location, float Tolerance) const
+{
+    UStrategySiteDefinition* BestMatch = nullptr;
+    float BestDist = Tolerance;
+
+    for (UStrategySiteDefinition* Site : AllPotentialSites)
+    {
+        if (!Site)
+        {
+            continue;
+        }
+
+        const float Dist = FVector2D::Distance(Site->Location, Location);
+        if (Dist <= BestDist)
+        {
+            BestDist = Dist;
+            BestMatch = Site;
+        }
+    }
+
+    return BestMatch;
+}
+
 bool UBaseManagerSubsystem::CanSalvageSite(EFactionType Faction, const UStrategySiteDefinition* Site,
     const UStrategyVehicle* SalvageVehicle) const
 {
-    (void)SalvageVehicle;
+    if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+    {
+        if (!Campaign->bSalvageSitesEnabled || !Campaign->bSalvageMissionsEnabled)
+        {
+            return false;
+        }
+    }
 
     if (!IsSalvageSite(Site))
     {
@@ -1203,6 +1233,24 @@ bool UBaseManagerSubsystem::CanSalvageSite(EFactionType Faction, const UStrategy
         if (MissionMgr->IsSiteTargetedByActiveMissions(Site))
         {
             return false;
+        }
+    }
+
+    if (SalvageVehicle)
+    {
+        if (!SalvageVehicle->VehicleDefinition
+            || !UStrategicSimulationDisplayHelpers::IsSalvageCapableVehicleType(SalvageVehicle->VehicleDefinition->VehicleType))
+        {
+            return false;
+        }
+
+        if (SalvageVehicle->HomeBase)
+        {
+            const float RoundTrip = FVector2D::Distance(SalvageVehicle->HomeBase->MapLocation, Site->Location) * 2.0f;
+            if (!SalvageVehicle->HasEnoughRangeForMission(RoundTrip))
+            {
+                return false;
+            }
         }
     }
 

@@ -1163,8 +1163,14 @@ EMissionType UAIControllerSubsystem::PickAIMissionTypeForVehicle(UStrategyVehicl
     UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
     const int32 OffensiveStartDay = Campaign ? Campaign->OffensiveMissionsStartDay : 5;
 
-    if (IsReconVehicleType(Vehicle->VehicleDefinition->VehicleType) || CurrentDay < OffensiveStartDay)
+    if (IsReconVehicleType(Vehicle->VehicleDefinition->VehicleType))
     {
+        if (Campaign && Campaign->bSalvageMissionsEnabled && Campaign->bSalvageSitesEnabled
+            && MissionMgr && MissionMgr->HasSalvageTargetInRange(Vehicle))
+        {
+            return EMissionType::Salvage;
+        }
+
         return EMissionType::Recon;
     }
 

@@ -71,6 +71,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage")
     bool bSitesPersistenceEnabled = true;
 
+    /** When false, AI and mission scheduling will not assign new Salvage missions. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage")
+    bool bSalvageMissionsEnabled = true;
+
+    /** Hours spent on-station at a wreck during Salvage missions (extraction window). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.5", ClampMax = "24.0"))
+    float SalvageOnStationHours = 4.0f;
+
+    /** Multiplier on hourly salvage extraction rate (PR-7 tuning hook). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.1", ClampMax = "4.0"))
+    float SalvageEfficiencyMultiplier = 1.0f;
+
     /** Days a wreck remains on the map before auto-removal if not salvaged. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "90"))
     int32 SalvageWreckExpiryDays = 7;

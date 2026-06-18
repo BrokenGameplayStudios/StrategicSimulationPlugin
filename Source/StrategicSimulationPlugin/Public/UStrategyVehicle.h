@@ -206,6 +206,14 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "Vehicle|Range")
     float RangeTraveledThisMission = 0.0f;
 
+    /** Wreck being salvaged during the current Salvage mission leg */
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Vehicle|Salvage")
+    TObjectPtr<class UStrategySiteDefinition> ActiveSalvageSite = nullptr;
+
+    /** Resources recovered this mission (already credited to faction pool during extraction) */
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Vehicle|Salvage")
+    FResourceStockpile SalvageExtractedThisMission;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
     float LastPingGameTimeHours = 0.0f;
 
@@ -225,6 +233,10 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void UpdatePositionAndPings(float CurrentGameHours, float DeltaGameHours);
+
+    /** Hourly resource transfer while on-station at a salvage wreck (Salvage missions). */
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Salvage")
+    bool ProcessSalvageExtractionTick(float DeltaGameHours);
 
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
     void PerformRadarPing();

@@ -36,6 +36,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     bool HasOffensiveTargetInRange(UStrategyVehicle* Vehicle) const;
 
+    /** Returns true if the vehicle can reach a known active wreck for salvage */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
+    bool HasSalvageTargetInRange(UStrategyVehicle* Vehicle) const;
+
     /** Parked idle vehicles at a base that are ready to fly today */
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     TArray<UStrategyVehicle*> GatherIdleVehiclesAtBase(UStrategyBase* Base) const;
