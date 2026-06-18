@@ -23,6 +23,8 @@ void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMissionManagerSubsystem::ClearRuntimeMissionStateForSiteMapLoad()
 {
+    RecentCombatSalvageWrecks.Empty();
+
     const TArray<UMissionGroup*> MissionsToClear = ActiveMissions;
     const int32 ClearedCount = MissionsToClear.Num();
     TSet<UMissionGroup*> MissionSet(MissionsToClear);
@@ -266,6 +268,305 @@ bool UMissionManagerSubsystem::HasOffensiveTargetInRange(UStrategyVehicle* Vehic
     return TryPickMissionTarget(Vehicle, EMissionType::Offensive, DummyTarget, DummyReserved, nullptr);
 }
 
+float UMissionManagerSubsystem::ComputeSalvageTargetScore(EFactionType Faction, const UStrategySiteDefinition* Site,
+    const FVector2D& Origin) const
+{
+    if (!Site)
+    {
+        return 0.0f;
+    }
+
+    float ResourceValue = static_cast<float>(Site->CurrentResources.Metals + Site->CurrentResources.Chemicals);
+    if (Site->WreckOwnerFaction != Faction)
+    {
+        ResourceValue += 500.0f;
+    }
+
+    const float Dist = FVector2D::Distance(Origin, Site->Location);
+    return ResourceValue / FMath::Max(Dist, 1.0f);
+}
+
+int32 UMissionManagerSubsystem::CountActiveSalvageMissions(EFactionType Faction) const
+{
+    int32 Count = 0;
+    for (const UMissionGroup* Mission : ActiveMissions)
+    {
+        if (Mission && Mission->MissionType == EMissionType::Salvage
+            && Mission->AttackingFaction == Faction
+            && Mission->Status != EMissionStatus::Completed
+            && Mission->Status != EMissionStatus::Failed)
+        {
+            ++Count;
+        }
+    }
+
+    return Count;
+}
+
+void UMissionManagerSubsystem::PruneOldCombatSalvageRecords(int32 CurrentDay)
+{
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    const int32 MemoryDays = Campaign ? FMath::Max(1, Campaign->SalvageCombatMemoryDays) : 3;
+
+    RecentCombatSalvageWrecks.RemoveAll([CurrentDay, MemoryDays](const FCombatSalvageWreckRecord& Record)
+    {
+        return Record.CreatedOnDay < CurrentDay - MemoryDays;
+    });
+}
+
+void UMissionManagerSubsystem::RecordCombatSalvageWreck(UStrategySiteDefinition* Site, EFactionType WinnerFaction,
+    int32 CurrentDay)
+{
+    if (!Site || WinnerFaction == EFactionType::Neutral)
+    {
+        return;
+    }
+
+    PruneOldCombatSalvageRecords(CurrentDay);
+
+    FCombatSalvageWreckRecord Record;
+    Record.SiteId = Site->SiteId;
+    Record.WinnerFaction = WinnerFaction;
+    Record.CreatedOnDay = CurrentDay;
+    RecentCombatSalvageWrecks.Add(Record);
+}
+
+bool UMissionManagerSubsystem::DidFactionWinCombatAtSite(EFactionType Faction, const UStrategySiteDefinition* Site,
+    int32 CurrentDay) const
+{
+    if (!Site)
+    {
+        return false;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    const int32 MemoryDays = Campaign ? FMath::Max(1, Campaign->SalvageCombatMemoryDays) : 3;
+
+    for (const FCombatSalvageWreckRecord& Record : RecentCombatSalvageWrecks)
+    {
+        if (Record.SiteId == Site->SiteId
+            && Record.WinnerFaction == Faction
+            && Record.CreatedOnDay >= CurrentDay - MemoryDays)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool UMissionManagerSubsystem::FindBestSalvageTargetForVehicle(UStrategyVehicle* Vehicle,
+    TSet<UStrategySiteDefinition*>& InOutReservedSites, UStrategySiteDefinition*& OutSite, float& OutScore) const
+{
+    OutSite = nullptr;
+    OutScore = -MAX_FLT;
+
+    if (!Vehicle || !Vehicle->HomeBase)
+    {
+        return false;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr)
+    {
+        return false;
+    }
+
+    float MapWidth, MapHeight, MapPadding;
+    GetMapBounds(MapWidth, MapHeight, MapPadding);
+    const float MinX = MapPadding;
+    const float MaxX = MapWidth - MapPadding;
+    const float MinY = MapPadding;
+    const float MaxY = MapHeight - MapPadding;
+
+    const EFactionType Faction = Vehicle->HomeBase->OwningFaction;
+    const FVector2D Origin = Vehicle->HomeBase->MapLocation;
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    const float MinScore = Campaign ? Campaign->MinSalvageScoreThreshold : 15.0f;
+
+    for (UStrategySiteDefinition* Site : BaseMgr->AllPotentialSites)
+    {
+        if (!Site || !BaseMgr->CanSalvageSite(Faction, Site, Vehicle))
+        {
+            continue;
+        }
+
+        if (InOutReservedSites.Contains(Site))
+        {
+            continue;
+        }
+
+        if (!IsValidMapLocation(Site->Location, MinX, MinY, MaxX, MaxY))
+        {
+            continue;
+        }
+
+        const float Score = ComputeSalvageTargetScore(Faction, Site, Origin);
+        if (Score > OutScore)
+        {
+            OutScore = Score;
+            OutSite = Site;
+        }
+    }
+
+    return OutSite != nullptr && OutScore >= MinScore;
+}
+
+bool UMissionManagerSubsystem::EvaluateAISalvageScheduling(UStrategyVehicle* Vehicle,
+    UStrategySiteDefinition*& OutBestSite, float& OutBestScore) const
+{
+    OutBestSite = nullptr;
+    OutBestScore = 0.0f;
+
+    if (!Vehicle || !Vehicle->VehicleDefinition || !Vehicle->HomeBase
+        || !UStrategicSimulationDisplayHelpers::IsSalvageCapableVehicleType(Vehicle->VehicleDefinition->VehicleType))
+    {
+        return false;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (!Campaign || !Campaign->bSalvageMissionsEnabled || !Campaign->bSalvageSitesEnabled)
+    {
+        return false;
+    }
+
+    const EFactionType Faction = Vehicle->HomeBase->OwningFaction;
+    if (CountActiveSalvageMissions(Faction) >= Campaign->MaxActiveSalvageMissionsPerFaction)
+    {
+        return false;
+    }
+
+    TSet<UStrategySiteDefinition*> ReservedSites;
+    CollectSitesTargetedByActiveMissions(ReservedSites, nullptr);
+
+    UStrategySiteDefinition* BestSite = nullptr;
+    float BestScore = 0.0f;
+    if (!FindBestSalvageTargetForVehicle(Vehicle, ReservedSites, BestSite, BestScore) || !BestSite)
+    {
+        return false;
+    }
+
+    const float Dist = FVector2D::Distance(Vehicle->HomeBase->MapLocation, BestSite->Location);
+    const bool bOwnWreck = BestSite->WreckOwnerFaction == Faction;
+    const float RequiredScore = bOwnWreck
+        ? Campaign->MinSalvageScoreThreshold * Campaign->LoserSalvageScoreMultiplier
+        : Campaign->MinSalvageScoreThreshold;
+
+    if (BestScore < RequiredScore)
+    {
+        return false;
+    }
+
+    if (bOwnWreck && Dist > Campaign->LoserSalvageMaxDistance
+        && BestScore < RequiredScore * 1.25f)
+    {
+        return false;
+    }
+
+    int32 CurrentDay = 1;
+    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
+    {
+        CurrentDay = TimeMgr->GetSimulationDayNumber();
+    }
+
+    if (!bOwnWreck && DidFactionWinCombatAtSite(Faction, BestSite, CurrentDay)
+        && FMath::FRand() < Campaign->SalvageDeclineAfterWinChance)
+    {
+        UE_LOG(LogTemp, Display,
+            TEXT("[SALVAGE AI] %s declined salvage at '%s' (score %.1f) — post-combat retaliation risk"),
+            *UEnum::GetValueAsString(Faction), *BestSite->SiteName, BestScore);
+        return false;
+    }
+
+    OutBestSite = BestSite;
+    OutBestScore = BestScore;
+    return true;
+}
+
+void UMissionManagerSubsystem::LogSalvageOpportunitiesForFaction(EFactionType Faction, int32 CurrentDay) const
+{
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!Campaign || !BaseMgr || !Campaign->bSalvageSitesEnabled || !Campaign->bSalvageMissionsEnabled)
+    {
+        return;
+    }
+
+    const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
+    if (Bases.Num() == 0)
+    {
+        return;
+    }
+
+    FVector2D NearestBaseLocation = Bases[0]->MapLocation;
+    for (UStrategyBase* Base : Bases)
+    {
+        if (Base)
+        {
+            NearestBaseLocation = Base->MapLocation;
+            break;
+        }
+    }
+
+    int32 LoggedCount = 0;
+    for (UStrategySiteDefinition* Site : BaseMgr->AllPotentialSites)
+    {
+        if (!Site || Site->SiteType != EStrategySiteType::SalvageSite
+            || Site->SalvageState != ESalvageSiteState::Active)
+        {
+            continue;
+        }
+
+        if (!BaseMgr->CanSalvageSite(Faction, Site, nullptr))
+        {
+            continue;
+        }
+
+        float BestDist = MAX_FLT;
+        FVector2D BestOrigin = NearestBaseLocation;
+        for (UStrategyBase* Base : Bases)
+        {
+            if (!Base)
+            {
+                continue;
+            }
+
+            const float Dist = FVector2D::Distance(Base->MapLocation, Site->Location);
+            if (Dist < BestDist)
+            {
+                BestDist = Dist;
+                BestOrigin = Base->MapLocation;
+            }
+        }
+
+        const float Score = ComputeSalvageTargetScore(Faction, Site, BestOrigin);
+        const bool bEligible = Score >= Campaign->MinSalvageScoreThreshold;
+        const bool bEnemyWreck = Site->WreckOwnerFaction != Faction;
+
+        UE_LOG(LogTemp, Display,
+            TEXT("[SALVAGE AI] Day %d %s opportunity: site %s score=%.1f owner=%s enemy=%s M=%d Chem=%d dist=%.0f eligible=%s"),
+            CurrentDay,
+            *UEnum::GetValueAsString(Faction),
+            *Site->SiteId.ToString(EGuidFormats::Short),
+            Score,
+            *UEnum::GetValueAsString(Site->WreckOwnerFaction),
+            bEnemyWreck ? TEXT("yes") : TEXT("no"),
+            Site->CurrentResources.Metals,
+            Site->CurrentResources.Chemicals,
+            BestDist,
+            bEligible ? TEXT("yes") : TEXT("no"));
+
+        ++LoggedCount;
+    }
+
+    if (LoggedCount == 0)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[SALVAGE AI] Day %d %s — no known active wrecks"),
+            CurrentDay, *UEnum::GetValueAsString(Faction));
+    }
+}
+
 bool UMissionManagerSubsystem::HasSalvageTargetInRange(UStrategyVehicle* Vehicle) const
 {
     if (!Vehicle || !Vehicle->VehicleDefinition
@@ -282,9 +583,9 @@ bool UMissionManagerSubsystem::HasSalvageTargetInRange(UStrategyVehicle* Vehicle
         }
     }
 
-    FVector2D DummyTarget;
-    TSet<UStrategySiteDefinition*> DummyReserved;
-    return TryPickMissionTarget(Vehicle, EMissionType::Salvage, DummyTarget, DummyReserved, nullptr);
+    UStrategySiteDefinition* BestSite = nullptr;
+    float BestScore = 0.0f;
+    return EvaluateAISalvageScheduling(Vehicle, BestSite, BestScore);
 }
 
 bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType, FVector2D& OutTarget,
@@ -487,48 +788,14 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
     case EMissionType::Salvage:
     {
         UStrategySiteDefinition* BestSite = nullptr;
-        float BestScore = -MAX_FLT;
-
-        for (UStrategySiteDefinition* Site : BaseMgr->AllPotentialSites)
-        {
-            if (!Site || !BaseMgr->CanSalvageSite(Faction, Site, Vehicle))
-            {
-                continue;
-            }
-
-            if (InOutReservedSites.Contains(Site))
-            {
-                continue;
-            }
-
-            if (!IsValidMapLocation(Site->Location, MinX, MinY, MaxX, MaxY))
-            {
-                continue;
-            }
-
-            float Score = static_cast<float>(Site->CurrentResources.Metals + Site->CurrentResources.Chemicals);
-            if (Site->WreckOwnerFaction != Faction)
-            {
-                Score += 500.0f;
-            }
-
-            const float Dist = FVector2D::Distance(Origin, Site->Location);
-            Score -= Dist * 0.1f;
-
-            if (Score > BestScore)
-            {
-                BestScore = Score;
-                BestSite = Site;
-            }
-        }
-
-        if (BestSite)
+        float BestScore = 0.0f;
+        if (FindBestSalvageTargetForVehicle(Vehicle, InOutReservedSites, BestSite, BestScore) && BestSite)
         {
             OutTarget = BestSite->Location;
             InOutReservedSites.Add(BestSite);
-            UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → salvage wreck '%s' at (%.0f, %.0f)"),
+            UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → salvage wreck '%s' (score %.1f) at (%.0f, %.0f)"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
-                *BestSite->SiteName, OutTarget.X, OutTarget.Y);
+                *BestSite->SiteName, BestScore, OutTarget.X, OutTarget.Y);
             return true;
         }
         break;
@@ -1407,7 +1674,7 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
     }
 }
 
-void UMissionManagerSubsystem::HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle)
+void UMissionManagerSubsystem::HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy)
 {
     if (!Vehicle || !Vehicle->IsDestroyed() || Vehicle->bWreckSalvageProcessed)
     {
@@ -1433,6 +1700,20 @@ void UMissionManagerSubsystem::HandleVehicleDestroyedInCombat(UStrategyVehicle* 
 
     if (WreckSite)
     {
+        EFactionType WinnerFaction = EFactionType::Neutral;
+        if (DestroyedBy && DestroyedBy->HomeBase)
+        {
+            WinnerFaction = DestroyedBy->HomeBase->OwningFaction;
+        }
+
+        int32 CurrentDay = 1;
+        if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
+        {
+            CurrentDay = TimeMgr->GetSimulationDayNumber();
+        }
+
+        RecordCombatSalvageWreck(WreckSite, WinnerFaction, CurrentDay);
+
         if (USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
         {
             SoldierMgr->ProcessCrewOnVehicleDestruction(Vehicle, WreckSite);

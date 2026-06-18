@@ -508,11 +508,25 @@ Blueprint helpers: `BuildSalvageMapMarkers`, `GetVisibleSalvageSitesForFaction`,
 |---------|---------|
 | `bSalvageMissionsEnabled` | `true` — set `false` to block new salvage scheduling |
 | `SalvageOnStationHours` | `4.0` — on-station extraction window |
-| `SalvageEfficiencyMultiplier` | `1.0` — hourly extraction rate scale |
+| `SalvageEfficiencyMultiplier` | `4.0` — hourly extraction rate scale (~medium wreck in one 4h on-station window) |
 
 Flow: schedule → fly to wreck → hourly `ProcessSalvageExtractionTick` → faction resources increase / wreck decreases → depletion calls `RemoveSalvageSite`. Resources are credited during extraction ticks (not again at mission resolve).
 
-### 2.13 Contested salvage (PR-6b)
+### 2.13 AI salvage prioritization (PR-7)
+
+AI sends Transport / Support / Scout vehicles to high-value known wrecks. Enemy wrecks score higher (`+500` resource bonus in heuristic). Tune on `AStrategyGameInitializer` (copied to campaign at play).
+
+| Setting | Default | Role |
+|---------|---------|------|
+| `MaxActiveSalvageMissionsPerFaction` | `2` | Caps concurrent salvage fleets |
+| `MinSalvageScoreThreshold` | `15.0` | `(Metals + Chemicals + enemy bonus) / distance` gate |
+| `SalvageDeclineAfterWinChance` | `0.35` | Combat winner may skip salvage (retaliation risk) |
+| `LoserSalvageScoreMultiplier` | `1.5` | Stricter threshold for own-wreck recovery |
+| `LoserSalvageMaxDistance` | `700` | Far + low-score own wrecks abandoned |
+
+Daily trace: `[SALVAGE AI] Day N … opportunity` per known wreck. On schedule: `[SALVAGE AI] … scheduling salvage to site {id} score=…`.
+
+### 2.14 Contested salvage (PR-6b)
 
 When Human and Enemy both have active `Salvage` missions at the same `SiteId`, the mission manager fires `OnSalvageContestStarted`, pauses the strategic clock (`PauseStrategicClock`), and waits for the tactical layer to call `ResolveSalvageContest(Outcome)`.
 
@@ -525,7 +539,7 @@ When Human and Enemy both have active `Salvage` missions at the same `SiteId`, t
 
 Payload: `FSalvageContestForceSnapshot` per faction (vehicles, soldiers, origin base). Clock resumes after `ResolveSalvageContest`.
 
-### 2.14 Build dependencies
+### 2.15 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 

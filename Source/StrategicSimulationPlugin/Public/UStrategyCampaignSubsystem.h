@@ -79,9 +79,33 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.5", ClampMax = "24.0"))
     float SalvageOnStationHours = 4.0f;
 
-    /** Multiplier on hourly salvage extraction rate (PR-7 tuning hook). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.1", ClampMax = "4.0"))
-    float SalvageEfficiencyMultiplier = 1.0f;
+    /** Multiplier on hourly salvage extraction rate (PR-7: ~4.0 depletes a medium wreck in one on-station window). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.1", ClampMax = "16.0"))
+    float SalvageEfficiencyMultiplier = 4.0f;
+
+    /** Max concurrent in-flight Salvage missions per faction (PR-7). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "8"))
+    int32 MaxActiveSalvageMissionsPerFaction = 2;
+
+    /** Minimum heuristic score before AI schedules Salvage (PR-7). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.0", ClampMax = "500.0"))
+    float MinSalvageScoreThreshold = 15.0f;
+
+    /** AI: chance the combat winner declines salvage and leaves the wreck (retaliation risk). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float SalvageDeclineAfterWinChance = 0.35f;
+
+    /** AI: score multiplier required when recovering own destroyed wreck (loser recovery). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1.0", ClampMax = "5.0"))
+    float LoserSalvageScoreMultiplier = 1.5f;
+
+    /** AI: own-wreck recovery abandoned when farther than this (map px) and below loser score threshold. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "100.0", ClampMax = "2000.0"))
+    float LoserSalvageMaxDistance = 700.0f;
+
+    /** Days to remember post-combat salvage context for decline/recovery heuristics. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "14"))
+    int32 SalvageCombatMemoryDays = 3;
 
     /** Days a wreck remains on the map before auto-removal if not salvaged. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "90"))

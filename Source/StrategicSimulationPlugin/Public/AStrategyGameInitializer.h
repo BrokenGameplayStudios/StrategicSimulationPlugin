@@ -89,6 +89,30 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
     float OpposingSalvageMIAPOWChance = 0.40f;
 
+    /** Hourly extraction rate scale (4.0 ≈ medium wreck in one 4h on-station window). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "0.1", ClampMax = "16.0"))
+    float SalvageEfficiencyMultiplier = 4.0f;
+
+    /** Max concurrent Salvage missions per faction. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "1", ClampMax = "8"))
+    int32 MaxActiveSalvageMissionsPerFaction = 2;
+
+    /** Minimum salvage heuristic score before AI dispatches recovery. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "0.0", ClampMax = "500.0"))
+    float MinSalvageScoreThreshold = 15.0f;
+
+    /** AI: chance combat winner skips salvage (retaliation heuristic). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float SalvageDeclineAfterWinChance = 0.35f;
+
+    /** AI: stricter score multiplier when faction recovers its own wreck. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "1.0", ClampMax = "5.0"))
+    float LoserSalvageScoreMultiplier = 1.5f;
+
+    /** AI: abandon own-wreck recovery beyond this distance when score is low. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "100.0", ClampMax = "2000.0"))
+    float LoserSalvageMaxDistance = 700.0f;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;

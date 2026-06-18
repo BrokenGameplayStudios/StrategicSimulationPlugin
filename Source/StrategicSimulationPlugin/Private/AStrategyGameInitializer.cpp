@@ -154,6 +154,12 @@ void AStrategyGameInitializer::BeginPlay()
     Campaign->SalvageWreckExpiryDays = SalvageWreckExpiryDays;
     Campaign->VehicleCrashDeathChance = VehicleCrashDeathChance;
     Campaign->OpposingSalvageMIAPOWChance = OpposingSalvageMIAPOWChance;
+    Campaign->SalvageEfficiencyMultiplier = SalvageEfficiencyMultiplier;
+    Campaign->MaxActiveSalvageMissionsPerFaction = MaxActiveSalvageMissionsPerFaction;
+    Campaign->MinSalvageScoreThreshold = MinSalvageScoreThreshold;
+    Campaign->SalvageDeclineAfterWinChance = SalvageDeclineAfterWinChance;
+    Campaign->LoserSalvageScoreMultiplier = LoserSalvageScoreMultiplier;
+    Campaign->LoserSalvageMaxDistance = LoserSalvageMaxDistance;
 
     UE_LOG(LogTemp, Display, TEXT("[MAP] Initializer applied map settings → Sites: %d | Site spacing: %.0f | Map: %.0fx%.0f | Border: %.0f | Faction separation: %.0f | Max bases/faction: %d"),
         NumberOfStrategicSites, MinimumDistanceBetweenSites, LogicalMapWidth, LogicalMapHeight,

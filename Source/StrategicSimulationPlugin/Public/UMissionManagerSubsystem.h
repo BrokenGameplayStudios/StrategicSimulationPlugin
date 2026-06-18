@@ -40,6 +40,22 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     bool HasSalvageTargetInRange(UStrategyVehicle* Vehicle) const;
 
+    /** Heuristic score for AI salvage prioritization (higher = better). */
+    UFUNCTION(BlueprintPure, Category = "Mission|Salvage")
+    float ComputeSalvageTargetScore(EFactionType Faction, const class UStrategySiteDefinition* Site,
+        const FVector2D& Origin) const;
+
+    /** Active + scheduled Salvage missions for a faction. */
+    UFUNCTION(BlueprintPure, Category = "Mission|Salvage")
+    int32 CountActiveSalvageMissions(EFactionType Faction) const;
+
+    /** AI salvage gate: thresholds, caps, post-combat decline, loser recovery rules. */
+    bool EvaluateAISalvageScheduling(UStrategyVehicle* Vehicle, class UStrategySiteDefinition*& OutBestSite,
+        float& OutBestScore) const;
+
+    /** Daily trace of known wreck opportunities (PR-7). */
+    void LogSalvageOpportunitiesForFaction(EFactionType Faction, int32 CurrentDay) const;
+
     /** Parked idle vehicles at a base that are ready to fly today */
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     TArray<UStrategyVehicle*> GatherIdleVehiclesAtBase(UStrategyBase* Base) const;
@@ -80,7 +96,7 @@ public:
     void UpdateAllLiveVehicles(float DeltaGameHours);
 
     /** Called when a vehicle is destroyed during live vehicular combat */
-    void HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle);
+    void HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy = nullptr);
 
     /** Log placeholder when an Offensive mission reaches the target base */
     void HandleBaseAttackArrival(UStrategyVehicle* Vehicle, UMissionGroup* Mission);
@@ -101,6 +117,21 @@ public:
     void BeginSalvageContest(UStrategySiteDefinition* Site, UMissionGroup* HumanMission, UMissionGroup* EnemyMission);
 
 private:
+    struct FCombatSalvageWreckRecord
+    {
+        FGuid SiteId;
+        EFactionType WinnerFaction = EFactionType::Neutral;
+        int32 CreatedOnDay = 0;
+    };
+
+    TArray<FCombatSalvageWreckRecord> RecentCombatSalvageWrecks;
+
+    void RecordCombatSalvageWreck(UStrategySiteDefinition* Site, EFactionType WinnerFaction, int32 CurrentDay);
+    void PruneOldCombatSalvageRecords(int32 CurrentDay);
+    bool DidFactionWinCombatAtSite(EFactionType Faction, const UStrategySiteDefinition* Site, int32 CurrentDay) const;
+    bool FindBestSalvageTargetForVehicle(UStrategyVehicle* Vehicle, TSet<class UStrategySiteDefinition*>& InOutReservedSites,
+        UStrategySiteDefinition*& OutSite, float& OutScore) const;
+
     UStrategySiteDefinition* GetSalvageTargetSite(const UMissionGroup* Mission) const;
     FSalvageContestForceSnapshot BuildSalvageContestSnapshot(const UMissionGroup* Mission) const;
     void DetectSalvageContests();

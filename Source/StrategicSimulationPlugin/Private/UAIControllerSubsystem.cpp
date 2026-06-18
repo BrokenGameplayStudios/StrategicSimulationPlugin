@@ -12,6 +12,7 @@
 #include "UStrategyVehicle.h"
 #include "UMissionManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
+#include "StrategicSiteDefinition.h"
 #include "StrategicSimulationTypes.h"
 #include "Engine/Engine.h"
 
@@ -108,6 +109,13 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         *UEnum::GetValueAsString(Faction), CurrentDay,
         BaseMgr->GetBases(Faction).Num(),
         Res.Money, Res.Metals, Res.Biologicals, Res.Chemicals, Res.ExoticMaterial, Res.ResearchPoints);
+
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (MissionMgr && Campaign && Campaign->bSalvageSitesEnabled && Campaign->bSalvageMissionsEnabled)
+    {
+        MissionMgr->LogSalvageOpportunitiesForFaction(Faction, CurrentDay);
+    }
 
     // === PER-BASE DEVELOPMENT — FOCUS BASE ===
     BaseMgr->AdvanceFacilityConstruction(Faction);
@@ -218,8 +226,14 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
 
     // === DAILY MISSION SCHEDULING — one slot per idle vehicle per base, spread across 24h ===
     UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
-    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    if (!MissionMgr)
+    {
+        MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    }
+    if (!Campaign)
+    {
+        Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    }
 
     int32 TotalScheduled = 0;
 
@@ -1165,10 +1179,21 @@ EMissionType UAIControllerSubsystem::PickAIMissionTypeForVehicle(UStrategyVehicl
 
     if (IsReconVehicleType(Vehicle->VehicleDefinition->VehicleType))
     {
-        if (Campaign && Campaign->bSalvageMissionsEnabled && Campaign->bSalvageSitesEnabled
-            && MissionMgr && MissionMgr->HasSalvageTargetInRange(Vehicle))
+        if (Campaign && Campaign->bSalvageMissionsEnabled && Campaign->bSalvageSitesEnabled && MissionMgr)
         {
-            return EMissionType::Salvage;
+            UStrategySiteDefinition* SalvageSite = nullptr;
+            float SalvageScore = 0.0f;
+            if (MissionMgr->EvaluateAISalvageScheduling(Vehicle, SalvageSite, SalvageScore) && SalvageSite)
+            {
+                const EFactionType Faction = Vehicle->HomeBase ? Vehicle->HomeBase->OwningFaction : EFactionType::Neutral;
+                UE_LOG(LogTemp, Display,
+                    TEXT("[SALVAGE AI] %s scheduling salvage to site %s score=%.1f wreck='%s'"),
+                    *UEnum::GetValueAsString(Faction),
+                    *SalvageSite->SiteId.ToString(EGuidFormats::Short),
+                    SalvageScore,
+                    *SalvageSite->SiteName);
+                return EMissionType::Salvage;
+            }
         }
 
         return EMissionType::Recon;

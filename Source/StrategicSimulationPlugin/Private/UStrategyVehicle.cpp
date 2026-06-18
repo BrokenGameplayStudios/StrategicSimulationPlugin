@@ -988,7 +988,7 @@ void UStrategyVehicle::ProcessCombatTick(float DeltaGameHours)
 
         if (Target->IsDestroyed() && MissionMgr)
         {
-            MissionMgr->HandleVehicleDestroyedInCombat(Target);
+            MissionMgr->HandleVehicleDestroyedInCombat(Target, this);
         }
     }
 
@@ -999,7 +999,7 @@ void UStrategyVehicle::ProcessCombatTick(float DeltaGameHours)
 
         if (IsDestroyed() && MissionMgr)
         {
-            MissionMgr->HandleVehicleDestroyedInCombat(this);
+            MissionMgr->HandleVehicleDestroyedInCombat(this, Target);
         }
     }
 }
