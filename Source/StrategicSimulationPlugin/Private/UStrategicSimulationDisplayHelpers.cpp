@@ -389,8 +389,20 @@ FLinearColor UStrategicSimulationDisplayHelpers::GetRadarContactMarkerColor(cons
         : FLinearColor(0.55f, 0.75f, 0.95f, 0.7f);
 }
 
+float UStrategicSimulationDisplayHelpers::GetRadarContactStalenessAlpha(const FRadarContact& Contact,
+    float CurrentGameHours, float ExpiryHours)
+{
+    if (!Contact.ContactId.IsValid() || ExpiryHours <= KINDA_SMALL_NUMBER || CurrentGameHours <= 0.0f)
+    {
+        return 1.0f;
+    }
+
+    const float AgeHours = FMath::Max(0.0f, CurrentGameHours - Contact.LastSeenGameHours);
+    return FMath::Clamp(1.0f - (AgeHours / ExpiryHours), 0.15f, 1.0f);
+}
+
 FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FRadarContact& Contact,
-    bool bCanIntercept, bool bAlreadyTargeted)
+    bool bCanIntercept, bool bAlreadyTargeted, float CurrentGameHours, float ExpiryHours)
 {
     if (!Contact.ContactId.IsValid())
     {
@@ -398,7 +410,11 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FR
     }
 
     const float Speed = Contact.EstimatedVelocity.Size();
-    const float HeadingDeg = FMath::RadiansToDegrees(FMath::Atan2(Contact.EstimatedVelocity.Y, Contact.EstimatedVelocity.X));
+    const float HeadingDeg = Contact.EstimatedHeadingDegrees;
+    const float AgeHours = CurrentGameHours > 0.0f
+        ? FMath::Max(0.0f, CurrentGameHours - Contact.LastSeenGameHours)
+        : 0.0f;
+    const float RemainingHours = FMath::Max(0.0f, ExpiryHours - AgeHours);
 
     FString ActionLine;
     if (bAlreadyTargeted)
@@ -414,12 +430,22 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FR
         ActionLine = TEXT("No idle gunship in range");
     }
 
+    const FString ThreatLine = Contact.ThreatenedBaseName.IsEmpty()
+        ? FString()
+        : FString::Printf(TEXT("\nThreatens: %s"), *Contact.ThreatenedBaseName);
+
+    const FString StalenessLine = CurrentGameHours > 0.0f
+        ? FString::Printf(TEXT("\nLast seen: %.1fh ago  Expires in: %.1fh"), AgeHours, RemainingHours)
+        : FString();
+
     return FText::FromString(FString::Printf(
-        TEXT("%s%s\nPos: (%.0f, %.0f)\nSpeed: %.0f px/h  Heading: %.0f°\n%s"),
+        TEXT("%s%s%s\nPos: (%.0f, %.0f)\nSpeed: %.0f px/h  Heading: %.0f°%s\n%s"),
         *Contact.TrackedVehicleName,
         Contact.bIsInboundThreat ? TEXT(" — INBOUND") : TEXT(""),
+        *ThreatLine,
         Contact.LastPosition.X, Contact.LastPosition.Y,
         Speed, HeadingDeg,
+        *StalenessLine,
         *ActionLine));
 }
 
@@ -461,6 +487,8 @@ TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarCon
     }
 
     const TArray<FRadarContact> Contacts = ContactMgr->GetContactsForFaction(ViewerFaction);
+    const float CurrentGameHours = MissionMgr ? MissionMgr->GetCurrentGameHours() : 0.0f;
+    const float ExpiryHours = Campaign ? FMath::Max(1.0f, Campaign->RadarContactExpiryHours) : 6.0f;
     Markers.Reserve(Contacts.Num());
 
     for (const FRadarContact& Contact : Contacts)
@@ -474,6 +502,7 @@ TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarCon
         const bool bCanIntercept = MissionMgr
             ? MissionMgr->CanFactionInterceptContact(ViewerFaction, Contact.ContactId)
             : false;
+        const float StalenessAlpha = GetRadarContactStalenessAlpha(Contact, CurrentGameHours, ExpiryHours);
 
         FRadarContactMapMarker Marker;
         Marker.ContactId = Contact.ContactId;
@@ -481,8 +510,10 @@ TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarCon
         Marker.bIsInboundThreat = Contact.bIsInboundThreat;
         Marker.bCanIntercept = bCanIntercept;
         Marker.bAlreadyTargeted = bAlreadyTargeted;
+        Marker.StalenessAlpha = StalenessAlpha;
         Marker.Color = GetRadarContactMarkerColor(Contact, bCanIntercept, bAlreadyTargeted);
-        Marker.Tooltip = FormatRadarContactTooltipText(Contact, bCanIntercept, bAlreadyTargeted);
+        Marker.Color.A *= StalenessAlpha;
+        Marker.Tooltip = FormatRadarContactTooltipText(Contact, bCanIntercept, bAlreadyTargeted, CurrentGameHours, ExpiryHours);
         Markers.Add(Marker);
     }
 

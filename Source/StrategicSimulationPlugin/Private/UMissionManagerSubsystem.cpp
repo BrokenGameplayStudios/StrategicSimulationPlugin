@@ -1950,7 +1950,7 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
     }
 }
 
-void UMissionManagerSubsystem::HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy)
+void UMissionManagerSubsystem::HandleVehicleDestroyed(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy)
 {
     if (!Vehicle || !Vehicle->IsDestroyed() || Vehicle->bWreckSalvageProcessed)
     {
@@ -2014,8 +2014,13 @@ void UMissionManagerSubsystem::HandleVehicleDestroyedInCombat(UStrategyVehicle* 
     Vehicle->CurrentTargetVehicle = nullptr;
     Vehicle->CurrentBehavior = EVehicleBehavior::Idle;
 
-    UE_LOG(LogTemp, Display, TEXT("[COMBAT] Vehicle '%s' destroyed in vehicular combat — salvage site created at (%.0f, %.0f)"),
+    const FString DestroyContext = (DestroyedBy && DestroyedBy->CurrentPhase == EVehicleMissionPhase::Combat)
+        ? TEXT("combat")
+        : TEXT("destroyed");
+
+    UE_LOG(LogTemp, Display, TEXT("[WRECK] Vehicle '%s' %s — salvage site created at (%.0f, %.0f)"),
         Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Unknown"),
+        *DestroyContext,
         Vehicle->CurrentPosition.X, Vehicle->CurrentPosition.Y);
 }
 

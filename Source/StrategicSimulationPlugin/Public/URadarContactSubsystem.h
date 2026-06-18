@@ -69,5 +69,7 @@ private:
 
     static bool IsInboundThreatVehicle(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
         UBaseManagerSubsystem* BaseMgr);
+    static FString InferThreatenedBaseName(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
+        UBaseManagerSubsystem* BaseMgr);
     static float GetBaseRadarRange();
 };

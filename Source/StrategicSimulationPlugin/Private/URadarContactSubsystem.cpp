@@ -179,6 +179,44 @@ UStrategyVehicle* URadarContactSubsystem::ResolveTrackedVehicle(const FRadarCont
     return nullptr;
 }
 
+FString URadarContactSubsystem::InferThreatenedBaseName(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
+    UBaseManagerSubsystem* BaseMgr)
+{
+    if (!EnemyVehicle || !BaseMgr)
+    {
+        return FString();
+    }
+
+    if (EnemyVehicle->CurrentMission)
+    {
+        if (EnemyVehicle->CurrentMission->MissionType == EMissionType::Offensive
+            && EnemyVehicle->CurrentMission->TargetEnemyBase
+            && EnemyVehicle->CurrentMission->TargetEnemyBase->OwningFaction == FriendlyFaction)
+        {
+            return EnemyVehicle->CurrentMission->TargetEnemyBase->BaseName.ToString();
+        }
+    }
+
+    UStrategyBase* NearestBase = nullptr;
+    float NearestDist = MAX_FLT;
+    for (UStrategyBase* FriendlyBase : BaseMgr->GetBases(FriendlyFaction))
+    {
+        if (!FriendlyBase)
+        {
+            continue;
+        }
+
+        const float Dist = FVector2D::Distance(EnemyVehicle->CurrentPosition, FriendlyBase->MapLocation);
+        if (Dist < NearestDist)
+        {
+            NearestDist = Dist;
+            NearestBase = FriendlyBase;
+        }
+    }
+
+    return NearestBase ? NearestBase->BaseName.ToString() : FString();
+}
+
 bool URadarContactSubsystem::IsInboundThreatVehicle(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
     UBaseManagerSubsystem* BaseMgr)
 {
@@ -264,6 +302,17 @@ void URadarContactSubsystem::ExpireStaleContacts(float CurrentGameHours)
 
         for (const FGuid& Id : ToRemove)
         {
+            if (const FRadarContact* ExpiredContact = ContactMap.Find(Id))
+            {
+                if (UStrategyEventDispatcher* Events = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+                {
+                    Events->OnRadarContactExpired.Broadcast(Faction, *ExpiredContact);
+                }
+
+                UE_LOG(LogTemp, Verbose, TEXT("[BASE RADAR] %s contact expired: %s"),
+                    *UEnum::GetValueAsString(Faction), *ExpiredContact->TrackedVehicleName);
+            }
+
             ContactMap.Remove(Id);
             ContactsWithActiveInterception.Remove(Id);
         }
@@ -374,6 +423,22 @@ FRadarContact URadarContactSubsystem::UpsertVehicleContact(EFactionType Detectin
     Contact.LastPosition = EnemyVehicle->CurrentPosition;
     Contact.LastSeenGameHours = CurrentGameHours;
     Contact.bIsInboundThreat = bIsInboundThreat;
+    Contact.EstimatedHeadingDegrees = Contact.EstimatedVelocity.IsNearlyZero()
+        ? 0.0f
+        : FMath::RadiansToDegrees(FMath::Atan2(Contact.EstimatedVelocity.Y, Contact.EstimatedVelocity.X));
+
+    if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
+    {
+        if (bIsInboundThreat)
+        {
+            Contact.ThreatenedBaseName = InferThreatenedBaseName(EnemyVehicle, DetectingFaction, BaseMgr);
+        }
+        else
+        {
+            Contact.ThreatenedBaseName.Empty();
+        }
+    }
+
     Contact.TrackedVehicleName = EnemyVehicle->VehicleDefinition
         ? EnemyVehicle->VehicleDefinition->VehicleName.ToString()
         : EnemyVehicle->GetName();

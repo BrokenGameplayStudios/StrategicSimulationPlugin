@@ -36,13 +36,14 @@ This plugin implements a turn-of-time strategic simulation layer: factions build
 - Debug strategic map HUD (bases, vehicles, paths, radar circles)
 - Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
 
-### In progress (PR-12+)
+### In progress (PR-13+)
 
-- **Radar & intel** — contact polish, patrol/guard and en-route defense ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
+- **Radar & intel** — patrol/guard missions and en-route defense ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
 - PR-8 shipped: docs wiki hub, `bAllowDebugExecCommands`, `bRadarLOSEnabled`, `bStaleIntelEnabled` feature flags
 - PR-9 shipped: `UFactionIntelSubsystem`, stale wreck tooltips, save schema v3 intel arrays
 - PR-10 shipped: `URadarTerrainSubsystem`, LOS blocker zones, combat engagement fix (gunship `AttackPower`), defensive guard patrols
 - PR-11 shipped: Command Center passive radar, `FRadarContact`, `LaunchInterceptionAtContact` (player + AI)
+- PR-12 shipped: contact heading/threatened-base fields, expiry events + stale UI fade, universal `HandleVehicleDestroyed` wreck creation
 
 ### What is not implemented yet
 
@@ -414,7 +415,7 @@ PerformRadarPing (every PingIntervalHours, default 0.5 game hours)
       → ShouldEngageVehicle?
         → SetBehavior(Attacking) → EVehicleMissionPhase::Combat
           → ProcessCombatTick (offensiveRating × 0.35 × deltaHours damage)
-            → HandleVehicleDestroyedInCombat → CreateSalvageSite
+            → HandleVehicleDestroyed → CreateSalvageSite
 ```
 
 **Engagement requirements** (`ShouldEngageVehicle`):
@@ -598,7 +599,16 @@ AI: inbound contacts trigger immediate `[INTERCEPT AI]` if a combat vehicle is i
 
 Blueprint helpers: `BuildRadarContactMapMarkers`, `FormatRadarContactTooltipText`, `IsPlayerRadarContactLayerEnabled`.
 
-### 2.19 Build dependencies
+### 2.19 Contact registry polish (PR-12)
+
+| Item | Behavior |
+|------|----------|
+| `EstimatedHeadingDegrees` / `ThreatenedBaseName` | Stored on `FRadarContact`; shown in map tooltip |
+| `OnRadarContactExpired` | Fires when `RadarContactExpiryHours` elapses without refresh |
+| Stale UI | Marker alpha fades as contact ages (`GetRadarContactStalenessAlpha`) |
+| Universal wreck | `HandleVehicleDestroyed` — any destroy path (combat or future crash) creates salvage when `bSalvageSitesEnabled` |
+
+### 2.20 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 

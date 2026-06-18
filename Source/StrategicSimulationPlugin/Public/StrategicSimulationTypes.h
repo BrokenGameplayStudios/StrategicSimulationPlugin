@@ -206,6 +206,12 @@ struct FRadarContact
     bool bIsInboundThreat = false;
 
     UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    float EstimatedHeadingDegrees = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    FString ThreatenedBaseName;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
     FString TrackedVehicleName;
 };
 

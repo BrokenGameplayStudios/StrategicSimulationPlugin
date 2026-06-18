@@ -90,22 +90,47 @@ void UStrategyVehicle::ApplyDamage(int32 DamageAmount)
 
 void UStrategyVehicle::UpdateDamageStateFromHealth()
 {
+    const bool bWasDestroyed = IsDestroyed();
+
     if (!VehicleDefinition || VehicleDefinition->MaxHealth <= 0)
     {
         DamageState = (CurrentHealth <= 0) ? EVehicleDamageState::Destroyed : EVehicleDamageState::Undamaged;
-        return;
+    }
+    else
+    {
+        const float HealthPercent = static_cast<float>(CurrentHealth) / VehicleDefinition->MaxHealth;
+
+        if (HealthPercent <= 0.0f)
+        {
+            DamageState = EVehicleDamageState::Destroyed;
+        }
+        else if (HealthPercent <= 0.3f)
+        {
+            DamageState = EVehicleDamageState::HeavilyDamaged;
+        }
+        else if (HealthPercent <= 0.7f)
+        {
+            DamageState = EVehicleDamageState::LightlyDamaged;
+        }
+        else
+        {
+            DamageState = EVehicleDamageState::Undamaged;
+        }
     }
 
-    float HealthPercent = (float)CurrentHealth / VehicleDefinition->MaxHealth;
+    if (!bWasDestroyed && IsDestroyed())
+    {
+        UStrategyVehicle* DestroyedBy = nullptr;
+        if (CurrentTargetVehicle.IsValid() && CurrentPhase == EVehicleMissionPhase::Combat)
+        {
+            DestroyedBy = CurrentTargetVehicle.Get();
+        }
 
-    if (HealthPercent <= 0.0f)
-        DamageState = EVehicleDamageState::Destroyed;
-    else if (HealthPercent <= 0.3f)
-        DamageState = EVehicleDamageState::HeavilyDamaged;
-    else if (HealthPercent <= 0.7f)
-        DamageState = EVehicleDamageState::LightlyDamaged;
-    else
-        DamageState = EVehicleDamageState::Undamaged;
+        if (UMissionManagerSubsystem* MissionMgr = GetMissionManagerForVehicle(this))
+        {
+            MissionMgr->HandleVehicleDestroyed(this, DestroyedBy);
+        }
+    }
 }
 
 bool UStrategyVehicle::NeedsRepair() const
@@ -1042,28 +1067,17 @@ void UStrategyVehicle::ProcessCombatTick(float DeltaGameHours)
     }
 
     const float DamageScale = 0.35f;
-    UMissionManagerSubsystem* MissionMgr = GetMissionManagerForVehicle(this);
 
     if (CurrentBehavior == EVehicleBehavior::Attacking)
     {
         const int32 DamageDealt = FMath::Max(1, FMath::RoundToInt(GetVehicleOffensiveRating() * DamageScale * DeltaGameHours));
         Target->ApplyDamage(DamageDealt);
-
-        if (Target->IsDestroyed() && MissionMgr)
-        {
-            MissionMgr->HandleVehicleDestroyedInCombat(Target, this);
-        }
     }
 
     if (Target->CurrentBehavior == EVehicleBehavior::Attacking && Target->CurrentTargetVehicle.Get() == this)
     {
         const int32 DamageReceived = FMath::Max(1, FMath::RoundToInt(Target->GetVehicleOffensiveRating() * DamageScale * DeltaGameHours));
         ApplyDamage(DamageReceived);
-
-        if (IsDestroyed() && MissionMgr)
-        {
-            MissionMgr->HandleVehicleDestroyedInCombat(this, Target);
-        }
     }
 }
 

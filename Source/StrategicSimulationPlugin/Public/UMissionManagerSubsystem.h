@@ -112,8 +112,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
     void UpdateAllLiveVehicles(float DeltaGameHours);
 
-    /** Called when a vehicle is destroyed during live vehicular combat */
-    void HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy = nullptr);
+    /** Called when a vehicle is destroyed on any path (combat, crash, debug). Creates salvage wreck when enabled. */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Combat")
+    void HandleVehicleDestroyed(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy = nullptr);
 
     /** Log placeholder when an Offensive mission reaches the target base */
     void HandleBaseAttackArrival(UStrategyVehicle* Vehicle, UMissionGroup* Mission);

@@ -53,6 +53,10 @@ struct FRadarContactMapMarker
 
     UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
     bool bAlreadyTargeted = false;
+
+    /** 1.0 = fresh, approaches 0 as contact nears expiry. */
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    float StalenessAlpha = 1.0f;
 };
 
 UCLASS()
@@ -134,7 +138,11 @@ public:
     static FLinearColor GetRadarContactMarkerColor(const struct FRadarContact& Contact, bool bCanIntercept, bool bAlreadyTargeted);
 
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
-    static FText FormatRadarContactTooltipText(const struct FRadarContact& Contact, bool bCanIntercept, bool bAlreadyTargeted);
+    static float GetRadarContactStalenessAlpha(const struct FRadarContact& Contact, float CurrentGameHours, float ExpiryHours);
+
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
+    static FText FormatRadarContactTooltipText(const struct FRadarContact& Contact, bool bCanIntercept, bool bAlreadyTargeted,
+        float CurrentGameHours = 0.0f, float ExpiryHours = 6.0f);
 
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
     static FText FormatRadarContactDiscoveryToast(const struct FRadarContact& Contact);

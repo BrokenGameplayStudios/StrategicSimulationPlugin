@@ -167,6 +167,7 @@ void UStrategyRadarContactMapWidget::BindRadarEvents()
     if (UStrategyEventDispatcher* EventDisp = GetEventDispatcher())
     {
         EventDisp->OnRadarContactUpdated.AddDynamic(this, &UStrategyRadarContactMapWidget::OnRadarContactUpdated);
+        EventDisp->OnRadarContactExpired.AddDynamic(this, &UStrategyRadarContactMapWidget::OnRadarContactExpired);
     }
 }
 
@@ -175,6 +176,7 @@ void UStrategyRadarContactMapWidget::UnbindRadarEvents()
     if (UStrategyEventDispatcher* EventDisp = GetEventDispatcher())
     {
         EventDisp->OnRadarContactUpdated.RemoveDynamic(this, &UStrategyRadarContactMapWidget::OnRadarContactUpdated);
+        EventDisp->OnRadarContactExpired.RemoveDynamic(this, &UStrategyRadarContactMapWidget::OnRadarContactExpired);
     }
 }
 
@@ -193,6 +195,17 @@ void UStrategyRadarContactMapWidget::OnRadarContactUpdated(EFactionType Faction,
         QueueContactToast(Contact);
     }
 
+    RefreshRadarContactMarkers();
+}
+
+void UStrategyRadarContactMapWidget::OnRadarContactExpired(EFactionType Faction, FRadarContact Contact)
+{
+    if (Faction != ViewerFaction)
+    {
+        return;
+    }
+
+    SeenContactIds.Remove(Contact.ContactId);
     RefreshRadarContactMarkers();
 }
 
