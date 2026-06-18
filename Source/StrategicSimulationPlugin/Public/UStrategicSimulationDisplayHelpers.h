@@ -36,6 +36,10 @@ struct FRadarContactMapMarker
     UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
     FGuid ContactId;
 
+    /** Faction whose passive radar created this contact (Human or Enemy). */
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    EFactionType ContactFaction = EFactionType::Neutral;
+
     UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
     FVector2D WidgetPosition = FVector2D::ZeroVector;
 
@@ -158,6 +162,11 @@ public:
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
     static FLinearColor GetRadarContactMarkerColor(const struct FRadarContact& Contact, bool bCanIntercept, bool bAlreadyTargeted);
 
+    /** Faction-tinted marker color (cyan for Human, magenta for Enemy). */
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
+    static FLinearColor GetRadarContactMarkerColorForFaction(EFactionType ContactFaction, const struct FRadarContact& Contact,
+        bool bCanIntercept, bool bAlreadyTargeted);
+
     /** Returns alpha 1.0 (fresh) down to 0.15 as the contact approaches expiry age. */
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
     static float GetRadarContactStalenessAlpha(const struct FRadarContact& Contact, float CurrentGameHours, float ExpiryHours);
@@ -165,7 +174,7 @@ public:
     /** Builds multi-line tooltip text for a radar contact (position, speed, intercept action). */
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
     static FText FormatRadarContactTooltipText(const struct FRadarContact& Contact, bool bCanIntercept, bool bAlreadyTargeted,
-        float CurrentGameHours = 0.0f, float ExpiryHours = 6.0f);
+        float CurrentGameHours = 0.0f, float ExpiryHours = 6.0f, bool bAllowClickDispatch = true);
 
     /** Formats a short toast when a new radar contact is first detected. */
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
@@ -174,5 +183,6 @@ public:
     /** Builds positioned radar contact markers for all contacts visible to ViewerFaction. */
     UFUNCTION(BlueprintCallable, Category = "Strategic Simulation|Display|Radar Contact Map", meta = (WorldContext = "WorldContextObject"))
     static TArray<FRadarContactMapMarker> BuildRadarContactMapMarkers(const UObject* WorldContextObject, EFactionType ViewerFaction,
-        FVector2D WidgetSize, float MapScaleMultiplier = 0.85f);
+        FVector2D WidgetSize, float MapScaleMultiplier = 0.85f, bool bIncludeOpposingFactionContacts = false,
+        bool bAllowClickDispatch = true);
 };

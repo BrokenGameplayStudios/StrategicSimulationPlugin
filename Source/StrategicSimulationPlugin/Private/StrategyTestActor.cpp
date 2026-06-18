@@ -67,7 +67,7 @@ void AStrategyTestActor::RunPhase13Test()
         if (UStrategyRadarContactMapWidget* RadarLayer = CreateWidget<UStrategyRadarContactMapWidget>(GetWorld(), RadarContactMapWidgetClass))
         {
             RadarLayer->AddToViewport(11);
-            UE_LOG(LogTemp, Display, TEXT("Radar contact overlay spawned (PR-11 click-to-intercept)"));
+            UE_LOG(LogTemp, Display, TEXT("Radar contact overlay spawned (hover intel; AI dispatches in spectate mode)"));
         }
     }
 

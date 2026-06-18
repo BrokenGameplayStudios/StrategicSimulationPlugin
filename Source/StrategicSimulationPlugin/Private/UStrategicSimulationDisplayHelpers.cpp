@@ -442,9 +442,29 @@ bool UStrategicSimulationDisplayHelpers::IsPlayerRadarContactLayerEnabled(const 
 FLinearColor UStrategicSimulationDisplayHelpers::GetRadarContactMarkerColor(const FRadarContact& Contact,
     bool bCanIntercept, bool bAlreadyTargeted)
 {
+    return GetRadarContactMarkerColorForFaction(Contact.DetectingFaction, Contact, bCanIntercept, bAlreadyTargeted);
+}
+
+FLinearColor UStrategicSimulationDisplayHelpers::GetRadarContactMarkerColorForFaction(EFactionType ContactFaction,
+    const FRadarContact& Contact, bool bCanIntercept, bool bAlreadyTargeted)
+{
     if (bAlreadyTargeted)
     {
         return FLinearColor(0.45f, 0.45f, 0.45f, 0.75f);
+    }
+
+    if (ContactFaction == EFactionType::Enemy)
+    {
+        if (Contact.bIsInboundThreat)
+        {
+            return bCanIntercept
+                ? FLinearColor(0.95f, 0.25f, 0.75f, 1.0f)
+                : FLinearColor(0.9f, 0.2f, 0.35f, 0.85f);
+        }
+
+        return bCanIntercept
+            ? FLinearColor(0.85f, 0.45f, 0.65f, 0.95f)
+            : FLinearColor(0.75f, 0.4f, 0.55f, 0.7f);
     }
 
     if (Contact.bIsInboundThreat)
@@ -474,7 +494,7 @@ float UStrategicSimulationDisplayHelpers::GetRadarContactStalenessAlpha(const FR
 
 /** Builds multi-line tooltip text for a radar contact (position, speed, intercept action). */
 FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FRadarContact& Contact,
-    bool bCanIntercept, bool bAlreadyTargeted, float CurrentGameHours, float ExpiryHours)
+    bool bCanIntercept, bool bAlreadyTargeted, float CurrentGameHours, float ExpiryHours, bool bAllowClickDispatch)
 {
     if (!Contact.ContactId.IsValid())
     {
@@ -495,7 +515,9 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FR
     }
     else if (bCanIntercept)
     {
-        ActionLine = TEXT("Click to launch interception");
+        ActionLine = bAllowClickDispatch
+            ? TEXT("Click to launch interception")
+            : TEXT("AI handles interception when enabled");
     }
     else
     {
@@ -552,9 +574,50 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactDiscoveryToast(const
         *DetectorLine));
 }
 
+namespace
+{
+    void AppendFactionContactMarkers(TArray<FRadarContactMapMarker>& Markers, EFactionType ContactFaction,
+        const TArray<FRadarContact>& Contacts, URadarContactSubsystem* ContactMgr, UMissionManagerSubsystem* MissionMgr,
+        UStrategyCampaignSubsystem* Campaign, FVector2D WidgetSize, float MapScaleMultiplier, float CurrentGameHours,
+        float ExpiryHours, bool bAllowClickDispatch)
+    {
+        for (const FRadarContact& Contact : Contacts)
+        {
+            if (!Contact.ContactId.IsValid())
+            {
+                continue;
+            }
+
+            const bool bAlreadyTargeted = ContactMgr->IsContactAlreadyTargeted(Contact.ContactId);
+            const bool bCanIntercept = MissionMgr
+                ? MissionMgr->CanFactionInterceptContact(ContactFaction, Contact.ContactId)
+                : false;
+            const float StalenessAlpha = UStrategicSimulationDisplayHelpers::GetRadarContactStalenessAlpha(
+                Contact, CurrentGameHours, ExpiryHours);
+
+            FRadarContactMapMarker Marker;
+            Marker.ContactId = Contact.ContactId;
+            Marker.ContactFaction = ContactFaction;
+            Marker.WidgetPosition = UStrategicSimulationDisplayHelpers::MapLogicalToWidgetPosition(
+                URadarContactSubsystem::GetContactInterceptPosition(Contact), WidgetSize, Campaign, MapScaleMultiplier);
+            Marker.bIsInboundThreat = Contact.bIsInboundThreat;
+            Marker.bCanIntercept = bCanIntercept;
+            Marker.bAlreadyTargeted = bAlreadyTargeted;
+            Marker.StalenessAlpha = StalenessAlpha;
+            Marker.Color = UStrategicSimulationDisplayHelpers::GetRadarContactMarkerColorForFaction(
+                ContactFaction, Contact, bCanIntercept, bAlreadyTargeted);
+            Marker.Color.A *= StalenessAlpha;
+            Marker.Tooltip = UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(
+                Contact, bCanIntercept, bAlreadyTargeted, CurrentGameHours, ExpiryHours, bAllowClickDispatch);
+            Markers.Add(Marker);
+        }
+    }
+}
+
 /** Builds positioned radar contact markers for all contacts visible to ViewerFaction. */
 TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarContactMapMarkers(
-    const UObject* WorldContextObject, EFactionType ViewerFaction, FVector2D WidgetSize, float MapScaleMultiplier)
+    const UObject* WorldContextObject, EFactionType ViewerFaction, FVector2D WidgetSize, float MapScaleMultiplier,
+    bool bIncludeOpposingFactionContacts, bool bAllowClickDispatch)
 {
     TArray<FRadarContactMapMarker> Markers;
 
@@ -577,36 +640,24 @@ TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarCon
         return Markers;
     }
 
-    const TArray<FRadarContact> Contacts = ContactMgr->GetContactsForFaction(ViewerFaction);
     const float CurrentGameHours = MissionMgr ? MissionMgr->GetCurrentGameHours() : 0.0f;
     const float ExpiryHours = Campaign ? FMath::Max(1.0f, Campaign->RadarContactExpiryHours) : 6.0f;
-    Markers.Reserve(Contacts.Num());
 
-    for (const FRadarContact& Contact : Contacts)
+    const TArray<FRadarContact> ViewerContacts = ContactMgr->GetContactsForFaction(ViewerFaction);
+    Markers.Reserve(ViewerContacts.Num() + (bIncludeOpposingFactionContacts ? 8 : 0));
+
+    AppendFactionContactMarkers(Markers, ViewerFaction, ViewerContacts, ContactMgr, MissionMgr, Campaign,
+        WidgetSize, MapScaleMultiplier, CurrentGameHours, ExpiryHours, bAllowClickDispatch);
+
+    if (bIncludeOpposingFactionContacts)
     {
-        if (!Contact.ContactId.IsValid())
-        {
-            continue;
-        }
-
-        const bool bAlreadyTargeted = ContactMgr->IsContactAlreadyTargeted(Contact.ContactId);
-        const bool bCanIntercept = MissionMgr
-            ? MissionMgr->CanFactionInterceptContact(ViewerFaction, Contact.ContactId)
-            : false;
-        const float StalenessAlpha = GetRadarContactStalenessAlpha(Contact, CurrentGameHours, ExpiryHours);
-
-        FRadarContactMapMarker Marker;
-        Marker.ContactId = Contact.ContactId;
-        Marker.WidgetPosition = MapLogicalToWidgetPosition(
-            URadarContactSubsystem::GetContactInterceptPosition(Contact), WidgetSize, Campaign, MapScaleMultiplier);
-        Marker.bIsInboundThreat = Contact.bIsInboundThreat;
-        Marker.bCanIntercept = bCanIntercept;
-        Marker.bAlreadyTargeted = bAlreadyTargeted;
-        Marker.StalenessAlpha = StalenessAlpha;
-        Marker.Color = GetRadarContactMarkerColor(Contact, bCanIntercept, bAlreadyTargeted);
-        Marker.Color.A *= StalenessAlpha;
-        Marker.Tooltip = FormatRadarContactTooltipText(Contact, bCanIntercept, bAlreadyTargeted, CurrentGameHours, ExpiryHours);
-        Markers.Add(Marker);
+        const EFactionType OpposingFaction = (ViewerFaction == EFactionType::Human)
+            ? EFactionType::Enemy
+            : EFactionType::Human;
+        const TArray<FRadarContact> OpposingContacts = ContactMgr->GetContactsForFaction(OpposingFaction);
+        Markers.Reserve(Markers.Num() + OpposingContacts.Num());
+        AppendFactionContactMarkers(Markers, OpposingFaction, OpposingContacts, ContactMgr, MissionMgr, Campaign,
+            WidgetSize, MapScaleMultiplier, CurrentGameHours, ExpiryHours, false);
     }
 
     return Markers;

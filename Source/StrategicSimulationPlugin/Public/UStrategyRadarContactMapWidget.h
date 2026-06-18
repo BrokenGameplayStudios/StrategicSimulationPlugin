@@ -11,7 +11,7 @@ class UMissionManagerSubsystem;
 class UStrategyCampaignSubsystem;
 class UStrategyEventDispatcher;
 
-/** Slate-painted overlay for passive radar contacts with click-to-intercept support. */
+/** Slate-painted overlay for passive radar contacts; hover for intel, optional click-to-intercept. */
 UCLASS(Blueprintable)
 class STRATEGICSIMULATIONPLUGIN_API UStrategyRadarContactMapWidget : public UStrategyUserWidget
 {
@@ -40,6 +40,20 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar Contact Map", meta = (ClampMin = "1.0", ClampMax = "30.0"))
     float ToastDurationSeconds = 6.0f;
 
+    /**
+     * When true, also draws the opposing faction's contacts (magenta for Enemy, cyan for Human).
+     * Auto-enabled while both factions run AI simulation.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar Contact Map")
+    bool bShowOpposingFactionContacts = true;
+
+    /**
+     * When true, left-click on a contact launches interception even if faction AI is enabled.
+     * Leave false in AI-vs-AI spectate; designers use TryInterceptContactById from a button instead.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar Contact Map")
+    bool bAllowPlayerClickToIntercept = false;
+
     /** Returns true when campaign flags enable the player radar contact layer. */
     UFUNCTION(BlueprintPure, Category = "Radar Contact Map")
     bool IsRadarContactLayerEnabled() const;
@@ -52,6 +66,22 @@ public:
     UFUNCTION(BlueprintPure, Category = "Radar Contact Map")
     FText GetHoveredTooltipText() const { return HoveredTooltip; }
 
+    /** Contact under the cursor, if any (for designer intercept buttons). */
+    UFUNCTION(BlueprintPure, Category = "Radar Contact Map")
+    FGuid GetHoveredContactId() const { return HoveredContactId; }
+
+    /** Faction that owns the hovered contact. */
+    UFUNCTION(BlueprintPure, Category = "Radar Contact Map")
+    EFactionType GetHoveredContactFaction() const { return HoveredContactFaction; }
+
+    /** False when faction AI handles interceptions (spectate / AI-vs-AI). */
+    UFUNCTION(BlueprintPure, Category = "Radar Contact Map")
+    bool IsClickToInterceptAllowed() const;
+
+    /** True when opposing-faction contacts are included in the overlay. */
+    UFUNCTION(BlueprintPure, Category = "Radar Contact Map")
+    bool ShouldShowOpposingFactionContacts() const;
+
     /** Rebuilds CachedMarkers from faction radar contacts and invalidates paint. */
     UFUNCTION(BlueprintCallable, Category = "Radar Contact Map")
     void RefreshRadarContactMarkers();
@@ -60,8 +90,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Radar Contact Map")
     bool TryInterceptContactAtWidgetPosition(FVector2D LocalWidgetPosition);
 
+    /** Designer / player button: dispatch interception for ViewerFaction. */
     UFUNCTION(BlueprintCallable, Category = "Radar Contact Map")
     bool TryInterceptContactById(FGuid ContactId);
+
+    /** Designer button: dispatch interception for a specific faction's contact. */
+    UFUNCTION(BlueprintCallable, Category = "Radar Contact Map")
+    bool TryInterceptContactByIdForFaction(EFactionType Faction, FGuid ContactId);
 
 protected:
     /** Binds radar events, sets visible input mode, and refreshes contact markers. */
@@ -77,7 +112,7 @@ protected:
     virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
         FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
 
-    /** Handles left-click on a contact marker to launch auto-interception. */
+    /** Handles left-click on a contact marker when click-to-intercept is allowed. */
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 private:
@@ -86,6 +121,12 @@ private:
 
     UPROPERTY(Transient)
     FText HoveredTooltip;
+
+    UPROPERTY(Transient)
+    FGuid HoveredContactId;
+
+    UPROPERTY(Transient)
+    EFactionType HoveredContactFaction = EFactionType::Neutral;
 
     FVector2D LastCachedWidgetSize = FVector2D::ZeroVector;
 
@@ -148,4 +189,13 @@ private:
 
     /** Returns UStrategyEventDispatcher from the widget's game instance. */
     UStrategyEventDispatcher* GetEventDispatcher() const;
+
+    /** Returns UAIControllerSubsystem from the widget's game instance. */
+    class UAIControllerSubsystem* GetAIController() const;
+
+    /** True when left-click may launch interception for the given contact owner faction. */
+    bool IsClickToInterceptAllowedForFaction(EFactionType Faction) const;
+
+    /** Shared launch path for click and designer-button dispatch. */
+    bool LaunchInterceptionForContact(EFactionType Faction, FGuid ContactId);
 };

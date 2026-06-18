@@ -1,5 +1,6 @@
 #include "UStrategyRadarContactMapWidget.h"
 #include "UMissionManagerSubsystem.h"
+#include "UAIControllerSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyVehicle.h"
 #include "UStrategyEventDispatcher.h"
@@ -104,10 +105,12 @@ int32 UStrategyRadarContactMapWidget::NativePaint(const FPaintArgs& Args, const 
     return MaxLayer;
 }
 
-/** Handles left-click on a contact marker to launch auto-interception. */
+/** Handles left-click on a contact marker when click-to-intercept is allowed. */
 FReply UStrategyRadarContactMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-    if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && IsRadarContactLayerEnabled())
+    if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton
+        && IsRadarContactLayerEnabled()
+        && IsClickToInterceptAllowed())
     {
         const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
         if (TryInterceptContactAtWidgetPosition(LocalPos))
@@ -119,12 +122,50 @@ FReply UStrategyRadarContactMapWidget::NativeOnMouseButtonDown(const FGeometry& 
     return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
+bool UStrategyRadarContactMapWidget::ShouldShowOpposingFactionContacts() const
+{
+    return bShowOpposingFactionContacts;
+}
+
+bool UStrategyRadarContactMapWidget::IsClickToInterceptAllowedForFaction(EFactionType Faction) const
+{
+    if (bAllowPlayerClickToIntercept)
+    {
+        return true;
+    }
+
+    const UAIControllerSubsystem* AI = GetAIController();
+    if (!AI)
+    {
+        return true;
+    }
+
+    if (Faction == EFactionType::Human && AI->IsSimulatingHumanAI())
+    {
+        return false;
+    }
+
+    if (Faction == EFactionType::Enemy && AI->IsSimulatingEnemyAI())
+    {
+        return false;
+    }
+
+    return true;
+}
+
+bool UStrategyRadarContactMapWidget::IsClickToInterceptAllowed() const
+{
+    return IsClickToInterceptAllowedForFaction(ViewerFaction);
+}
+
 /** Rebuilds CachedMarkers from faction radar contacts and invalidates paint. */
 void UStrategyRadarContactMapWidget::RefreshRadarContactMarkers()
 {
     const FVector2D WidgetSize = GetCachedGeometry().GetLocalSize();
+    const bool bIncludeOpposing = ShouldShowOpposingFactionContacts();
+    const bool bAllowClickDispatch = IsClickToInterceptAllowedForFaction(ViewerFaction);
     CachedMarkers = UStrategicSimulationDisplayHelpers::BuildRadarContactMapMarkers(
-        this, ViewerFaction, WidgetSize, MapScaleMultiplier);
+        this, ViewerFaction, WidgetSize, MapScaleMultiplier, bIncludeOpposing, bAllowClickDispatch);
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -132,16 +173,25 @@ void UStrategyRadarContactMapWidget::RefreshRadarContactMarkers()
 bool UStrategyRadarContactMapWidget::TryInterceptContactAtWidgetPosition(FVector2D LocalWidgetPosition)
 {
     const FRadarContactMapMarker* Marker = FindMarkerAtPosition(LocalWidgetPosition);
-    if (!Marker)
+    if (!Marker || !IsClickToInterceptAllowedForFaction(Marker->ContactFaction))
     {
         return false;
     }
 
-    return TryInterceptContactById(Marker->ContactId);
+    return TryInterceptContactByIdForFaction(Marker->ContactFaction, Marker->ContactId);
 }
 
-/** Launches auto-interception via UMissionManagerSubsystem and shows a confirmation toast. */
 bool UStrategyRadarContactMapWidget::TryInterceptContactById(FGuid ContactId)
+{
+    return TryInterceptContactByIdForFaction(ViewerFaction, ContactId);
+}
+
+bool UStrategyRadarContactMapWidget::TryInterceptContactByIdForFaction(EFactionType Faction, FGuid ContactId)
+{
+    return LaunchInterceptionForContact(Faction, ContactId);
+}
+
+bool UStrategyRadarContactMapWidget::LaunchInterceptionForContact(EFactionType Faction, FGuid ContactId)
 {
     UMissionManagerSubsystem* MissionMgr = GetMissionManager();
     if (!MissionMgr || !ContactId.IsValid())
@@ -151,7 +201,7 @@ bool UStrategyRadarContactMapWidget::TryInterceptContactById(FGuid ContactId)
 
     UStrategyBase* OriginBase = nullptr;
     UStrategyVehicle* Vehicle = nullptr;
-    if (!MissionMgr->TryLaunchInterceptionAtContactAuto(ViewerFaction, ContactId, OriginBase, Vehicle))
+    if (!MissionMgr->TryLaunchInterceptionAtContactAuto(Faction, ContactId, OriginBase, Vehicle))
     {
         return false;
     }
@@ -168,7 +218,8 @@ bool UStrategyRadarContactMapWidget::TryInterceptContactById(FGuid ContactId)
     RefreshRadarContactMarkers();
     Invalidate(EInvalidateWidgetReason::Paint);
 
-    UE_LOG(LogTemp, Display, TEXT("[RADAR MAP] Player interception from '%s' via %s"), *BaseName, *VehicleName);
+    UE_LOG(LogTemp, Display, TEXT("[RADAR MAP] %s interception from '%s' via %s"),
+        *UEnum::GetValueAsString(Faction), *BaseName, *VehicleName);
     return true;
 }
 
@@ -197,17 +248,27 @@ void UStrategyRadarContactMapWidget::UnbindRadarEvents()
 /** Event handler: queues toast for new contacts and refreshes markers on update. */
 void UStrategyRadarContactMapWidget::OnRadarContactUpdated(EFactionType Faction, FRadarContact Contact)
 {
-    if (Faction != ViewerFaction || !IsRadarContactLayerEnabled() || !Contact.ContactId.IsValid())
+    if (!IsRadarContactLayerEnabled() || !Contact.ContactId.IsValid())
     {
         return;
     }
 
-    const bool bIsNew = !SeenContactIds.Contains(Contact.ContactId);
-    SeenContactIds.Add(Contact.ContactId);
-
-    if (bIsNew)
+    const bool bOwnFaction = Faction == ViewerFaction;
+    const bool bOpposingFaction = ShouldShowOpposingFactionContacts() && Faction != ViewerFaction;
+    if (!bOwnFaction && !bOpposingFaction)
     {
-        QueueContactToast(Contact);
+        return;
+    }
+
+    if (bOwnFaction)
+    {
+        const bool bIsNew = !SeenContactIds.Contains(Contact.ContactId);
+        SeenContactIds.Add(Contact.ContactId);
+
+        if (bIsNew)
+        {
+            QueueContactToast(Contact);
+        }
     }
 
     RefreshRadarContactMarkers();
@@ -216,12 +277,18 @@ void UStrategyRadarContactMapWidget::OnRadarContactUpdated(EFactionType Faction,
 /** Event handler: forgets expired contact IDs and refreshes markers. */
 void UStrategyRadarContactMapWidget::OnRadarContactExpired(EFactionType Faction, FRadarContact Contact)
 {
-    if (Faction != ViewerFaction)
+    const bool bOwnFaction = Faction == ViewerFaction;
+    const bool bOpposingFaction = ShouldShowOpposingFactionContacts() && Faction != ViewerFaction;
+    if (!bOwnFaction && !bOpposingFaction)
     {
         return;
     }
 
-    SeenContactIds.Remove(Contact.ContactId);
+    if (bOwnFaction)
+    {
+        SeenContactIds.Remove(Contact.ContactId);
+    }
+
     RefreshRadarContactMarkers();
 }
 
@@ -260,6 +327,8 @@ void UStrategyRadarContactMapWidget::QueueContactToast(const FRadarContact& Cont
 void UStrategyRadarContactMapWidget::UpdateHoveredTooltip(const FGeometry& MyGeometry)
 {
     HoveredTooltip = FText::GetEmpty();
+    HoveredContactId = FGuid();
+    HoveredContactFaction = EFactionType::Neutral;
 
     if (!IsRadarContactLayerEnabled())
     {
@@ -271,6 +340,8 @@ void UStrategyRadarContactMapWidget::UpdateHoveredTooltip(const FGeometry& MyGeo
     if (const FRadarContactMapMarker* Marker = FindMarkerAtPosition(LocalMouse))
     {
         HoveredTooltip = Marker->Tooltip;
+        HoveredContactId = Marker->ContactId;
+        HoveredContactFaction = Marker->ContactFaction;
     }
 }
 
@@ -421,6 +492,15 @@ UStrategyEventDispatcher* UStrategyRadarContactMapWidget::GetEventDispatcher() c
     if (UGameInstance* GI = GetGameInstance())
     {
         return GI->GetSubsystem<UStrategyEventDispatcher>();
+    }
+    return nullptr;
+}
+
+UAIControllerSubsystem* UStrategyRadarContactMapWidget::GetAIController() const
+{
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        return GI->GetSubsystem<UAIControllerSubsystem>();
     }
     return nullptr;
 }
