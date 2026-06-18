@@ -145,6 +145,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Combat")
     void HandleVehicleDestroyed(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy = nullptr);
 
+    /** Cancels in-progress expansion when a guard vehicle is destroyed or abandons the site. */
+    void TryCancelExpansionForLostGuard(UStrategyVehicle* Vehicle);
+
+    /** True while a live expansion guard is on-station within range of the expansion base. */
+    bool IsExpansionBaseGuarded(const UStrategyBase* ExpansionBase) const;
+
     /** Log placeholder when an Offensive mission reaches the target base */
     void HandleBaseAttackArrival(UStrategyVehicle* Vehicle, UMissionGroup* Mission);
 

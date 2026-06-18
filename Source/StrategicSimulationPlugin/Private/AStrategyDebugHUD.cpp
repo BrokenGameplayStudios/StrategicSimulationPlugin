@@ -38,6 +38,81 @@ namespace
 
         return Campaign->bAllowDebugExecCommands;
     }
+
+    UStrategyBase* FindBaseAtSite(const UBaseManagerSubsystem* BaseMgr, const UStrategySiteDefinition* Site)
+    {
+        if (!BaseMgr || !Site)
+        {
+            return nullptr;
+        }
+
+        for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Human))
+        {
+            if (Base && Base->BuiltOnSite == Site)
+            {
+                return Base;
+            }
+        }
+
+        for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
+        {
+            if (Base && Base->BuiltOnSite == Site)
+            {
+                return Base;
+            }
+        }
+
+        return nullptr;
+    }
+
+    int32 GetSiteIndex(const UBaseManagerSubsystem* BaseMgr, const UStrategySiteDefinition* Site)
+    {
+        if (!BaseMgr || !Site)
+        {
+            return -1;
+        }
+
+        return BaseMgr->AllPotentialSites.IndexOfByKey(Site);
+    }
+
+    FLinearColor GetPotentialSiteNodeColor(const UStrategyBase* Base)
+    {
+        if (!Base)
+        {
+            return FLinearColor(0.85f, 0.85f, 0.85f, 0.8f);
+        }
+
+        if (Base->OwningFaction == EFactionType::Human)
+        {
+            return FLinearColor(0.22f, 0.52f, 0.95f, 0.8f);
+        }
+
+        return FLinearColor(0.92f, 0.22f, 0.42f, 0.8f);
+    }
+
+    void DrawSiteIndexLabel(UCanvas* InCanvas, const FVector2D& ScreenPos, int32 SiteIndex, float Scale)
+    {
+        if (!InCanvas || !GEngine)
+        {
+            return;
+        }
+
+        const FString IndexText = FString::Printf(TEXT("%d"), SiteIndex);
+        UFont* Font = GEngine->GetSmallFont();
+        if (!Font)
+        {
+            return;
+        }
+
+        int32 TextHeight = 0;
+        int32 TextWidth = 0;
+        Font->GetStringHeightAndWidth(IndexText, TextHeight, TextWidth);
+
+        const float YOffset = 28.0f * Scale;
+        InCanvas->DrawText(Font, FText::FromString(IndexText),
+            ScreenPos.X - static_cast<float>(TextWidth) * 0.5f, ScreenPos.Y - YOffset,
+            0.85f, 0.85f, FFontRenderInfo());
+    }
 }
 
 /** Enables tick for on-screen debug text updates. */
@@ -218,12 +293,16 @@ void AStrategyDebugHUD::AppendExpansionConstructionStatus(const UBaseManagerSubs
             }
 
             const int32 DaysRemaining = BaseMgr->GetCommandCenterBuildDaysRemaining(Base);
-            const FString StatusText = DaysRemaining > 0
+            const int32 SiteIndex = GetSiteIndex(BaseMgr, Base->BuiltOnSite);
+            const FString DaysText = DaysRemaining > 0
                 ? FString::Printf(TEXT("%d day(s) left"), DaysRemaining)
                 : FString(TEXT("awaiting CC placement"));
+            const FString SiteText = SiteIndex >= 0
+                ? FString::Printf(TEXT("on site %d"), SiteIndex)
+                : FString(TEXT("on site ?"));
 
-            DebugText += FString::Printf(TEXT("  %s '%s': %s\n"),
-                FactionLabel, *Base->BaseName.ToString(), *StatusText);
+            DebugText += FString::Printf(TEXT("%s '%s': %s, %s...\n"),
+                FactionLabel, *Base->BaseName.ToString(), *DaysText, *SiteText);
         }
     };
 
@@ -348,7 +427,7 @@ void AStrategyDebugHUD::DrawHUD()
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths"), 50, 155, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 185, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE/RED TRIANGLE = Salvage Wreck (destroyed vehicle faction)"), 50, 215, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GRAY = Radar LOS blocker zones (mountains)"), 50, 245, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BROWN = Radar LOS blocker zones (mountains)"), 50, 245, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN RING = Command Center passive radar range"), 50, 275, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN DIAMOND = Friendly radar entry  |  MAGENTA = Enemy radar entry"), 50, 305, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 335, 1.0f, 1.0f, FFontRenderInfo());
@@ -372,7 +451,7 @@ void AStrategyDebugHUD::DrawHUD()
                 InspectorText += FString::Printf(TEXT("Type: %s\n"),
                     *UStrategicSimulationDisplayHelpers::GetSiteTypeDisplayName(Site->SiteType).ToString());
                 InspectorText += FString::Printf(TEXT("Status: %s\n"),
-                    *UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(Site));
+                    *UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(Site, BaseManager));
 
                 bool bHumanDiscovered = BaseManager->DiscoveredSitesHuman.Contains(Site);
                 bool bEnemyDiscovered = BaseManager->DiscoveredSitesEnemy.Contains(Site);
@@ -448,34 +527,21 @@ void AStrategyDebugHUD::DrawHUD()
                 InspectorText += TEXT("\n");
 
                 // === FIND OWNING BASE ===
-                UStrategyBase* OwningBase = nullptr;
-
-                for (UStrategyBase* Base : BaseManager->GetBases(EFactionType::Human))
-                {
-                    if (Base && Base->BuiltOnSite == Site)
-                    {
-                        OwningBase = Base;
-                        break;
-                    }
-                }
-
-                if (!OwningBase)
-                {
-                    for (UStrategyBase* Base : BaseManager->GetBases(EFactionType::Enemy))
-                    {
-                        if (Base && Base->BuiltOnSite == Site)
-                        {
-                            OwningBase = Base;
-                            break;
-                        }
-                    }
-                }
+                UStrategyBase* OwningBase = FindBaseAtSite(BaseManager, Site);
 
                 // === BASE SECTION ===
                 if (OwningBase)
                 {
                     FString FactionStr = (OwningBase->OwningFaction == EFactionType::Human) ? TEXT("Human") : TEXT("Enemy");
                     InspectorText += FString::Printf(TEXT("== Base (%s) ==\n"), *FactionStr);
+
+                    if (!BaseManager->IsCommandCenterOperational(OwningBase))
+                    {
+                        const int32 DaysRemaining = BaseManager->GetCommandCenterBuildDaysRemaining(OwningBase);
+                        InspectorText += DaysRemaining > 0
+                            ? FString::Printf(TEXT("Under Construction — %d day(s) left\n"), DaysRemaining)
+                            : TEXT("Under Construction\n");
+                    }
 
                     // Extraction
                     FResourceStockpile Extraction = OwningBase->GetDailyExtractionFromSite();
@@ -530,7 +596,7 @@ void AStrategyDebugHUD::DrawInspectedSiteHighlight()
         ScreenPos - FVector2D(HighlightSize * 0.5f, HighlightSize * 0.5f),
         FVector2D(HighlightSize, HighlightSize),
         3.0f * Scale,
-        FLinearColor::Yellow);
+        FLinearColor(1.0f, 1.0f, 0.0f, 0.8f));
 }
 
 /** Draws a three-segment outlined triangle at ScreenPos. */
@@ -561,10 +627,7 @@ void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 Sit
 
     DrawSiteTriangle(ScreenPos, NodeSize, 2.0f * Scale, WreckColor);
 
-    const FString IndexText = FString::Printf(TEXT("%d"), SiteIndex);
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(IndexText),
-        ScreenPos.X + 10.0f * Scale, ScreenPos.Y - 14.0f * Scale,
-        0.85f, 0.85f, FFontRenderInfo());
+    DrawSiteIndexLabel(Canvas, ScreenPos, SiteIndex, Scale);
 
     if (BaseManager)
     {
@@ -572,17 +635,17 @@ void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 Sit
         if (BaseManager->DiscoveredSitesHuman.Contains(Site))
         {
             Canvas->K2_DrawBox(ScreenPos - FVector2D(8.0f * Scale, 12.0f * Scale),
-                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Blue);
+                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor(0.0f, 0.0f, 1.0f, 0.8f));
         }
         if (BaseManager->DiscoveredSitesEnemy.Contains(Site))
         {
             Canvas->K2_DrawBox(ScreenPos + FVector2D(4.0f * Scale, -12.0f * Scale),
-                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Red);
+                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor(1.0f, 0.0f, 0.0f, 0.8f));
         }
     }
 }
 
-/** Draws gray radar LOS blocker zones from URadarTerrainSubsystem. */
+/** Draws brown radar LOS blocker zones from URadarTerrainSubsystem. */
 void AStrategyDebugHUD::DrawRadarBlockerZones()
 {
     if (!Canvas || !bShowStrategyMap)
@@ -597,7 +660,7 @@ void AStrategyDebugHUD::DrawRadarBlockerZones()
     }
 
     const float Scale = GetCurrentMapScale();
-    const FLinearColor BlockerColor(0.45f, 0.45f, 0.45f, 0.55f);
+    const FLinearColor BlockerColor(0.55f, 0.32f, 0.12f, 0.55f);
 
     for (const FRadarBlockerZone& Zone : TerrainMgr->GetBlockerZones())
     {
@@ -650,24 +713,22 @@ void AStrategyDebugHUD::DrawAllPotentialSites()
         const FVector2D ScreenPos = GetScreenPosition(Site->Location);
 
         const float NodeSize = 10.0f * Scale;
+        const FLinearColor NodeColor = GetPotentialSiteNodeColor(FindBaseAtSite(BaseManager, Site));
         Canvas->K2_DrawBox(ScreenPos - FVector2D(NodeSize * 0.5f, NodeSize * 0.5f),
-            FVector2D(NodeSize, NodeSize), 1.0f, FLinearColor(0.85f, 0.85f, 0.85f, 0.8f));
+            FVector2D(NodeSize, NodeSize), 1.0f, NodeColor);
 
-        const FString IndexText = FString::Printf(TEXT("%d"), i);
-        Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(IndexText),
-            ScreenPos.X + 10.0f * Scale, ScreenPos.Y - 14.0f * Scale,
-            0.85f, 0.85f, FFontRenderInfo());
+        DrawSiteIndexLabel(Canvas, ScreenPos, i, Scale);
 
         const float MarkerSize = 4.0f * Scale;
         if (BaseManager->DiscoveredSitesHuman.Contains(Site))
         {
             Canvas->K2_DrawBox(ScreenPos - FVector2D(8.0f * Scale, 12.0f * Scale),
-                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Blue);
+                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor(0.0f, 0.0f, 1.0f, 0.8f));
         }
         if (BaseManager->DiscoveredSitesEnemy.Contains(Site))
         {
             Canvas->K2_DrawBox(ScreenPos + FVector2D(4.0f * Scale, -12.0f * Scale),
-                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Red);
+                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor(1.0f, 0.0f, 0.0f, 0.8f));
         }
     }
 }
@@ -732,8 +793,8 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
     {
         float ScreenRadius = RadarRange * Scale;
         const FLinearColor RadarColor = bIsHuman
-            ? FLinearColor(0.28f, 0.58f, 0.92f, 0.55f)
-            : FLinearColor(0.92f, 0.28f, 0.48f, 0.55f);
+            ? FLinearColor(0.28f, 0.58f, 0.92f, 0.4f)
+            : FLinearColor(0.92f, 0.28f, 0.48f, 0.4f);
 
         const int32 NumSegments = 48;
         for (int32 i = 0; i < NumSegments; ++i)
@@ -803,8 +864,8 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
             const float RadarRange = Campaign->BaseRadarRangePixels * Scale;
             const bool bHumanBase = Base->OwningFaction == EFactionType::Human;
             const FLinearColor RadarColor = bHumanBase
-                ? FLinearColor(0.32f, 0.62f, 0.95f, 0.55f)
-                : FLinearColor(0.95f, 0.32f, 0.55f, 0.55f);
+                ? FLinearColor(0.32f, 0.62f, 0.95f, 0.4f)
+                : FLinearColor(0.95f, 0.32f, 0.55f, 0.4f);
             const int32 Segments = 32;
             FVector2D PreviousPoint = ScreenPos + FVector2D(RadarRange, 0.0f);
 

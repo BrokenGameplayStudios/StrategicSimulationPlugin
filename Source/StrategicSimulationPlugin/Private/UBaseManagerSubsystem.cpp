@@ -477,6 +477,17 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
                 continue;
             }
 
+            if (Fac->FacilityDefinition->FacilityType == EFacilityType::Command
+                && Base->BuiltOnSite && !Fac->bIsOperational)
+            {
+                UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+                if (!MissionMgr || !MissionMgr->IsExpansionBaseGuarded(Base))
+                {
+                    CancelExpansionConstruction(Base, Base->BuiltOnSite);
+                    continue;
+                }
+            }
+
             Fac->BuildProgressDays--;
 
             if (Fac->FacilityDefinition->FacilityType == EFacilityType::Command && Fac->BuildProgressDays > 0)

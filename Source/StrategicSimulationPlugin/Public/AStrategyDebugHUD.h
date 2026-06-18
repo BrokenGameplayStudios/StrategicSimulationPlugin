@@ -100,7 +100,7 @@ private:
     /** Draws a faction-colored triangle and discovery markers for an active salvage wreck. */
     void DrawSalvageSite(UStrategySiteDefinition* Site, int32 SiteIndex, float Scale, const UBaseManagerSubsystem* BaseManager);
 
-    /** Draws gray radar LOS blocker zones from URadarTerrainSubsystem. */
+    /** Draws brown radar LOS blocker zones from URadarTerrainSubsystem. */
     void DrawRadarBlockerZones();
 
     /** Draws cyan/magenta diamonds at friendly and enemy radar contact entry points. */

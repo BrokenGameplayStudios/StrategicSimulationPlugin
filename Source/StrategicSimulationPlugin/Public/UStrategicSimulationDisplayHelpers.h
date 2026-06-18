@@ -86,6 +86,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display")
     static FString GetSiteStatusDisplayText(const class UStrategySiteDefinition* Site);
 
+    /** Resolves under-construction state when BaseManager can look up bases on the site. */
+    static FString GetSiteStatusDisplayText(const class UStrategySiteDefinition* Site,
+        const UBaseManagerSubsystem* BaseManager);
+
     /** Faction-aware status using last-known base-built state when stale intel is enabled. */
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display", meta = (WorldContext = "WorldContextObject"))
     static FString GetSiteStatusDisplayTextForFaction(const class UStrategySiteDefinition* Site, EFactionType ViewerFaction,

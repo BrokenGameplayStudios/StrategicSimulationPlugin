@@ -1,5 +1,6 @@
 #include "UStrategicSimulationDisplayHelpers.h"
 #include "StrategicSiteDefinition.h"
+#include "UStrategyBase.h"
 #include "UBaseManagerSubsystem.h"
 #include "UFactionIntelSubsystem.h"
 #include "URadarContactSubsystem.h"
@@ -50,8 +51,43 @@ FText UStrategicSimulationDisplayHelpers::GetSiteTypeDisplayName(EStrategySiteTy
     return Enum->GetDisplayNameTextByValue(static_cast<int64>(SiteType));
 }
 
+namespace
+{
+    UStrategyBase* FindBaseBuiltOnSite(const UBaseManagerSubsystem* BaseManager, const UStrategySiteDefinition* Site)
+    {
+        if (!BaseManager || !Site)
+        {
+            return nullptr;
+        }
+
+        for (UStrategyBase* Base : BaseManager->GetBases(EFactionType::Human))
+        {
+            if (Base && Base->BuiltOnSite == Site)
+            {
+                return Base;
+            }
+        }
+
+        for (UStrategyBase* Base : BaseManager->GetBases(EFactionType::Enemy))
+        {
+            if (Base && Base->BuiltOnSite == Site)
+            {
+                return Base;
+            }
+        }
+
+        return nullptr;
+    }
+}
+
 /** Returns a short status string for a site (wreck state, base built, available, etc.). */
 FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(const UStrategySiteDefinition* Site)
+{
+    return GetSiteStatusDisplayText(Site, nullptr);
+}
+
+FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(const UStrategySiteDefinition* Site,
+    const UBaseManagerSubsystem* BaseManager)
 {
     if (!Site)
     {
@@ -71,6 +107,20 @@ FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(const UStra
         }
         return TEXT("Active Wreck");
     case EStrategySiteType::PotentialBase:
+        if (BaseManager)
+        {
+            if (UStrategyBase* Base = FindBaseBuiltOnSite(BaseManager, Site))
+            {
+                if (!BaseManager->IsCommandCenterOperational(Base))
+                {
+                    const int32 DaysRemaining = BaseManager->GetCommandCenterBuildDaysRemaining(Base);
+                    return DaysRemaining > 0
+                        ? FString::Printf(TEXT("Under Construction — %d day(s) left"), DaysRemaining)
+                        : TEXT("Under Construction");
+                }
+                return TEXT("Base Built");
+            }
+        }
         return Site->bHasBeenUsed ? TEXT("Base Built") : TEXT("Available");
     default:
         return Site->bHasBeenUsed ? TEXT("Used") : TEXT("Available");

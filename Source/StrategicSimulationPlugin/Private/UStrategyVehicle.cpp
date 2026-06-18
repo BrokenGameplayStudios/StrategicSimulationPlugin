@@ -379,6 +379,14 @@ void UStrategyVehicle::DockAtHomeHangar()
         HomeHanger->ParkedVehicles.AddUnique(this);
     }
 
+    if (CurrentMission && CurrentMission->MissionType == EMissionType::BaseExpansion)
+    {
+        if (UMissionManagerSubsystem* MissionMgr = GetMissionManagerForVehicle(this))
+        {
+            MissionMgr->TryCancelExpansionForLostGuard(this);
+        }
+    }
+
     ActiveSalvageSite = nullptr;
     ActiveExpansionSite = nullptr;
     bExpansionGuardActive = false;
@@ -1052,6 +1060,20 @@ bool UStrategyVehicle::ProcessBaseExpansionGuardTick(float DeltaGameHours)
         return false;
     }
 
+    constexpr float GuardMaxDistanceFromSitePixels = 96.0f;
+    if (FVector2D::Distance(CurrentPosition, ExpansionBase->MapLocation) > GuardMaxDistanceFromSitePixels)
+    {
+        if (UMissionManagerSubsystem* MissionMgr = GetMissionManagerForVehicle(this))
+        {
+            MissionMgr->TryCancelExpansionForLostGuard(this);
+        }
+
+        UE_LOG(LogTemp, Display, TEXT("[BASE EXPANSION] Guard %s left station at '%s' — expansion cancelled"),
+            VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+            *ExpansionBase->BaseName.ToString());
+        return false;
+    }
+
     if (BaseMgr->IsCommandCenterOperational(ExpansionBase))
     {
         if (UStrategyEventDispatcher* EventDisp = GI->GetSubsystem<UStrategyEventDispatcher>())
@@ -1389,6 +1411,14 @@ void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicl
     }
     else if (NewBehavior == EVehicleBehavior::Returning)
     {
+        if (CurrentMission && CurrentMission->MissionType == EMissionType::BaseExpansion && bExpansionGuardActive)
+        {
+            if (UMissionManagerSubsystem* MissionMgr = GetMissionManagerForVehicle(this))
+            {
+                MissionMgr->TryCancelExpansionForLostGuard(this);
+            }
+        }
+
         CurrentPhase = EVehicleMissionPhase::Returning;
         ReturningDistanceTraveled = 0.0f;
         GenerateReturnPath();

@@ -2187,6 +2187,141 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
     }
 }
 
+namespace ExpansionGuardHelpers
+{
+    constexpr float GuardMaxDistanceFromSitePixels = 96.0f;
+
+    UStrategyBase* ResolveExpansionBaseForVehicle(UStrategyVehicle* Vehicle, UBaseManagerSubsystem* BaseMgr)
+    {
+        if (!Vehicle || !BaseMgr)
+        {
+            return nullptr;
+        }
+
+        UStrategySiteDefinition* ExpansionSite = Vehicle->ActiveExpansionSite;
+        UStrategyBase* ExpansionBase = nullptr;
+
+        if (Vehicle->CurrentMission)
+        {
+            ExpansionBase = Vehicle->CurrentMission->ExpansionBaseUnderConstruction.Get();
+            if (!ExpansionSite)
+            {
+                ExpansionSite = Vehicle->CurrentMission->TargetExpansionSite;
+            }
+        }
+
+        if (!ExpansionBase && ExpansionSite)
+        {
+            ExpansionBase = BaseMgr->FindExpansionBaseAtSite(ExpansionSite);
+        }
+
+        return ExpansionBase;
+    }
+
+    bool IsVehicleOnExpansionGuardStation(UStrategyVehicle* Vehicle, const UStrategyBase* ExpansionBase)
+    {
+        if (!Vehicle || !ExpansionBase || Vehicle->IsDestroyed())
+        {
+            return false;
+        }
+
+        if (!Vehicle->bExpansionGuardActive)
+        {
+            return false;
+        }
+
+        if (Vehicle->CurrentPhase == EVehicleMissionPhase::Docked
+            || Vehicle->CurrentBehavior == EVehicleBehavior::Returning)
+        {
+            return false;
+        }
+
+        return FVector2D::Distance(Vehicle->CurrentPosition, ExpansionBase->MapLocation)
+            <= GuardMaxDistanceFromSitePixels;
+    }
+}
+
+/** Cancels in-progress expansion when a guard vehicle is destroyed or abandons the site. */
+void UMissionManagerSubsystem::TryCancelExpansionForLostGuard(UStrategyVehicle* Vehicle)
+{
+    if (!Vehicle)
+    {
+        return;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr)
+    {
+        return;
+    }
+
+    UStrategySiteDefinition* ExpansionSite = Vehicle->ActiveExpansionSite;
+    if (Vehicle->CurrentMission && !ExpansionSite)
+    {
+        ExpansionSite = Vehicle->CurrentMission->TargetExpansionSite;
+    }
+
+    UStrategyBase* ExpansionBase = ExpansionGuardHelpers::ResolveExpansionBaseForVehicle(Vehicle, BaseMgr);
+    if (!ExpansionBase || BaseMgr->IsCommandCenterOperational(ExpansionBase))
+    {
+        return;
+    }
+
+    BaseMgr->CancelExpansionConstruction(ExpansionBase, ExpansionSite);
+
+    if (Vehicle->CurrentMission)
+    {
+        Vehicle->CurrentMission->ExpansionBaseUnderConstruction = nullptr;
+    }
+
+    Vehicle->ActiveExpansionSite = nullptr;
+    Vehicle->bExpansionGuardActive = false;
+}
+
+/** True while a live expansion guard is on-station within range of the expansion base. */
+bool UMissionManagerSubsystem::IsExpansionBaseGuarded(const UStrategyBase* ExpansionBase) const
+{
+    if (!ExpansionBase || !ExpansionBase->BuiltOnSite)
+    {
+        return false;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr || BaseMgr->IsCommandCenterOperational(ExpansionBase))
+    {
+        return false;
+    }
+
+    for (const UMissionGroup* Mission : ActiveMissions)
+    {
+        if (!Mission || Mission->MissionType != EMissionType::BaseExpansion)
+        {
+            continue;
+        }
+
+        const UStrategyBase* MissionExpansion = Mission->ExpansionBaseUnderConstruction.Get();
+        if (!MissionExpansion && Mission->TargetExpansionSite)
+        {
+            MissionExpansion = BaseMgr->FindExpansionBaseAtSite(Mission->TargetExpansionSite);
+        }
+
+        if (MissionExpansion != ExpansionBase)
+        {
+            continue;
+        }
+
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (ExpansionGuardHelpers::IsVehicleOnExpansionGuardStation(Vehicle, ExpansionBase))
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 /** On vehicle destruction: creates salvage wreck via BaseManager when enabled, records combat winner, processes crew. */
 void UMissionManagerSubsystem::HandleVehicleDestroyed(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy)
 {
@@ -2195,22 +2330,9 @@ void UMissionManagerSubsystem::HandleVehicleDestroyed(UStrategyVehicle* Vehicle,
         return;
     }
 
+    TryCancelExpansionForLostGuard(Vehicle);
+
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
-
-    if (Vehicle->CurrentMission && Vehicle->CurrentMission->MissionType == EMissionType::BaseExpansion && BaseMgr)
-    {
-        UStrategyBase* ExpansionBase = Vehicle->CurrentMission->ExpansionBaseUnderConstruction.Get();
-        if (!ExpansionBase && Vehicle->CurrentMission->TargetExpansionSite)
-        {
-            ExpansionBase = BaseMgr->FindExpansionBaseAtSite(Vehicle->CurrentMission->TargetExpansionSite);
-        }
-
-        if (ExpansionBase && !BaseMgr->IsCommandCenterOperational(ExpansionBase))
-        {
-            BaseMgr->CancelExpansionConstruction(ExpansionBase, Vehicle->CurrentMission->TargetExpansionSite);
-            Vehicle->CurrentMission->ExpansionBaseUnderConstruction = nullptr;
-        }
-    }
 
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
     const bool bSalvageSitesEnabled = !Campaign || Campaign->bSalvageSitesEnabled;
