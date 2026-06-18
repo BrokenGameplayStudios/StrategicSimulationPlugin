@@ -21,7 +21,8 @@ Guides for using the plugin in your project: level setup, tuning, gameplay syste
 - Bases, facilities, soldiers, research, vehicles, and faction resources
 - Live vehicle missions on a logical map with radar discovery
 - Combat between armed vehicles; wrecks become salvage sites
-- Command Center passive radar, threat contacts, and player click-to-intercept
+- Command Center passive radar, threat contacts, spectate-friendly radar overlay, and optional player/designer intercept
+- Vehicle crew requirements (min 1 soldier, max-fill from origin base)
 - Border patrol and AI interception toward inbound threats
 - Fog-of-war salvage map and stale intel tooltips
 - Site-map save/load for QA (not a full campaign Continue)
@@ -32,7 +33,7 @@ Guides for using the plugin in your project: level setup, tuning, gameplay syste
 - Tactical map / player PvE battle load
 - Full campaign save (soldiers, vehicles, bases across sessions)
 - Research unlock gating (stub always allows)
-- Soldier casualties on abstract mission resolution
+- Soldier casualties on abstract mission resolution (wreck KIA/MIA on vehicle destruction is implemented)
 
 ## Engineering docs
 

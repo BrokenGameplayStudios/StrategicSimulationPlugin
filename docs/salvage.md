@@ -4,6 +4,8 @@
 
 When a vehicle is destroyed (combat or future crash paths), a **SalvageSite** is placed at the wreck location with resources derived from the vehicle. Participants in the fight know the wreck immediately (**combat-known**); other factions must discover it via radar or visit.
 
+**Crew aboard** the vehicle are processed on destruction: `VehicleCrashDeathChance` may mark them KIA; survivors become **MIA** at the wreck (rescueable by owning faction salvage). Vehicles cannot launch missions without at least one soldier (see [Missions & AI](missions-and-ai.md)).
+
 Wrecks expire after **`SalvageWreckExpiryDays`** if not salvaged.
 
 ## Fog of war

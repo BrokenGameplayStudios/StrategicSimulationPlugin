@@ -56,7 +56,7 @@ Set **HumanStartingStockpile** and **EnemyStartingStockpile** (Money, Metals, Bi
 | BaseRadarRangePixels | 512 | Passive radar reach |
 | BaseRadarPingIntervalHours | 1.0 | Time between base radar sweeps |
 | RadarContactExpiryHours | 6.0 | Contact fades if not refreshed |
-| bAIReactiveInterceptionEnabled | true | AI launches gunships on inbound contacts |
+| bAIReactiveInterceptionEnabled | true | AI launches gunships on inbound contacts (requires stationed crew at base) |
 | bNotifyPlayerOfEnemyRadarContacts | true | Toast when enemy detects your vehicles |
 | bRadarLOSEnabled | true | Mountains block radar line of sight |
 | bStaleIntelEnabled | true | UI shows last-known site data when stale |
@@ -69,6 +69,14 @@ Set **HumanStartingStockpile** and **EnemyStartingStockpile** (Money, Metals, Bi
 | POWCaptureChanceOnVictory | varies | POW on combat victory |
 | KIAChanceOnVictory | varies | KIA on combat victory |
 | VehicleCrashDeathChance | 0.25 | Crash death vs MIA on vehicle destruction |
+
+## Radar contact map widget
+
+| Property | Default | Effect |
+|----------|---------|--------|
+| bShowOpposingFactionContacts | true | Draw Human and Enemy contacts (faction-tinted) |
+| bAllowPlayerClickToIntercept | false | Left-click dispatch; off during AI-vs-AI spectate |
+| ViewerFaction | Human | Whose contacts trigger discovery toasts |
 
 ## Debug
 

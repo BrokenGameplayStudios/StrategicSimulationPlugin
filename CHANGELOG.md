@@ -4,10 +4,36 @@ User-facing changes to the Strategic Simulation Plugin. For setup and usage, see
 
 ## [Unreleased]
 
+### Vehicle crew
+- Vehicles require **at least one soldier** aboard before any mission can launch (including reactive interception)
+- Crew is drawn from **soldiers stationed at the origin base** who are not already on another mission or vehicle
+- AI and player missions **max-fill** each vehicle to `SoldierCapacity` when soldiers are available
+- **Deferred** missions assign crew at **launch time** (not when queued), so soldiers stay available until departure
+- Idle vehicle selection skips ships that have no crew and no assignable soldiers at base
+- New log tags: `[CREW]` (assignment), warning when a wreck had no crew aboard
+
+### Radar contact map (AI vs AI / spectate)
+- **Left-click intercept disabled** by default while Human or Enemy AI simulation is on (`bAllowPlayerClickToIntercept`)
+- Hover tooltips still show contact intel; action line reads *"AI handles interception when enabled"* instead of *"Click to launch interception"*
+- **`bShowOpposingFactionContacts`** (default on) draws both factions' pings — cyan for Human, magenta for Enemy
+- Designer dispatch: `GetHoveredContactId`, `GetHoveredContactFaction`, `TryInterceptContactByIdForFaction`, `IsClickToInterceptAllowed`
+- `FRadarContactMapMarker` includes `ContactFaction` for multi-faction overlays
+
+### Debug strategy map HUD
+- CC under-construction overlay: `Enemy 'Forward Base 02': 4 day(s) left, on site 21...`
+- Site inspector **Status** and base section show **Under Construction — N day(s) left** when CC is building
+- Radar circles **40%** opacity; inspector yellow ring and blue/red discovery squares **80%**
+- Radar LOS blockers drawn **brown** (legend updated)
+- Site index numbers **centered above** the node at **2×** offset (clear of inspector yellow ring)
+- Potential base nodes use **faction color** when a base exists or is under construction
+- `GetSiteStatusDisplayText(Site, BaseManager)` resolves under-construction state
+
 ### Base expansion
 - **Breaking:** New bases require a **Base Expansion** vehicle mission — race to the site, guard Command Center construction, then return home
 - AI expansion runs **before** daily mission scheduling and can **preempt** deferred Recon/Offensive/Salvage missions when no inbound radar threats
-- Guard destroyed before CC completes cancels construction and reopens the site (no refund)
+- Guard destroyed, returning, or docking away before CC completes **cancels** construction and reopens the site (no refund)
+- CC construction only advances while the guard is on-station (within 96 px, not returning/docked)
+- Fixed expansion charging **double** Command Center cost (deduction now happens once in `BuildFacility`)
 - Live combat at contested sites (no salvage-style contest UI)
 - Blueprint events: `OnBaseExpansionOrdered`, `OnBaseExpansionClaimed`, `OnBaseExpansionCancelled`, `OnBaseExpansionGuardComplete`
 - Tuning: `MaxActiveExpansionMissionsPerFaction`, `bBaseExpansionRequiresVehicleGuard`
@@ -61,6 +87,6 @@ User-facing changes to the Strategic Simulation Plugin. For setup and usage, see
 ### Known limitations
 - Base attack arrival is log-only (no strategic base damage yet)
 - Research unlock gating is a stub
-- Mission resolution does not apply soldier casualties
+- Mission resolution does not apply soldier casualties (crew can be lost on **vehicle destruction** via KIA/MIA at wreck sites)
 - Ammo is treated as infinite when `MaxAmmo == 0`
 - No tactical map load for player PvE fights yet

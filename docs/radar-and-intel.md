@@ -27,11 +27,36 @@ Contacts expire after **`RadarContactExpiryHours`** without refresh.
 
 **UStrategyRadarContactMapWidget** draws contact diamonds on the HUD:
 
-- Hover for tooltip (faction, base, entry point, heading, speed)
-- **Left-click** to launch interception (`TryLaunchInterceptionAtContactAuto`)
-- Toasts on new contacts
+- Hover for tooltip (faction, base, entry point, heading, speed, staleness)
+- Toasts on new contacts for the widget's `ViewerFaction`
+- **`bShowOpposingFactionContacts`** (default on) — also draws the other faction's contacts (cyan = Human, magenta = Enemy)
 
 Requires **`bBasePassiveRadarEnabled`**. Spawned by test actor at z-order 11 or embed in your HUD.
+
+### AI vs AI / spectate mode
+
+When **`UAIControllerSubsystem`** is simulating a faction (`IsSimulatingHumanAI` / `IsSimulatingEnemyAI`):
+
+- **Left-click intercept is off** by default (`bAllowPlayerClickToIntercept = false`)
+- Tooltips show *"AI handles interception when enabled"* instead of *"Click to launch interception"*
+- **Reactive AI** still dispatches gunships via `URadarContactSubsystem` when `bAIReactiveInterceptionEnabled` is on
+
+Set **`bAllowPlayerClickToIntercept = true`** on the widget to restore click-to-intercept during AI runs (testing only).
+
+### Manual intercept (designer UI)
+
+Wire a button instead of map click:
+
+| Blueprint call | Purpose |
+|----------------|---------|
+| `GetHoveredContactId` | Contact under cursor |
+| `GetHoveredContactFaction` | Human or Enemy owner of that contact |
+| `GetHoveredTooltipText` | Same text as the hover panel |
+| `IsClickToInterceptAllowed` | Hide/disable button in spectate mode |
+| `TryInterceptContactById` | Dispatch for `ViewerFaction` |
+| `TryInterceptContactByIdForFaction` | Dispatch for either faction's hovered contact |
+
+Backend: `UMissionManagerSubsystem::TryLaunchInterceptionAtContactAuto` (requires crew — see [Missions & AI](missions-and-ai.md)).
 
 ## AI response
 
@@ -53,4 +78,4 @@ Salvage tooltips append *"Intel stale"* when appropriate.
 
 ## Line of sight
 
-Configure **`RadarBlockerZones`** on the initializer (circles or rectangles). Debug HUD draws blockers in gray.
+Configure **`RadarBlockerZones`** on the initializer (circles or rectangles). Debug HUD draws blockers in **brown**.

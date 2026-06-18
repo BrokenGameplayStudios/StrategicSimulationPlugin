@@ -13,7 +13,8 @@
 | **Radar contact** | Passive radar track of an enemy vehicle (position, heading, inbound flag) |
 | **Entry point** | Map position where a contact first entered radar range — used for intercept/patrol |
 | **Inbound threat** | Enemy vehicle moving toward friendly bases or territory |
-| **Reactive interception** | Immediate gunship launch when radar detects inbound contact |
+| **Reactive interception** | Immediate gunship launch when radar detects inbound contact (requires stationed crew) |
+| **Mission-ready soldier** | Stationed at origin base, not KIA/MIA/POW, not on another mission or vehicle |
 | **Spoke patrol** | Recon pattern: patrol outward along rotating compass spokes from base |
 | **Hot spoke** | Spoke direction prioritized after recent inbound threat detection |
 | **Contested salvage** | Two factions salvaging the same wreck — strategic clock pauses for tactical resolve |

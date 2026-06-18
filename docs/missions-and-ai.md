@@ -13,6 +13,19 @@
 
 All new missions use **live movement** (vehicles fly on the map in real time).
 
+## Vehicle crew
+
+Every departing vehicle needs **at least one soldier** aboard:
+
+- Crew is taken from soldiers **stationed at the mission origin base** who are not already on another mission or vehicle
+- Missions **max-fill** to the vehicle's `SoldierCapacity` when enough soldiers are available
+- **Deferred** missions (staggered daily slots) assign crew when the launch hour arrives — not when queued
+- Reactive interception and player intercept use the same rules; missions abort with `[CREW]` / `[MISSION] Aborted before launch` if no soldiers are available
+
+On **vehicle destruction**, aboard soldiers are processed for wreck KIA/MIA (`VehicleCrashDeathChance`). Vehicles that launch without crew produce empty wrecks (now blocked at launch).
+
+Blueprint: `UStrategyVehicle::HasMinimumCrew` / `GetCrewCount`.
+
 ## Base expansion (vehicle-guarded)
 
 New bases are **not** built instantly. A faction must dispatch a **Base Expansion** mission:
@@ -72,10 +85,12 @@ Offensive missions fly to an enemy Command Center. On arrival the game logs **`[
 
 ## Reactive interception
 
-When passive radar detects an **inbound** vehicle, idle gunships at that base may launch immediately (AI or player). Player can also click contacts on the radar map widget.
+When passive radar detects an **inbound** vehicle, idle gunships at that base may launch immediately if they have **crew** and range. AI uses `TryReactiveInterception` when faction AI and `bAIReactiveInterceptionEnabled` are on.
+
+Players can intercept via the radar map widget click (when `bAllowPlayerClickToIntercept` is true) or a designer button calling `TryInterceptContactById` / `TryLaunchInterceptionAtContactAuto`.
 
 ## What is not implemented
 
 - Abstract day-countdown missions (legacy path unused)
-- Soldier casualties on mission resolve (always zero)
+- Soldier casualties on abstract mission **resolve** (always zero; destruction wrecks use KIA/MIA)
 - Base attack outcome / strategic base damage

@@ -7,7 +7,7 @@
 | `UStrategyUserWidget` | CommonUI base for strategic HUD panels |
 | `UStrategyActivatableWidget` | Menus and modal screens |
 | `UStrategySalvageMapWidget` | Fog-aware wreck overlay |
-| `UStrategyRadarContactMapWidget` | Radar contacts + click-to-intercept |
+| `UStrategyRadarContactMapWidget` | Radar contacts, hover intel, optional click-to-intercept |
 | `UStrategicSimulationDisplayHelpers` | Blueprint function library for markers and tooltips |
 
 ## Sample content widgets
@@ -45,7 +45,9 @@ Bind **`UTimeManagerSubsystem::OnSimulationClockStateChanged`** to update pause/
 | Start campaign | `UStrategyCampaignSubsystem::StartSimulation` |
 | Unpause | `UTimeManagerSubsystem::TogglePause` |
 | Get managers | `GetResourceManager`, `GetBaseManager`, `GetMissionManager`, … on Campaign |
-| Intercept contact | `TryLaunchInterceptionAtContactAuto` or radar widget click |
+| Intercept contact (player) | `TryLaunchInterceptionAtContactAuto` or `UStrategyRadarContactMapWidget::TryInterceptContactById` |
+| Intercept from HUD button | `GetHoveredContactId` + `TryInterceptContactByIdForFaction` on radar widget |
+| Site status (inspector) | `GetSiteStatusDisplayText(Site, BaseManager)` — includes under-construction |
 | Resolve salvage fight | `ResolveSalvageContest` |
 | Build salvage markers | `UStrategicSimulationDisplayHelpers::BuildSalvageMapMarkers` |
-| Build radar markers | `BuildRadarContactMapMarkers` |
+| Build radar markers | `BuildRadarContactMapMarkers` (optional `bIncludeOpposingFactionContacts`, `bAllowClickDispatch`) |
