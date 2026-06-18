@@ -44,6 +44,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Interception")
     bool LaunchInterceptionAtContact(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FGuid ContactId);
 
+    /** Player UI: pick nearest idle combat vehicle and launch interception at a contact. */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Interception")
+    bool TryLaunchInterceptionAtContactAuto(EFactionType Faction, FGuid ContactId, UStrategyBase*& OutOriginBase,
+        UStrategyVehicle*& OutVehicle);
+
+    /** True when any idle combat vehicle at a faction base can reach this contact. */
+    UFUNCTION(BlueprintPure, Category = "Mission|Interception")
+    bool CanFactionInterceptContact(EFactionType Faction, FGuid ContactId) const;
+
     /** Returns true if the vehicle can reach a known active wreck for salvage */
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     bool HasSalvageTargetInRange(UStrategyVehicle* Vehicle) const;

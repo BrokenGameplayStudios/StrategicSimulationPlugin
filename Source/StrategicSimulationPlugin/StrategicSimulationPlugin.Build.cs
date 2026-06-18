@@ -21,6 +21,7 @@ public class StrategicSimulationPlugin : ModuleRules
         PrivateDependencyModuleNames.AddRange(
             new string[]
             {
+                "InputCore",
                 "Slate",
                 "SlateCore"
             }

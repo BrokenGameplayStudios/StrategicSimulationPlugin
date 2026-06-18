@@ -587,10 +587,16 @@ Operational Command Centers ping on `BaseRadarPingIntervalHours` within `BaseRad
 | API | Role |
 |-----|------|
 | `URadarContactSubsystem::GetContactsForFaction` | UI lists threats near your bases |
-| `UMissionManagerSubsystem::LaunchInterceptionAtContact` | Player dispatches gunship at a contact (same as AI reactive path) |
+| `UMissionManagerSubsystem::LaunchInterceptionAtContact` | Explicit base + vehicle dispatch (same mission path as AI) |
+| `UMissionManagerSubsystem::TryLaunchInterceptionAtContactAuto` | Player click path — nearest idle gunship |
+| `UMissionManagerSubsystem::CanFactionInterceptContact` | Enable/disable intercept UI affordance |
 | `OnRadarContactUpdated` | Widget toast when a new track appears |
 
 AI: inbound contacts trigger immediate `[INTERCEPT AI]` if a combat vehicle is idle; daily scheduling prefers `Interception` when contacts exist.
+
+**Player map overlay:** `UStrategyRadarContactMapWidget` draws contact diamonds on the HUD (orange = inbound + interceptable, cyan = track only). Hover for tooltip; **left-click** calls `TryLaunchInterceptionAtContactAuto`. `AStrategyTestActor` spawns it at z-order 11 (above salvage layer). Gated on `bBasePassiveRadarEnabled`.
+
+Blueprint helpers: `BuildRadarContactMapMarkers`, `FormatRadarContactTooltipText`, `IsPlayerRadarContactLayerEnabled`.
 
 ### 2.19 Build dependencies
 
@@ -614,6 +620,7 @@ Plugin dependency in `.uplugin`: **CommonUI** (must be enabled in host project).
 | New playable game | `StartSimulation` |
 | Force AI tick | `Debug_RunAI` on Campaign or AI subsystem |
 | Resolve contested salvage | `UStrategyCampaignSubsystem::ResolveSalvageContest` (after `OnSalvageContestStarted`) |
+| Intercept radar contact (player) | `TryLaunchInterceptionAtContactAuto(Human, ContactId, …)` or click on `UStrategyRadarContactMapWidget` |
 | Get managers | `GetResourceManager`, `GetBaseManager`, `GetMissionManager`, etc. on Campaign |
 
 ---

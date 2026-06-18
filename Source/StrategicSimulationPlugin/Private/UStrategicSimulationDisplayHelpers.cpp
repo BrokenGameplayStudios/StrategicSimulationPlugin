@@ -2,6 +2,8 @@
 #include "StrategicSiteDefinition.h"
 #include "UBaseManagerSubsystem.h"
 #include "UFactionIntelSubsystem.h"
+#include "URadarContactSubsystem.h"
+#include "UMissionManagerSubsystem.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UVehicleDefinition.h"
 #include "Engine/Engine.h"
@@ -351,6 +353,136 @@ TArray<FSalvageMapMarker> UStrategicSimulationDisplayHelpers::BuildSalvageMapMar
         Marker.WidgetPosition = MapLogicalToWidgetPosition(Site->Location, WidgetSize, Campaign, MapScaleMultiplier);
         Marker.Color = GetSalvageWreckColor(Site->WreckOwnerFaction);
         Marker.Tooltip = FormatSalvageTooltipText(Site, BaseManager, ViewerFaction);
+        Markers.Add(Marker);
+    }
+
+    return Markers;
+}
+
+bool UStrategicSimulationDisplayHelpers::IsCombatVehicleType(EVehicleType VehicleType)
+{
+    return VehicleType == EVehicleType::Gunship || VehicleType == EVehicleType::Heavy;
+}
+
+bool UStrategicSimulationDisplayHelpers::IsPlayerRadarContactLayerEnabled(const UStrategyCampaignSubsystem* Campaign)
+{
+    return Campaign && Campaign->bBasePassiveRadarEnabled;
+}
+
+FLinearColor UStrategicSimulationDisplayHelpers::GetRadarContactMarkerColor(const FRadarContact& Contact,
+    bool bCanIntercept, bool bAlreadyTargeted)
+{
+    if (bAlreadyTargeted)
+    {
+        return FLinearColor(0.45f, 0.45f, 0.45f, 0.75f);
+    }
+
+    if (Contact.bIsInboundThreat)
+    {
+        return bCanIntercept
+            ? FLinearColor(1.0f, 0.35f, 0.1f, 1.0f)
+            : FLinearColor(0.9f, 0.2f, 0.2f, 0.85f);
+    }
+
+    return bCanIntercept
+        ? FLinearColor(0.2f, 0.85f, 1.0f, 0.95f)
+        : FLinearColor(0.55f, 0.75f, 0.95f, 0.7f);
+}
+
+FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FRadarContact& Contact,
+    bool bCanIntercept, bool bAlreadyTargeted)
+{
+    if (!Contact.ContactId.IsValid())
+    {
+        return FText::GetEmpty();
+    }
+
+    const float Speed = Contact.EstimatedVelocity.Size();
+    const float HeadingDeg = FMath::RadiansToDegrees(FMath::Atan2(Contact.EstimatedVelocity.Y, Contact.EstimatedVelocity.X));
+
+    FString ActionLine;
+    if (bAlreadyTargeted)
+    {
+        ActionLine = TEXT("Interception in progress");
+    }
+    else if (bCanIntercept)
+    {
+        ActionLine = TEXT("Click to launch interception");
+    }
+    else
+    {
+        ActionLine = TEXT("No idle gunship in range");
+    }
+
+    return FText::FromString(FString::Printf(
+        TEXT("%s%s\nPos: (%.0f, %.0f)\nSpeed: %.0f px/h  Heading: %.0f°\n%s"),
+        *Contact.TrackedVehicleName,
+        Contact.bIsInboundThreat ? TEXT(" — INBOUND") : TEXT(""),
+        Contact.LastPosition.X, Contact.LastPosition.Y,
+        Speed, HeadingDeg,
+        *ActionLine));
+}
+
+FText UStrategicSimulationDisplayHelpers::FormatRadarContactDiscoveryToast(const FRadarContact& Contact)
+{
+    if (!Contact.ContactId.IsValid())
+    {
+        return FText::GetEmpty();
+    }
+
+    return FText::FromString(FString::Printf(
+        TEXT("Radar contact%s: %s"),
+        Contact.bIsInboundThreat ? TEXT(" (INBOUND)") : TEXT(""),
+        *Contact.TrackedVehicleName));
+}
+
+TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarContactMapMarkers(
+    const UObject* WorldContextObject, EFactionType ViewerFaction, FVector2D WidgetSize, float MapScaleMultiplier)
+{
+    TArray<FRadarContactMapMarker> Markers;
+
+    if (!WorldContextObject)
+    {
+        return Markers;
+    }
+
+    UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
+    if (!World || !World->GetGameInstance())
+    {
+        return Markers;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = World->GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    URadarContactSubsystem* ContactMgr = World->GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    UMissionManagerSubsystem* MissionMgr = World->GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    if (!IsPlayerRadarContactLayerEnabled(Campaign) || !ContactMgr)
+    {
+        return Markers;
+    }
+
+    const TArray<FRadarContact> Contacts = ContactMgr->GetContactsForFaction(ViewerFaction);
+    Markers.Reserve(Contacts.Num());
+
+    for (const FRadarContact& Contact : Contacts)
+    {
+        if (!Contact.ContactId.IsValid())
+        {
+            continue;
+        }
+
+        const bool bAlreadyTargeted = ContactMgr->IsContactAlreadyTargeted(Contact.ContactId);
+        const bool bCanIntercept = MissionMgr
+            ? MissionMgr->CanFactionInterceptContact(ViewerFaction, Contact.ContactId)
+            : false;
+
+        FRadarContactMapMarker Marker;
+        Marker.ContactId = Contact.ContactId;
+        Marker.WidgetPosition = MapLogicalToWidgetPosition(Contact.LastPosition, WidgetSize, Campaign, MapScaleMultiplier);
+        Marker.bIsInboundThreat = Contact.bIsInboundThreat;
+        Marker.bCanIntercept = bCanIntercept;
+        Marker.bAlreadyTargeted = bAlreadyTargeted;
+        Marker.Color = GetRadarContactMarkerColor(Contact, bCanIntercept, bAlreadyTargeted);
+        Marker.Tooltip = FormatRadarContactTooltipText(Contact, bCanIntercept, bAlreadyTargeted);
         Markers.Add(Marker);
     }
 

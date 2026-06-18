@@ -6,6 +6,7 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "UStrategySalvageMapWidget.h"
+#include "UStrategyRadarContactMapWidget.h"
 #include "StrategicSiteDefinition.h"
 #include "UStrategySoldier.h"
 #include "UResearchTechDefinition.h"
@@ -14,6 +15,7 @@ AStrategyTestActor::AStrategyTestActor()
 {
     PrimaryActorTick.bCanEverTick = false;
     SalvageMapWidgetClass = UStrategySalvageMapWidget::StaticClass();
+    RadarContactMapWidgetClass = UStrategyRadarContactMapWidget::StaticClass();
 }
 
 void AStrategyTestActor::BeginPlay()
@@ -54,6 +56,15 @@ void AStrategyTestActor::RunPhase13Test()
         {
             SalvageLayer->AddToViewport(10);
             UE_LOG(LogTemp, Display, TEXT("Salvage map overlay spawned (PR-5 player wreck icons)"));
+        }
+    }
+
+    if (RadarContactMapWidgetClass)
+    {
+        if (UStrategyRadarContactMapWidget* RadarLayer = CreateWidget<UStrategyRadarContactMapWidget>(GetWorld(), RadarContactMapWidgetClass))
+        {
+            RadarLayer->AddToViewport(11);
+            UE_LOG(LogTemp, Display, TEXT("Radar contact overlay spawned (PR-11 click-to-intercept)"));
         }
     }
 

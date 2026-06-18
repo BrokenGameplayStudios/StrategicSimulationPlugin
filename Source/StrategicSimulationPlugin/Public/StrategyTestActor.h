@@ -26,6 +26,10 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
     TSubclassOf<class UStrategySalvageMapWidget> SalvageMapWidgetClass;
 
+    /** Passive radar contact overlay — click to launch interception (PR-11). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+    TSubclassOf<class UStrategyRadarContactMapWidget> RadarContactMapWidgetClass;
+
 private:
     UFUNCTION()
     void OnSoldierRecruited_Test(EFactionType Faction, UStrategySoldier* Soldier);

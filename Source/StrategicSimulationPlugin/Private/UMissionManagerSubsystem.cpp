@@ -15,6 +15,7 @@
 #include "UStrategyEventDispatcher.h"
 #include "UFactionIntelSubsystem.h"
 #include "URadarContactSubsystem.h"
+#include "UAIControllerSubsystem.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -352,6 +353,145 @@ bool UMissionManagerSubsystem::LaunchInterceptionAtContact(UStrategyBase* Origin
         *Contact.TrackedVehicleName,
         Contact.LastPosition.X, Contact.LastPosition.Y);
 
+    return true;
+}
+
+bool UMissionManagerSubsystem::CanFactionInterceptContact(EFactionType Faction, FGuid ContactId) const
+{
+    if (!ContactId.IsValid())
+    {
+        return false;
+    }
+
+    URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!ContactMgr || !BaseMgr)
+    {
+        return false;
+    }
+
+    if (ContactMgr->IsContactAlreadyTargeted(ContactId))
+    {
+        return false;
+    }
+
+    FRadarContact Contact;
+    if (!ContactMgr->GetContactById(Faction, ContactId, Contact))
+    {
+        return false;
+    }
+
+    for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
+    {
+        if (!Base)
+        {
+            continue;
+        }
+
+        for (UStrategyVehicle* Vehicle : GatherIdleVehiclesAtBase(Base))
+        {
+            if (!Vehicle || !Vehicle->VehicleDefinition)
+            {
+                continue;
+            }
+
+            if (!UAIControllerSubsystem::IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType))
+            {
+                continue;
+            }
+
+            const float RoundTrip = FVector2D::Distance(Base->MapLocation, Contact.LastPosition) * 2.0f;
+            if (Vehicle->HasEnoughRangeForMission(RoundTrip))
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool UMissionManagerSubsystem::TryLaunchInterceptionAtContactAuto(EFactionType Faction, FGuid ContactId,
+    UStrategyBase*& OutOriginBase, UStrategyVehicle*& OutVehicle)
+{
+    OutOriginBase = nullptr;
+    OutVehicle = nullptr;
+
+    if (!ContactId.IsValid() || !CanFactionInterceptContact(Faction, ContactId))
+    {
+        return false;
+    }
+
+    URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!ContactMgr || !BaseMgr)
+    {
+        return false;
+    }
+
+    FRadarContact Contact;
+    if (!ContactMgr->GetContactById(Faction, ContactId, Contact))
+    {
+        return false;
+    }
+
+    UStrategyBase* BestBase = nullptr;
+    UStrategyVehicle* BestVehicle = nullptr;
+    float BestScore = -1.0f;
+
+    for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
+    {
+        if (!Base)
+        {
+            continue;
+        }
+
+        for (UStrategyVehicle* Vehicle : GatherIdleVehiclesAtBase(Base))
+        {
+            if (!Vehicle || !Vehicle->VehicleDefinition)
+            {
+                continue;
+            }
+
+            if (!UAIControllerSubsystem::IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType))
+            {
+                continue;
+            }
+
+            const float Dist = FVector2D::Distance(Base->MapLocation, Contact.LastPosition);
+            const float RoundTrip = Dist * 2.0f;
+            if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
+            {
+                continue;
+            }
+
+            float Score = 1000.0f - Dist;
+            if (Contact.bIsInboundThreat)
+            {
+                Score += 250.0f;
+            }
+
+            if (Score > BestScore)
+            {
+                BestScore = Score;
+                BestBase = Base;
+                BestVehicle = Vehicle;
+            }
+        }
+    }
+
+    if (!BestBase || !BestVehicle)
+    {
+        return false;
+    }
+
+    if (!LaunchInterceptionAtContact(BestBase, BestVehicle, ContactId))
+    {
+        return false;
+    }
+
+    OutOriginBase = BestBase;
+    OutVehicle = BestVehicle;
     return true;
 }
 

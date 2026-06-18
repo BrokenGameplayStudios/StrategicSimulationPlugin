@@ -28,6 +28,33 @@ struct FSalvageMapMarker
     FText Tooltip;
 };
 
+USTRUCT(BlueprintType)
+struct FRadarContactMapMarker
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    FGuid ContactId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    FVector2D WidgetPosition = FVector2D::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    FLinearColor Color = FLinearColor::White;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    FText Tooltip;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    bool bIsInboundThreat = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    bool bCanIntercept = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact Map")
+    bool bAlreadyTargeted = false;
+};
+
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UStrategicSimulationDisplayHelpers : public UBlueprintFunctionLibrary
 {
@@ -96,4 +123,23 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Strategic Simulation|Display|Salvage Map", meta = (WorldContext = "WorldContextObject"))
     static TArray<UStrategySiteDefinition*> GetVisibleSalvageSitesForFaction(const UObject* WorldContextObject,
         EFactionType ViewerFaction);
+
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact")
+    static bool IsCombatVehicleType(EVehicleType VehicleType);
+
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
+    static bool IsPlayerRadarContactLayerEnabled(const UStrategyCampaignSubsystem* Campaign);
+
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
+    static FLinearColor GetRadarContactMarkerColor(const struct FRadarContact& Contact, bool bCanIntercept, bool bAlreadyTargeted);
+
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
+    static FText FormatRadarContactTooltipText(const struct FRadarContact& Contact, bool bCanIntercept, bool bAlreadyTargeted);
+
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Radar Contact Map")
+    static FText FormatRadarContactDiscoveryToast(const struct FRadarContact& Contact);
+
+    UFUNCTION(BlueprintCallable, Category = "Strategic Simulation|Display|Radar Contact Map", meta = (WorldContext = "WorldContextObject"))
+    static TArray<FRadarContactMapMarker> BuildRadarContactMapMarkers(const UObject* WorldContextObject, EFactionType ViewerFaction,
+        FVector2D WidgetSize, float MapScaleMultiplier = 0.85f);
 };
