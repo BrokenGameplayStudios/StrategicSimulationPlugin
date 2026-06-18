@@ -15,9 +15,94 @@
 #include "UResourceManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategicSimulationDisplayHelpers.h"
+#include "UStrategyEventDispatcher.h"
 #include "Engine/Engine.h"
 
 static UMissionManagerSubsystem* GetMissionManagerForVehicle(UStrategyVehicle* Vehicle);
+
+static UGameInstance* GetGameInstanceForVehicle(UStrategyVehicle* Vehicle)
+{
+    if (!Vehicle)
+    {
+        return nullptr;
+    }
+
+    UGameInstance* GI = Vehicle->GetTypedOuter<UGameInstance>();
+    if (!GI)
+    {
+        if (UWorld* World = Vehicle->GetWorld())
+        {
+            GI = World->GetGameInstance();
+        }
+    }
+    return GI;
+}
+
+/** Attempts to claim an expansion site on arrival or after winning on-station combat. */
+static bool TryClaimExpansionSiteForVehicle(UStrategyVehicle* Vehicle)
+{
+    if (!Vehicle || !Vehicle->HomeBase || !Vehicle->CurrentMission
+        || Vehicle->CurrentMission->MissionType != EMissionType::BaseExpansion)
+    {
+        return false;
+    }
+
+    UGameInstance* GI = GetGameInstanceForVehicle(Vehicle);
+    if (!GI)
+    {
+        return false;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr)
+    {
+        return false;
+    }
+
+    UStrategySiteDefinition* Site = Vehicle->ActiveExpansionSite;
+    if (!Site)
+    {
+        Site = Vehicle->CurrentMission->TargetExpansionSite;
+    }
+    if (!Site)
+    {
+        Site = BaseMgr->FindSiteAtLocation(Vehicle->CurrentPosition);
+    }
+    if (!Site)
+    {
+        return false;
+    }
+
+    Vehicle->ActiveExpansionSite = Site;
+
+    if (Site->bHasBeenUsed)
+    {
+        UStrategyBase* ExistingBase = BaseMgr->FindExpansionBaseAtSite(Site);
+        if (ExistingBase && ExistingBase->OwningFaction == Vehicle->HomeBase->OwningFaction)
+        {
+            Vehicle->CurrentMission->ExpansionBaseUnderConstruction = ExistingBase;
+            Vehicle->bExpansionGuardActive = true;
+            Vehicle->CurrentBehavior = EVehicleBehavior::Patrolling;
+            return true;
+        }
+        return false;
+    }
+
+    const FText BaseName = Vehicle->CurrentMission->PendingExpansionBaseName.IsEmpty()
+        ? FText::FromString(TEXT("Forward Base"))
+        : Vehicle->CurrentMission->PendingExpansionBaseName;
+
+    UStrategyBase* NewBase = BaseMgr->TryClaimExpansionSite(Vehicle->HomeBase->OwningFaction, Site, Vehicle, BaseName);
+    if (!NewBase)
+    {
+        return false;
+    }
+
+    Vehicle->CurrentMission->ExpansionBaseUnderConstruction = NewBase;
+    Vehicle->bExpansionGuardActive = true;
+    Vehicle->CurrentBehavior = EVehicleBehavior::Patrolling;
+    return true;
+}
 
 /** Default-constructs vehicle movement, health, and radar state. */
 UStrategyVehicle::UStrategyVehicle()
@@ -295,6 +380,8 @@ void UStrategyVehicle::DockAtHomeHangar()
     }
 
     ActiveSalvageSite = nullptr;
+    ActiveExpansionSite = nullptr;
+    bExpansionGuardActive = false;
 
     UE_LOG(LogTemp, Verbose, TEXT("[VEHICLE] %s docked at base '%s'"),
         VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
@@ -340,6 +427,8 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
     CurrentTargetVehicle = nullptr;
     SalvageExtractedThisMission = FResourceStockpile();
     ActiveSalvageSite = nullptr;
+    ActiveExpansionSite = nullptr;
+    bExpansionGuardActive = false;
 
     switch (MissionType)
     {
@@ -372,6 +461,30 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
         break;
     case EMissionType::Defensive:
         CurrentBehavior = EVehicleBehavior::Patrolling;
+        break;
+    case EMissionType::BaseExpansion:
+        CurrentBehavior = EVehicleBehavior::Patrolling;
+        {
+            UGameInstance* GI = GetTypedOuter<UGameInstance>();
+            if (!GI)
+            {
+                if (UWorld* World = GetWorld())
+                {
+                    GI = World->GetGameInstance();
+                }
+            }
+            if (GI)
+            {
+                if (UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>())
+                {
+                    ActiveExpansionSite = BaseMgr->FindSiteAtLocation(TargetLocation);
+                }
+            }
+            if (!ActiveExpansionSite && CurrentMission)
+            {
+                ActiveExpansionSite = CurrentMission->TargetExpansionSite;
+            }
+        }
         break;
     default:
         CurrentBehavior = EVehicleBehavior::Scouting;
@@ -546,6 +659,23 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
     {
         UStrategyVehicle* Target = CurrentTargetVehicle.Get();
 
+        if (!Target || Target->IsDestroyed())
+        {
+            if (CurrentMission && CurrentMission->MissionType == EMissionType::BaseExpansion
+                && TryClaimExpansionSiteForVehicle(this))
+            {
+                CurrentPhase = EVehicleMissionPhase::OnStation;
+                CombatBehaviorStartTime = -1.0f;
+                CurrentTargetVehicle = nullptr;
+            }
+            else
+            {
+                SetBehavior(EVehicleBehavior::Returning);
+            }
+            TickRadarPings(CurrentGameHours);
+            return;
+        }
+
         if (CombatBehaviorStartTime < 0.0f)
         {
             CombatBehaviorStartTime = CurrentGameHours;
@@ -604,7 +734,17 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
 
         if (bShouldReturn)
         {
-            SetBehavior(EVehicleBehavior::Returning);
+            if (CurrentMission && CurrentMission->MissionType == EMissionType::BaseExpansion
+                && !bExpansionGuardActive && TryClaimExpansionSiteForVehicle(this))
+            {
+                CurrentPhase = EVehicleMissionPhase::OnStation;
+                CombatBehaviorStartTime = -1.0f;
+                CurrentTargetVehicle = nullptr;
+            }
+            else
+            {
+                SetBehavior(EVehicleBehavior::Returning);
+            }
         }
 
         return;
@@ -614,6 +754,19 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
     if (CurrentPhase == EVehicleMissionPhase::Returning)
     {
         AdvanceReturningMovement(DeltaGameHours);
+        TickRadarPings(CurrentGameHours);
+        return;
+    }
+
+    // === BASE EXPANSION GUARD (hold on-station until CC completes) ===
+    if (bExpansionGuardActive
+        && CurrentMission
+        && CurrentMission->MissionType == EMissionType::BaseExpansion)
+    {
+        if (!ProcessBaseExpansionGuardTick(DeltaGameHours))
+        {
+            SetBehavior(EVehicleBehavior::Returning);
+        }
         TickRadarPings(CurrentGameHours);
         return;
     }
@@ -635,6 +788,25 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
         if (UMissionManagerSubsystem* MissionMgr = GetMissionManagerForVehicle(this))
         {
             MissionMgr->HandleBaseAttackArrival(this, CurrentMission);
+        }
+    }
+
+    if (PreviousPhase != EVehicleMissionPhase::OnStation
+        && CurrentPhase == EVehicleMissionPhase::OnStation
+        && CurrentMission
+        && CurrentMission->MissionType == EMissionType::BaseExpansion
+        && !bExpansionGuardActive)
+    {
+        if (!TryClaimExpansionSiteForVehicle(this))
+        {
+            if (ActiveExpansionSite && ActiveExpansionSite->bHasBeenUsed)
+            {
+                CurrentBehavior = EVehicleBehavior::Patrolling;
+            }
+            else
+            {
+                SetBehavior(EVehicleBehavior::Returning);
+            }
         }
     }
 
@@ -660,6 +832,19 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
         {
             SetBehavior(EVehicleBehavior::Returning);
         }
+    }
+
+    if (CurrentPhase == EVehicleMissionPhase::OnStation
+        && CurrentMission
+        && CurrentMission->MissionType == EMissionType::BaseExpansion
+        && bExpansionGuardActive)
+    {
+        if (!ProcessBaseExpansionGuardTick(DeltaGameHours))
+        {
+            SetBehavior(EVehicleBehavior::Returning);
+        }
+        TickRadarPings(CurrentGameHours);
+        return;
     }
 
     if (CurrentPhase == EVehicleMissionPhase::OnStation && HomeBase)
@@ -824,6 +1009,61 @@ bool UStrategyVehicle::ProcessSalvageExtractionTick(float DeltaGameHours)
         UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Wreck '%s' depleted by %s — removed from map"),
             *Site->SiteName, *UEnum::GetValueAsString(SalvagingFaction));
 
+        return false;
+    }
+
+    return true;
+}
+
+/** Holds on-station until Command Center is operational or construction is cancelled. */
+bool UStrategyVehicle::ProcessBaseExpansionGuardTick(float DeltaGameHours)
+{
+    (void)DeltaGameHours;
+
+    if (!HomeBase || !CurrentMission || CurrentMission->MissionType != EMissionType::BaseExpansion)
+    {
+        return false;
+    }
+
+    UGameInstance* GI = GetGameInstanceForVehicle(this);
+    if (!GI)
+    {
+        return false;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GI->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr)
+    {
+        return false;
+    }
+
+    UStrategyBase* ExpansionBase = CurrentMission->ExpansionBaseUnderConstruction.Get();
+    if (!ExpansionBase && ActiveExpansionSite)
+    {
+        ExpansionBase = BaseMgr->FindExpansionBaseAtSite(ActiveExpansionSite);
+        if (ExpansionBase)
+        {
+            CurrentMission->ExpansionBaseUnderConstruction = ExpansionBase;
+        }
+    }
+
+    if (!ExpansionBase)
+    {
+        return false;
+    }
+
+    if (BaseMgr->IsCommandCenterOperational(ExpansionBase))
+    {
+        if (UStrategyEventDispatcher* EventDisp = GI->GetSubsystem<UStrategyEventDispatcher>())
+        {
+            EventDisp->OnBaseExpansionGuardComplete.Broadcast(HomeBase->OwningFaction, ExpansionBase, this);
+        }
+
+        UE_LOG(LogTemp, Display, TEXT("[BASE EXPANSION] Guard %s — Command Center operational at '%s', returning home"),
+            VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+            *ExpansionBase->BaseName.ToString());
+
+        bExpansionGuardActive = false;
         return false;
     }
 

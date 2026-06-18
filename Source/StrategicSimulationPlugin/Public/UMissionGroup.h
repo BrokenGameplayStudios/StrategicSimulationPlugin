@@ -107,4 +107,16 @@ public:
     /** Live enemy vehicle resolved from a radar contact. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
     TWeakObjectPtr<UStrategyVehicle> TargetInterceptVehicle;
+
+    /** Potential base site targeted by a BaseExpansion mission. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
+    class UStrategySiteDefinition* TargetExpansionSite = nullptr;
+
+    /** Base name to use when the expansion vehicle claims the site. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
+    FText PendingExpansionBaseName;
+
+    /** Base shell created after a successful site claim (guard until Command Center completes). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
+    TWeakObjectPtr<UStrategyBase> ExpansionBaseUnderConstruction;
 };

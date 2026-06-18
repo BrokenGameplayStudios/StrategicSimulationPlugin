@@ -123,6 +123,12 @@ private:
     /** Finds a suitable discovered but unused site for AI expansion */
     UStrategySiteDefinition* FindExpansionSiteForAI(EFactionType Faction) const;
 
+    /** Picks nearest idle vehicle (prefer combat) and orders a BaseExpansion mission. */
+    bool TryStartAIExpansion(EFactionType Faction) const;
+
+    /** True when the faction has inbound-threat radar contacts (blocks preempting defensive missions). */
+    bool FactionHasInboundThreatContacts(EFactionType Faction) const;
+
     /** Returns the base with the fewest parked vehicles (for staggered distribution) */
     UStrategyBase* GetBaseWithFewestVehicles(EFactionType Faction) const;
 };

@@ -9,8 +9,22 @@
 | Salvage | Transport, Support, Scout | Recover wreck resources |
 | Defensive | Any with range | Patrol toward inbound threat entry lanes |
 | Interception | Gunship, Heavy | Engage tracked radar contact |
+| Base Expansion | Any with range | Race to claim a site and guard Command Center construction |
 
 All new missions use **live movement** (vehicles fly on the map in real time).
+
+## Base expansion (vehicle-guarded)
+
+New bases are **not** built instantly. A faction must dispatch a **Base Expansion** mission:
+
+1. Vehicle flies to a discovered, unused `PotentialBase` site (factions can **race** for the same site).
+2. First survivor to reach the site **claims** it, pays Command Center cost, and starts construction.
+3. The vehicle **guards on-station** until the Command Center is operational (live combat if challenged).
+4. Guard returns to its **origin** home base when construction completes.
+
+If the **guard is destroyed** before the Command Center finishes, construction is **cancelled**, the site reopens, and the Command Center cost is **not** refunded. Choose your fleet wisely — scouts arrive fast but gunships hold the site better.
+
+Player API: `StartBaseExpansion` on `UBaseManagerSubsystem`. Events: `OnBaseExpansionOrdered`, `OnBaseExpansionClaimed`, `OnBaseExpansionCancelled`, `OnBaseExpansionGuardComplete`.
 
 ## Daily AI loop
 
@@ -22,7 +36,7 @@ Each simulation day, per faction (if AI enabled):
 4. Vehicle build (scouts first, then combat)
 5. Equip soldiers and vehicle weapons
 6. Schedule missions for idle vehicles (staggered across 24h)
-7. Base expansion when conditions are met
+7. **Base expansion** (before routine mission scheduling) — preempts deferred Recon/Offensive/Salvage slots when no inbound threats; prefers combat vehicles
 
 Force a tick for testing: **`Debug_RunAI`** on campaign or AI subsystem.
 

@@ -107,6 +107,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "1", ClampMax = "8"))
     int32 MaxActiveSalvageMissionsPerFaction = 2;
 
+    /** Max concurrent BaseExpansion guard missions per faction. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Expansion", meta = (ClampMin = "1", ClampMax = "4"))
+    int32 MaxActiveExpansionMissionsPerFaction = 1;
+
+    /** When true, new bases require a vehicle to claim and guard the construction site. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Expansion")
+    bool bBaseExpansionRequiresVehicleGuard = true;
+
     /** Minimum salvage heuristic score before AI dispatches recovery. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "0.0", ClampMax = "500.0"))
     float MinSalvageScoreThreshold = 15.0f;

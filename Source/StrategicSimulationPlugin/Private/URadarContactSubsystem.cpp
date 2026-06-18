@@ -67,6 +67,87 @@ namespace RadarContactHelpers
 
         return Direction * Speed;
     }
+
+    /** Intersection of segment P0→P1 with the circle centered at Base with radius Range (first entry along the segment). */
+    static bool IntersectSegmentCircle(const FVector2D& Base, float Range, const FVector2D& P0, const FVector2D& P1,
+        FVector2D& OutEntry)
+    {
+        const FVector2D D = P1 - P0;
+        const FVector2D F = P0 - Base;
+        const float A = FVector2D::DotProduct(D, D);
+        if (A <= KINDA_SMALL_NUMBER)
+        {
+            return false;
+        }
+
+        const float B = 2.0f * FVector2D::DotProduct(F, D);
+        const float C = FVector2D::DotProduct(F, F) - Range * Range;
+        const float Discriminant = B * B - 4.0f * A * C;
+        if (Discriminant < 0.0f)
+        {
+            return false;
+        }
+
+        const float SqrtDisc = FMath::Sqrt(Discriminant);
+        float T = (-B - SqrtDisc) / (2.0f * A);
+        if (T < 0.0f || T > 1.0f)
+        {
+            T = (-B + SqrtDisc) / (2.0f * A);
+            if (T < 0.0f || T > 1.0f)
+            {
+                return false;
+            }
+        }
+
+        OutEntry = P0 + D * T;
+        return true;
+    }
+
+    /** Point on the passive-radar ring where the track first entered (backtracked along flight path). */
+    FVector2D ComputeRadarRingEntryPoint(const FVector2D& BaseLocation, float RadarRange,
+        const FVector2D& VehiclePosition, const UStrategyVehicle* Vehicle)
+    {
+        if (RadarRange <= KINDA_SMALL_NUMBER)
+        {
+            return VehiclePosition;
+        }
+
+        const FVector2D Velocity = EstimateVehicleVelocity(Vehicle);
+        FVector2D BacktrackStart = VehiclePosition;
+
+        if (!Velocity.IsNearlyZero())
+        {
+            const float BacktrackDist = FMath::Max(RadarRange * 2.5f,
+                FVector2D::Distance(VehiclePosition, BaseLocation) + RadarRange);
+            BacktrackStart = VehiclePosition - Velocity.GetSafeNormal() * BacktrackDist;
+        }
+        else
+        {
+            const FVector2D ToVehicle = VehiclePosition - BaseLocation;
+            if (!ToVehicle.IsNearlyZero())
+            {
+                BacktrackStart = BaseLocation + ToVehicle.GetSafeNormal() * (RadarRange + 50.0f);
+            }
+            else
+            {
+                BacktrackStart = BaseLocation + FVector2D(RadarRange + 50.0f, 0.0f);
+            }
+        }
+
+        FVector2D EntryPoint;
+        if (IntersectSegmentCircle(BaseLocation, RadarRange, BacktrackStart, VehiclePosition, EntryPoint))
+        {
+            return EntryPoint;
+        }
+
+        const FVector2D ToVehicle = VehiclePosition - BaseLocation;
+        if (!ToVehicle.IsNearlyZero())
+        {
+            return BaseLocation + ToVehicle.GetSafeNormal() * RadarRange;
+        }
+
+        return VehiclePosition;
+    }
 }
 
 /**
@@ -458,7 +539,7 @@ void URadarContactSubsystem::ProcessBaseSites(UStrategyBase* Base, EFactionType 
 
 /** Creates or updates a per-vehicle contact, locking FirstDetectedPosition on first sighting and estimating velocity. */
 FRadarContact URadarContactSubsystem::UpsertVehicleContact(EFactionType DetectingFaction, UStrategyBase* DetectingBase,
-    UStrategyVehicle* EnemyVehicle, float CurrentGameHours, bool bIsInboundThreat)
+    UStrategyVehicle* EnemyVehicle, float CurrentGameHours, bool bIsInboundThreat, float DetectingRadarRangePixels)
 {
     FRadarContact Result;
 
@@ -492,7 +573,11 @@ FRadarContact URadarContactSubsystem::UpsertVehicleContact(EFactionType Detectin
         Contact.ContactId = ContactId;
         Contact.DetectingFaction = DetectingFaction;
         Contact.DetectingBaseName = DetectingBase->BaseName.ToString();
-        Contact.FirstDetectedPosition = CurrentPosition;
+        const float EffectiveRange = DetectingRadarRangePixels > KINDA_SMALL_NUMBER
+            ? DetectingRadarRangePixels
+            : GetBaseRadarRange();
+        Contact.FirstDetectedPosition = RadarContactHelpers::ComputeRadarRingEntryPoint(
+            DetectingBase->MapLocation, EffectiveRange, CurrentPosition, EnemyVehicle);
         Contact.bHasFirstDetectedPosition = true;
         Contact.EstimatedVelocity = RadarContactHelpers::EstimateVehicleVelocity(EnemyVehicle);
     }
@@ -748,7 +833,7 @@ void URadarContactSubsystem::ProcessBaseVehicles(UStrategyBase* Base, EFactionTy
             }
 
             const bool bInbound = IsInboundThreatVehicle(EnemyVehicle, Faction, BaseMgr);
-            const FRadarContact Contact = UpsertVehicleContact(Faction, Base, EnemyVehicle, CurrentGameHours, bInbound);
+            const FRadarContact Contact = UpsertVehicleContact(Faction, Base, EnemyVehicle, CurrentGameHours, bInbound, Range);
             if (Contact.ContactId.IsValid() && Contact.bIsInboundThreat)
             {
                 QueueReactiveInterception(Faction, Base, Contact.ContactId);

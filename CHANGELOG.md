@@ -2,6 +2,20 @@
 
 User-facing changes to the Strategic Simulation Plugin. For setup and usage, see the [Documentation Wiki](docs/README.md).
 
+## [Unreleased]
+
+### Base expansion
+- **Breaking:** New bases require a **Base Expansion** vehicle mission — race to the site, guard Command Center construction, then return home
+- AI expansion runs **before** daily mission scheduling and can **preempt** deferred Recon/Offensive/Salvage missions when no inbound radar threats
+- Guard destroyed before CC completes cancels construction and reopens the site (no refund)
+- Live combat at contested sites (no salvage-style contest UI)
+- Blueprint events: `OnBaseExpansionOrdered`, `OnBaseExpansionClaimed`, `OnBaseExpansionCancelled`, `OnBaseExpansionGuardComplete`
+- Tuning: `MaxActiveExpansionMissionsPerFaction`, `bBaseExpansionRequiresVehicleGuard`
+
+### Radar contacts
+- First-detection marker placed on the **passive radar ring** (backtracked along flight path), not at the vehicle's ping position
+- Debug HUD contact diamonds use uniform size and opacity for Human and Enemy tracks
+
 ## [1.0.0] — 2026-06-18
 
 ### Simulation core
@@ -12,7 +26,7 @@ User-facing changes to the Strategic Simulation Plugin. For setup and usage, see
 - Strategic clock pause during contested salvage
 
 ### Missions & combat
-- Mission types: Recon, Offensive, Salvage, Defensive, Interception
+- Mission types: Recon, Offensive, Salvage, Defensive, Interception, Base Expansion (see [Unreleased])
 - Staggered daily mission launches across the 24-hour game day
 - Armed vehicular combat for Gunship/Heavy vehicles
 - Offensive base-attack missions after configurable start day (default: day 5)

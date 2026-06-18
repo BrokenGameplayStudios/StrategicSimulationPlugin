@@ -39,6 +39,13 @@ Set **HumanStartingStockpile** and **EnemyStartingStockpile** (Money, Metals, Bi
 | SalvageOnStationHours | 4.0 | On-station extraction window |
 | SalvageEfficiencyMultiplier | 4.0 | Hourly extraction rate scale |
 | MaxActiveSalvageMissionsPerFaction | 2 | Concurrent salvage fleets |
+
+## Expansion (`Campaign | Expansion` / initializer **Expansion**)
+
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| MaxActiveExpansionMissionsPerFaction | 1 | Concurrent base-expansion guard missions per faction |
+| bBaseExpansionRequiresVehicleGuard | true | New bases require a vehicle mission (disable only for testing) |
 | MinSalvageScoreThreshold | 15.0 | AI distance/value gate for salvage |
 
 ## Radar & intel

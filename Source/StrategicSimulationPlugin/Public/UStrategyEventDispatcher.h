@@ -65,6 +65,22 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSalvageSiteRemoved, FGuid, SiteI
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSalvageContestStarted, UStrategySiteDefinition*, Site,
     FSalvageContestForceSnapshot, HumanForceSnapshot, FSalvageContestForceSnapshot, EnemyForceSnapshot);
 
+/** Fires when a faction orders a vehicle to expand onto a discovered site. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnBaseExpansionOrdered, EFactionType, Faction,
+    UStrategySiteDefinition*, Site, UStrategyVehicle*, Vehicle);
+
+/** Fires when an expansion vehicle successfully claims a site and starts Command Center construction. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnBaseExpansionClaimed, EFactionType, Faction,
+    UStrategySiteDefinition*, Site, UStrategyBase*, Base);
+
+/** Fires when in-progress expansion construction is cancelled (guard destroyed before CC completes). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBaseExpansionCancelled, EFactionType, Faction,
+    UStrategySiteDefinition*, Site);
+
+/** Fires when the guard vehicle completes its duty and the Command Center is operational. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnBaseExpansionGuardComplete, EFactionType, Faction,
+    UStrategyBase*, Base, UStrategyVehicle*, Vehicle);
+
 /** Central Blueprint-assignable event bus for strategic simulation UI and test hooks. */
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UStrategyEventDispatcher : public UGameInstanceSubsystem
@@ -125,4 +141,16 @@ public:
 
     /** @see FOnSalvageContestStarted — UMissionManagerSubsystem::BeginSalvageContest. */
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSalvageContestStarted OnSalvageContestStarted;
+
+    /** @see FOnBaseExpansionOrdered — UBaseManagerSubsystem::StartBaseExpansion. */
+    UPROPERTY(BlueprintAssignable, Category = "Events|Expansion") FOnBaseExpansionOrdered OnBaseExpansionOrdered;
+
+    /** @see FOnBaseExpansionClaimed — UBaseManagerSubsystem::TryClaimExpansionSite. */
+    UPROPERTY(BlueprintAssignable, Category = "Events|Expansion") FOnBaseExpansionClaimed OnBaseExpansionClaimed;
+
+    /** @see FOnBaseExpansionCancelled — UBaseManagerSubsystem::CancelExpansionConstruction. */
+    UPROPERTY(BlueprintAssignable, Category = "Events|Expansion") FOnBaseExpansionCancelled OnBaseExpansionCancelled;
+
+    /** @see FOnBaseExpansionGuardComplete — UStrategyVehicle guard duty complete. */
+    UPROPERTY(BlueprintAssignable, Category = "Events|Expansion") FOnBaseExpansionGuardComplete OnBaseExpansionGuardComplete;
 };

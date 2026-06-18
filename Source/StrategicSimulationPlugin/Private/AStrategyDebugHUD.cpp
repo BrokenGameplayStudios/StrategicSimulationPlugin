@@ -772,20 +772,24 @@ void AStrategyDebugHUD::DrawRadarContactEntryPoints()
     }
 
     const float Scale = GetCurrentMapScale();
-    const float DiamondSize = 7.0f * Scale;
+    const float HalfSize = 7.0f * Scale;
+    const float LineThickness = 2.0f * Scale;
 
-    auto DrawDiamond = [&](const FVector2D& LogicalPos, const FLinearColor& Color)
+    auto DrawDiamond = [&](const FVector2D& LogicalPos, const FLinearColor& BaseColor)
     {
         const FVector2D Center = GetScreenPosition(LogicalPos);
-        const FVector2D Top(Center.X, Center.Y - DiamondSize);
-        const FVector2D Right(Center.X + DiamondSize, Center.Y);
-        const FVector2D Bottom(Center.X, Center.Y + DiamondSize);
-        const FVector2D Left(Center.X - DiamondSize, Center.Y);
+        const FVector2D Top(Center.X, Center.Y - HalfSize);
+        const FVector2D Right(Center.X + HalfSize, Center.Y);
+        const FVector2D Bottom(Center.X, Center.Y + HalfSize);
+        const FVector2D Left(Center.X - HalfSize, Center.Y);
 
-        Canvas->K2_DrawLine(Top, Right, 1.5f * Scale, Color);
-        Canvas->K2_DrawLine(Right, Bottom, 1.5f * Scale, Color);
-        Canvas->K2_DrawLine(Bottom, Left, 1.5f * Scale, Color);
-        Canvas->K2_DrawLine(Left, Top, 1.5f * Scale, Color);
+        FLinearColor Color = BaseColor;
+        Color.A = 1.0f;
+
+        Canvas->K2_DrawLine(Top, Right, LineThickness, Color);
+        Canvas->K2_DrawLine(Right, Bottom, LineThickness, Color);
+        Canvas->K2_DrawLine(Bottom, Left, LineThickness, Color);
+        Canvas->K2_DrawLine(Left, Top, LineThickness, Color);
     };
 
     if (bShowFriendlyRadarContacts)
@@ -798,9 +802,12 @@ void AStrategyDebugHUD::DrawRadarContactEntryPoints()
             }
 
             const FLinearColor Color = Contact.bIsInboundThreat
-                ? FLinearColor(0.2f, 0.85f, 1.0f, 0.95f)
-                : FLinearColor(0.35f, 0.65f, 0.95f, 0.65f);
-            DrawDiamond(URadarContactSubsystem::GetContactInterceptPosition(Contact), Color);
+                ? FLinearColor(0.2f, 0.85f, 1.0f, 1.0f)
+                : FLinearColor(0.35f, 0.65f, 0.95f, 1.0f);
+            const FVector2D MarkerPos = Contact.bHasFirstDetectedPosition
+                ? Contact.FirstDetectedPosition
+                : URadarContactSubsystem::GetContactInterceptPosition(Contact);
+            DrawDiamond(MarkerPos, Color);
         }
     }
 
@@ -814,9 +821,12 @@ void AStrategyDebugHUD::DrawRadarContactEntryPoints()
             }
 
             const FLinearColor Color = Contact.bIsInboundThreat
-                ? FLinearColor(0.95f, 0.25f, 0.75f, 0.95f)
-                : FLinearColor(0.85f, 0.45f, 0.65f, 0.65f);
-            DrawDiamond(URadarContactSubsystem::GetContactInterceptPosition(Contact), Color);
+                ? FLinearColor(0.95f, 0.25f, 0.75f, 1.0f)
+                : FLinearColor(0.85f, 0.45f, 0.65f, 1.0f);
+            const FVector2D MarkerPos = Contact.bHasFirstDetectedPosition
+                ? Contact.FirstDetectedPosition
+                : URadarContactSubsystem::GetContactInterceptPosition(Contact);
+            DrawDiamond(MarkerPos, Color);
         }
     }
 }

@@ -166,6 +166,8 @@ void AStrategyGameInitializer::BeginPlay()
     Campaign->OpposingSalvageMIAPOWChance = OpposingSalvageMIAPOWChance;
     Campaign->SalvageEfficiencyMultiplier = SalvageEfficiencyMultiplier;
     Campaign->MaxActiveSalvageMissionsPerFaction = MaxActiveSalvageMissionsPerFaction;
+    Campaign->MaxActiveExpansionMissionsPerFaction = MaxActiveExpansionMissionsPerFaction;
+    Campaign->bBaseExpansionRequiresVehicleGuard = bBaseExpansionRequiresVehicleGuard;
     Campaign->MinSalvageScoreThreshold = MinSalvageScoreThreshold;
     Campaign->SalvageDeclineAfterWinChance = SalvageDeclineAfterWinChance;
     Campaign->LoserSalvageScoreMultiplier = LoserSalvageScoreMultiplier;

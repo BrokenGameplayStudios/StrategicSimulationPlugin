@@ -1447,6 +1447,174 @@ bool UBaseManagerSubsystem::CanBuildBaseOnSite(EFactionType Faction, UStrategySi
     return true;
 }
 
+/** True when the base has an operational Command Center facility. */
+bool UBaseManagerSubsystem::IsCommandCenterOperational(const UStrategyBase* Base) const
+{
+    if (!Base)
+    {
+        return false;
+    }
+
+    for (const UStrategyFacility* Fac : Base->Facilities)
+    {
+        if (Fac && Fac->bIsOperational && Fac->FacilityDefinition
+            && Fac->FacilityDefinition->FacilityType == EFacilityType::Command)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** Finds a base under construction at a site (CC not yet operational). */
+UStrategyBase* UBaseManagerSubsystem::FindExpansionBaseAtSite(const UStrategySiteDefinition* Site) const
+{
+    if (!Site)
+    {
+        return nullptr;
+    }
+
+    auto FindInBases = [&](const TArray<UStrategyBase*>& Bases) -> UStrategyBase*
+    {
+        for (UStrategyBase* Base : Bases)
+        {
+            if (Base && Base->BuiltOnSite == Site && !IsCommandCenterOperational(Base))
+            {
+                return Base;
+            }
+        }
+        return nullptr;
+    };
+
+    if (UStrategyBase* Base = FindInBases(HumanBases))
+    {
+        return Base;
+    }
+
+    return FindInBases(EnemyBases);
+}
+
+/** Atomic site claim: deducts CC cost and starts construction when gates still pass. */
+UStrategyBase* UBaseManagerSubsystem::TryClaimExpansionSite(EFactionType Faction, UStrategySiteDefinition* TargetSite,
+    UStrategyVehicle* GuardVehicle, FText BaseName)
+{
+    if (!TargetSite || !GuardVehicle)
+    {
+        return nullptr;
+    }
+
+    if (!CanBuildBaseOnSite(Faction, TargetSite))
+    {
+        return nullptr;
+    }
+
+    UStrategyBase* NewBase = BuildNewBase(Faction, BaseName, TargetSite->Location, TargetSite);
+    if (!NewBase)
+    {
+        return nullptr;
+    }
+
+    NewBase->BuiltOnSite = TargetSite;
+
+    UE_LOG(LogTemp, Display, TEXT("[BASE EXPANSION] %s claimed site '%s' with guard %s — Command Center construction started"),
+        *UEnum::GetValueAsString(Faction), *TargetSite->SiteName,
+        GuardVehicle->VehicleDefinition ? *GuardVehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"));
+
+    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
+        EventDisp->OnBaseExpansionClaimed.Broadcast(Faction, TargetSite, NewBase);
+    }
+
+    return NewBase;
+}
+
+/** Removes an in-progress expansion shell and reopens the site (no resource refund). */
+void UBaseManagerSubsystem::CancelExpansionConstruction(UStrategyBase* ExpansionBase, UStrategySiteDefinition* Site)
+{
+    if (!ExpansionBase)
+    {
+        return;
+    }
+
+    const EFactionType Faction = ExpansionBase->OwningFaction;
+
+    if (IsCommandCenterOperational(ExpansionBase))
+    {
+        return;
+    }
+
+    UStrategySiteDefinition* LinkedSite = Site ? Site : ExpansionBase->BuiltOnSite;
+
+    TArray<UStrategyBase*>& Bases = GetMutableBases(Faction);
+    Bases.Remove(ExpansionBase);
+
+    if (LinkedSite)
+    {
+        LinkedSite->bHasBeenUsed = false;
+    }
+
+    ExpansionBase->BuiltOnSite = nullptr;
+    ExpansionBase->Facilities.Empty();
+
+    OnBaseListChanged.Broadcast(Faction);
+    OnFacilityListChanged.Broadcast(Faction);
+
+    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
+        EventDisp->OnBaseExpansionCancelled.Broadcast(Faction, LinkedSite);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[BASE EXPANSION] %s expansion at '%s' cancelled — site reopened for contest"),
+        *UEnum::GetValueAsString(Faction),
+        LinkedSite ? *LinkedSite->SiteName : TEXT("unknown site"));
+}
+
+/** Orders a vehicle to race to a site, claim it, guard CC construction, then return home. */
+bool UBaseManagerSubsystem::StartBaseExpansion(EFactionType Faction, UStrategySiteDefinition* TargetSite,
+    UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FText BaseName)
+{
+    if (!TargetSite || !OriginBase || !Vehicle)
+    {
+        return false;
+    }
+
+    if (!CanBuildBaseOnSite(Faction, TargetSite))
+    {
+        return false;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    if (!MissionMgr)
+    {
+        return false;
+    }
+
+    if (Campaign && Campaign->bBaseExpansionRequiresVehicleGuard)
+    {
+        const int32 MaxExpansion = Campaign->MaxActiveExpansionMissionsPerFaction;
+        if (MissionMgr->CountActiveExpansionMissions(Faction) >= MaxExpansion)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[BASE EXPANSION] %s at expansion mission cap (%d)"),
+                *UEnum::GetValueAsString(Faction), MaxExpansion);
+            return false;
+        }
+    }
+
+    if (!MissionMgr->StartBaseExpansionMission(OriginBase, Vehicle, TargetSite, BaseName, Faction))
+    {
+        return false;
+    }
+
+    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
+        EventDisp->OnBaseExpansionOrdered.Broadcast(Faction, TargetSite, Vehicle);
+    }
+
+    return true;
+}
+
 /** Builds a base on a validated site and marks the site as used. */
 bool UBaseManagerSubsystem::TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName)
 {

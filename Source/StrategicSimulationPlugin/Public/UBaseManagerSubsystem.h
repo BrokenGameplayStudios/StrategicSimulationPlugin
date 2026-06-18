@@ -156,13 +156,35 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Expansion|Save")
     void DeserializeAllSites(const TArray<FStrategySiteSaveData>& SavedSites);
 
-    /** Attempts to build a new base on a discovered site. Returns true if successful. */
-    UFUNCTION(BlueprintCallable, Category = "Base Expansion")
+    /** Debug/instant path: builds a base immediately without a guard vehicle. Prefer StartBaseExpansion for gameplay. */
+    UFUNCTION(BlueprintCallable, Category = "Base Expansion", meta = (DeprecatedFunction, DeprecationMessage = "Use StartBaseExpansion for gameplay expansion."))
     bool TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName);
 
     /** Checks if a faction can build a base on this specific site. */
     UFUNCTION(BlueprintCallable, Category = "Base Expansion")
     bool CanBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* Site) const;
+
+    /** Orders a vehicle mission to race to a site, claim it, guard CC construction, then return home. */
+    UFUNCTION(BlueprintCallable, Category = "Base Expansion")
+    bool StartBaseExpansion(EFactionType Faction, UStrategySiteDefinition* TargetSite, UStrategyBase* OriginBase,
+        class UStrategyVehicle* Vehicle, FText BaseName);
+
+    /** Atomic site claim: starts base shell and Command Center construction if gates still pass. */
+    UFUNCTION(BlueprintCallable, Category = "Base Expansion")
+    UStrategyBase* TryClaimExpansionSite(EFactionType Faction, UStrategySiteDefinition* TargetSite,
+        class UStrategyVehicle* GuardVehicle, FText BaseName);
+
+    /** Removes an in-progress expansion base and reopens the site for a new race. */
+    UFUNCTION(BlueprintCallable, Category = "Base Expansion")
+    void CancelExpansionConstruction(UStrategyBase* ExpansionBase, UStrategySiteDefinition* Site);
+
+    /** True when the base has an operational Command Center facility. */
+    UFUNCTION(BlueprintPure, Category = "Base Expansion")
+    bool IsCommandCenterOperational(const UStrategyBase* Base) const;
+
+    /** Finds a base under construction at a site (CC not yet operational). */
+    UFUNCTION(BlueprintPure, Category = "Base Expansion")
+    UStrategyBase* FindExpansionBaseAtSite(const UStrategySiteDefinition* Site) const;
 
     /** Processes daily resource extraction from sites for all bases of a faction */
     void ProcessDailyResourceExtraction(EFactionType Faction);

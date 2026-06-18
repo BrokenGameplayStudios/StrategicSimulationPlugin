@@ -28,7 +28,31 @@ public:
 
     /** Creates and optionally defers a mission; assigns soldiers and activates live movement when due. */
     UFUNCTION(BlueprintCallable, Category = "Mission")
-    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType = EMissionType::Offensive, EFactionType AttackingFaction = EFactionType::Enemy, float ScheduledLaunchGameHours = -1.f);
+    UMissionGroup* StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType = EMissionType::Offensive, EFactionType AttackingFaction = EFactionType::Enemy, float ScheduledLaunchGameHours = -1.f,
+        class UStrategySiteDefinition* ExpansionSite = nullptr, const FText& ExpansionBaseName = FText::GetEmpty());
+
+    /** Launches a single-vehicle BaseExpansion mission to race for and guard a site. */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Base Expansion")
+    bool StartBaseExpansionMission(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
+        UStrategySiteDefinition* TargetSite, FText BaseName, EFactionType Faction);
+
+    /** Active + in-flight BaseExpansion missions for a faction. */
+    UFUNCTION(BlueprintPure, Category = "Mission|Base Expansion")
+    int32 CountActiveExpansionMissions(EFactionType Faction) const;
+
+    /**
+     * Parked vehicles plus docked vehicles waiting on a deferred launch slot.
+     * Used when expansion should preempt low-priority scheduled missions.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Base Expansion")
+    TArray<UStrategyVehicle*> GatherExpansionCandidateVehicles(UStrategyBase* Base) const;
+
+    /**
+     * Removes a vehicle from a not-yet-launched mission so it can fly expansion immediately.
+     * Returns false if the vehicle is already in live movement or mission is non-preemptible.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Base Expansion")
+    bool UnassignVehicleFromDeferredMission(UStrategyVehicle* Vehicle, bool bAllowDefensivePreempt = false);
 
     /** Schedule one mission per idle vehicle at a base, evenly spaced across the 24-hour day */
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")

@@ -269,7 +269,8 @@ enum class EMissionType : uint8
     Defensive         UMETA(DisplayName = "Defensive"),      // Defend a location from attackers
     Offensive         UMETA(DisplayName = "Offensive"),      // Attack/destroy enemy location/base
     Recon             UMETA(DisplayName = "Recon"),      // Scouting / exploration mission
-    Salvage           UMETA(DisplayName = "Salvage")     // Recover resources from vehicle wrecks
+    Salvage           UMETA(DisplayName = "Salvage"),    // Recover resources from vehicle wrecks
+    BaseExpansion     UMETA(DisplayName = "Base Expansion") // Race to claim a site and guard CC construction
 };
 
 /** Faction A = Human, Faction B = Enemy in contested salvage resolution. */

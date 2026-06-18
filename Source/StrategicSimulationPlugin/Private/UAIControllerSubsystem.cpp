@@ -229,8 +229,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
         }
     }
 
-    // === DAILY MISSION SCHEDULING — one slot per idle vehicle per base, spread across 24h ===
-    UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
     if (!MissionMgr)
     {
         MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
@@ -239,6 +237,59 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     {
         Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
     }
+
+    // === BASE EXPANSION (priority — before daily mission scheduling consumes idle vehicles) ===
+    if (AllBases.Num() < MaxBases && BaseMgr && ResourceMgr && ResourceMgr->GetResources(Faction).Money > 9500)
+    {
+        bool bAllBasesHaveVehicle = true;
+        for (UStrategyBase* B : AllBases)
+        {
+            bool bThisBaseHasVehicle = false;
+
+            if (B->HasOperationalFacilityOfType(EFacilityType::Hanger))
+            {
+                for (UStrategyFacility* Fac : B->Facilities)
+                {
+                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger
+                        && Fac->ParkedVehicles.Num() > 0)
+                    {
+                        bThisBaseHasVehicle = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!bThisBaseHasVehicle && MissionMgr)
+            {
+                for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+                {
+                    if (Mission && Mission->OriginBase == B && Mission->VehiclesInFleet.Num() > 0)
+                    {
+                        bThisBaseHasVehicle = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!bThisBaseHasVehicle)
+            {
+                bAllBasesHaveVehicle = false;
+                break;
+            }
+        }
+
+        if (bAllBasesHaveVehicle)
+        {
+            if (TryStartAIExpansion(Faction))
+            {
+                UE_LOG(LogTemp, Display, TEXT("[AI] %s dispatched expansion guard toward site (base #%d planned)"),
+                    *UEnum::GetValueAsString(Faction), AllBases.Num() + 1);
+            }
+        }
+    }
+
+    // === DAILY MISSION SCHEDULING — one slot per idle vehicle per base, spread across 24h ===
+    UEngineeringManagerSubsystem* EngMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
 
     int32 TotalScheduled = 0;
 
@@ -336,80 +387,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     if (BaseMgr && Campaign && Campaign->bVerboseLogging)
     {
         BaseMgr->DebugPrintFullBaseState(Faction);
-    }
-
-    // === EXPANSION (unchanged) ===
-    if (AllBases.Num() < MaxBases)
-    {
-        bool bAllBasesHaveVehicle = true;
-        UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG] %s — Checking expansion: Bases = %d (max %d)"),
-            *UEnum::GetValueAsString(Faction), AllBases.Num(), MaxBases);
-
-        for (UStrategyBase* B : AllBases)
-        {
-            bool bThisBaseHasVehicle = false;
-
-            if (B->HasOperationalFacilityOfType(EFacilityType::Hanger))
-            {
-                for (UStrategyFacility* Fac : B->Facilities)
-                {
-                    if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-                    {
-                        if (Fac->ParkedVehicles.Num() > 0)
-                        {
-                            bThisBaseHasVehicle = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (!bThisBaseHasVehicle && MissionMgr)
-            {
-                for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
-                {
-                    if (Mission && Mission->OriginBase == B && Mission->VehiclesInFleet.Num() > 0)
-                    {
-                        bThisBaseHasVehicle = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!bThisBaseHasVehicle)
-            {
-                bAllBasesHaveVehicle = false;
-                UE_LOG(LogTemp, Display, TEXT("[EXPANSION DEBUG]   Base '%s' does NOT own a vehicle yet"), *B->BaseName.ToString());
-                break;
-            }
-        }
-
-        if (bAllBasesHaveVehicle && ResourceMgr->GetResources(Faction).Money > 9500)
-        {
-            UE_LOG(LogTemp, Display, TEXT("[AI] %s — EXPANSION TRIGGERED! ALL bases own vehicles → Building NEW base #%d"),
-                *UEnum::GetValueAsString(Faction), AllBases.Num() + 1);
-
-            FString NewName = FString::Printf(TEXT("Forward Base %02d"), AllBases.Num() + 1);
-
-            // Try to expand onto a discovered site
-            if (UStrategySiteDefinition* TargetSite = FindExpansionSiteForAI(Faction))
-            {
-                if (BaseMgr->TryBuildBaseOnSite(Faction, TargetSite, FText::FromString(NewName)))
-                {
-                    UE_LOG(LogTemp, Display, TEXT("[AI] %s successfully expanded onto discovered site: %s"),
-                        *UEnum::GetValueAsString(Faction), *TargetSite->SiteName);
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[AI] %s wants to expand but has no valid discovered sites available."),
-                    *UEnum::GetValueAsString(Faction));
-            }
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[EXPANSION DEBUG] %s — At maximum bases (%d)"), *UEnum::GetValueAsString(Faction), MaxBases);
     }
 
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
@@ -990,6 +967,135 @@ UStrategyBase* UAIControllerSubsystem::GetBaseWithFewestVehicles(EFactionType Fa
     return BestBase;
 }
 
+/** True when the faction has inbound-threat radar contacts (blocks preempting defensive missions). */
+bool UAIControllerSubsystem::FactionHasInboundThreatContacts(EFactionType Faction) const
+{
+    URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    if (!ContactMgr)
+    {
+        return false;
+    }
+
+    for (const FRadarContact& Contact : ContactMgr->GetContactsForFaction(Faction))
+    {
+        if (Contact.bIsInboundThreat)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** Picks nearest vehicle (prefer combat), preempts deferred missions when safe, and orders expansion. */
+bool UAIControllerSubsystem::TryStartAIExpansion(EFactionType Faction) const
+{
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>();
+    if (!BaseMgr || !MissionMgr)
+    {
+        return false;
+    }
+
+    if (MissionMgr->CountActiveExpansionMissions(Faction) > 0)
+    {
+        return false;
+    }
+
+    UStrategySiteDefinition* TargetSite = FindExpansionSiteForAI(Faction);
+    if (!TargetSite)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[EXPANSION] %s — no valid discovered expansion site"),
+            *UEnum::GetValueAsString(Faction));
+        return false;
+    }
+
+    const bool bInboundThreat = FactionHasInboundThreatContacts(Faction);
+    const bool bAllowDefensivePreempt = !bInboundThreat;
+
+    UStrategyBase* BestBase = nullptr;
+    UStrategyVehicle* BestVehicle = nullptr;
+    bool bBestNeedsPreempt = false;
+    float BestScore = -FLT_MAX;
+
+    for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
+    {
+        if (!Base)
+        {
+            continue;
+        }
+
+        for (UStrategyVehicle* Vehicle : MissionMgr->GatherExpansionCandidateVehicles(Base))
+        {
+            if (!Vehicle || !Vehicle->VehicleDefinition)
+            {
+                continue;
+            }
+
+            const bool bNeedsPreempt = Vehicle->CurrentMission != nullptr;
+            if (bNeedsPreempt)
+            {
+                const EMissionType QueuedType = Vehicle->CurrentMission->MissionType;
+                if (QueuedType == EMissionType::Interception
+                    || QueuedType == EMissionType::Defensive)
+                {
+                    if (!bAllowDefensivePreempt)
+                    {
+                        continue;
+                    }
+                }
+            }
+
+            const float RoundTrip = FVector2D::Distance(Base->MapLocation, TargetSite->Location) * 2.0f;
+            if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
+            {
+                continue;
+            }
+
+            float Score = -FVector2D::Distance(Base->MapLocation, TargetSite->Location);
+            if (IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType))
+            {
+                Score += 250.0f;
+            }
+            Score += static_cast<float>(Vehicle->GetVehicleOffensiveRating());
+            if (!bNeedsPreempt)
+            {
+                Score += 50.0f;
+            }
+
+            if (Score > BestScore)
+            {
+                BestScore = Score;
+                BestBase = Base;
+                BestVehicle = Vehicle;
+                bBestNeedsPreempt = bNeedsPreempt;
+            }
+        }
+    }
+
+    if (!BestBase || !BestVehicle)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[EXPANSION] %s — no expansion candidate (inbound threat blocking preempt: %s)"),
+            *UEnum::GetValueAsString(Faction), bInboundThreat ? TEXT("yes") : TEXT("no"));
+        return false;
+    }
+
+    if (bBestNeedsPreempt)
+    {
+        if (!MissionMgr->UnassignVehicleFromDeferredMission(BestVehicle, bAllowDefensivePreempt))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[EXPANSION] %s — failed to preempt deferred mission for guard vehicle"),
+                *UEnum::GetValueAsString(Faction));
+            return false;
+        }
+    }
+
+    const int32 BaseNumber = BaseMgr->GetBases(Faction).Num() + 1;
+    const FString NewName = FString::Printf(TEXT("Forward Base %02d"), BaseNumber);
+
+    return BaseMgr->StartBaseExpansion(Faction, TargetSite, BestBase, BestVehicle, FText::FromString(NewName));
+}
+
 /** Finds first valid discovered unused expansion site. */
 UStrategySiteDefinition* UAIControllerSubsystem::FindExpansionSiteForAI(EFactionType Faction) const
 {
@@ -1282,7 +1388,8 @@ bool UAIControllerSubsystem::ShouldEngageVehicle(UStrategyVehicle* DetectingVehi
         const EMissionType MissionType = DetectingVehicle->CurrentMission->MissionType;
         if (MissionType == EMissionType::Offensive
             || MissionType == EMissionType::Interception
-            || MissionType == EMissionType::Defensive)
+            || MissionType == EMissionType::Defensive
+            || MissionType == EMissionType::BaseExpansion)
         {
             return true;
         }

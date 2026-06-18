@@ -239,6 +239,14 @@ public:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Vehicle|Salvage")
     FResourceStockpile SalvageExtractedThisMission;
 
+    /** Potential base site being claimed or guarded during a BaseExpansion mission. */
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Vehicle|Expansion")
+    TObjectPtr<class UStrategySiteDefinition> ActiveExpansionSite = nullptr;
+
+    /** True while holding on-station until Command Center construction completes. */
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Vehicle|Expansion")
+    bool bExpansionGuardActive = false;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
     float LastPingGameTimeHours = 0.0f;
 
@@ -268,6 +276,10 @@ public:
     /** Hourly resource transfer while on-station at a salvage wreck (Salvage missions). */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Salvage")
     bool ProcessSalvageExtractionTick(float DeltaGameHours);
+
+    /** Holds on-station during BaseExpansion until CC is operational or construction is cancelled. */
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Expansion")
+    bool ProcessBaseExpansionGuardTick(float DeltaGameHours);
 
     /** Executes one radar sweep: site discovery, base scan, and vehicle detection. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")

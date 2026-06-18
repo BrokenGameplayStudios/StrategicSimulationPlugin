@@ -148,7 +148,7 @@ private:
      * Notifies exploration and broadcasts OnRadarContactUpdated (and player alert for new enemy inbound tracks).
      */
     FRadarContact UpsertVehicleContact(EFactionType DetectingFaction, UStrategyBase* DetectingBase,
-        UStrategyVehicle* EnemyVehicle, float CurrentGameHours, bool bIsInboundThreat);
+        UStrategyVehicle* EnemyVehicle, float CurrentGameHours, bool bIsInboundThreat, float DetectingRadarRangePixels);
 
     /** Removes contacts older than RadarContactExpiryHours and cleans vehicle/interception bookkeeping. */
     void ExpireStaleContacts(float CurrentGameHours);

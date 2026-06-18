@@ -75,6 +75,9 @@ void UMissionManagerSubsystem::ClearRuntimeMissionStateForSiteMapLoad()
         Vehicle->SearchTimeAtTarget = 0.0f;
         Vehicle->PlannedRoundTripRange = 0.0f;
         Vehicle->RangeTraveledThisMission = 0.0f;
+        Vehicle->ActiveSalvageSite = nullptr;
+        Vehicle->ActiveExpansionSite = nullptr;
+        Vehicle->bExpansionGuardActive = false;
 
         if (Vehicle->CurrentHanger)
         {
@@ -1091,6 +1094,19 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
         break;
     }
 
+    case EMissionType::BaseExpansion:
+    {
+        if (Vehicle->CurrentMission && Vehicle->CurrentMission->TargetExpansionSite)
+        {
+            OutTarget = Vehicle->CurrentMission->TargetExpansionSite->Location;
+            UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → expansion site '%s' at (%.0f, %.0f)"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                *Vehicle->CurrentMission->TargetExpansionSite->SiteName, OutTarget.X, OutTarget.Y);
+            return true;
+        }
+        break;
+    }
+
     default:
         break;
     }
@@ -1130,6 +1146,9 @@ bool UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
         {
             SearchHours = 4.0f;
         }
+        break;
+    case EMissionType::BaseExpansion:
+        SearchHours = 0.5f;
         break;
     default:
         SearchHours = 2.0f;
@@ -1639,7 +1658,8 @@ void UMissionManagerSubsystem::HandleBaseAttackArrival(UStrategyVehicle* Vehicle
 }
 
 /** Creates mission, assigns crew, and launches or defers movement. */
-UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction, float ScheduledLaunchGameHours)
+UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction, float ScheduledLaunchGameHours,
+    UStrategySiteDefinition* ExpansionSite, const FText& ExpansionBaseName)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
 
@@ -1678,6 +1698,12 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     NewMission->AttackingFaction = AttackingFaction;
     NewMission->ScheduledLaunchGameHours = EffectiveLaunchHour;
     NewMission->bMovementActivated = false;
+
+    if (MissionType == EMissionType::BaseExpansion && ExpansionSite)
+    {
+        NewMission->TargetExpansionSite = ExpansionSite;
+        NewMission->PendingExpansionBaseName = ExpansionBaseName;
+    }
 
     ActiveMissions.Add(NewMission);
 
@@ -1770,6 +1796,146 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     }
 
     return NewMission;
+}
+
+/** Launches a single-vehicle BaseExpansion mission to race for and guard a site. */
+bool UMissionManagerSubsystem::StartBaseExpansionMission(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
+    UStrategySiteDefinition* TargetSite, FText BaseName, EFactionType Faction)
+{
+    if (!OriginBase || !Vehicle || !TargetSite)
+    {
+        return false;
+    }
+
+    UMissionGroup* Mission = StartMission(OriginBase, { Vehicle }, 0, {}, EMissionType::BaseExpansion,
+        Faction, -1.f, TargetSite, BaseName);
+
+    return Mission != nullptr && Mission->bMovementActivated;
+}
+
+/** Active + in-flight BaseExpansion missions for a faction. */
+int32 UMissionManagerSubsystem::CountActiveExpansionMissions(EFactionType Faction) const
+{
+    int32 Count = 0;
+    for (const UMissionGroup* Mission : ActiveMissions)
+    {
+        if (Mission && Mission->MissionType == EMissionType::BaseExpansion
+            && Mission->AttackingFaction == Faction
+            && Mission->Status == EMissionStatus::InProgress)
+        {
+            Count++;
+        }
+    }
+    return Count;
+}
+
+/** Parked + deferred-launch vehicles that may be reassigned to guard an expansion site. */
+TArray<UStrategyVehicle*> UMissionManagerSubsystem::GatherExpansionCandidateVehicles(UStrategyBase* Base) const
+{
+    TArray<UStrategyVehicle*> Candidates;
+
+    if (!Base)
+    {
+        return Candidates;
+    }
+
+    for (UStrategyFacility* Facility : Base->Facilities)
+    {
+        if (!Facility || !Facility->bIsOperational || !Facility->FacilityDefinition ||
+            Facility->FacilityDefinition->FacilityType != EFacilityType::Hanger)
+        {
+            continue;
+        }
+
+        for (UStrategyVehicle* Vehicle : Facility->ParkedVehicles)
+        {
+            if (!Vehicle || Vehicle->IsDestroyed())
+            {
+                continue;
+            }
+
+            if (Vehicle->GetMissionPhase() != EVehicleMissionPhase::Docked)
+            {
+                continue;
+            }
+
+            if (Vehicle->CurrentMission && Vehicle->CurrentMission->bMovementActivated)
+            {
+                continue;
+            }
+
+            if (Vehicle->CurrentRangeLeft <= 0.0f || Vehicle->NeedsRepair())
+            {
+                continue;
+            }
+
+            const int32 MaxHealth = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->MaxHealth : 100;
+            if (Vehicle->CurrentHealth < MaxHealth * 0.95f)
+            {
+                continue;
+            }
+
+            Candidates.Add(Vehicle);
+        }
+    }
+
+    return Candidates;
+}
+
+/** Removes a docked vehicle from a deferred mission so expansion can launch immediately. */
+bool UMissionManagerSubsystem::UnassignVehicleFromDeferredMission(UStrategyVehicle* Vehicle, bool bAllowDefensivePreempt)
+{
+    if (!Vehicle || Vehicle->IsDestroyed() || Vehicle->GetMissionPhase() != EVehicleMissionPhase::Docked)
+    {
+        return false;
+    }
+
+    UMissionGroup* Mission = Vehicle->CurrentMission;
+    if (!Mission || Mission->bMovementActivated || Mission->Status != EMissionStatus::InProgress)
+    {
+        return Vehicle->CurrentMission == nullptr;
+    }
+
+    const EMissionType MissionType = Mission->MissionType;
+    if (MissionType == EMissionType::Interception
+        || MissionType == EMissionType::Defensive)
+    {
+        if (!bAllowDefensivePreempt)
+        {
+            return false;
+        }
+    }
+
+    Mission->VehiclesInFleet.Remove(Vehicle);
+    Vehicle->CurrentMission = nullptr;
+
+    for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+    {
+        if (Soldier && Soldier->CurrentMission == Mission)
+        {
+            Soldier->CurrentMission = nullptr;
+        }
+    }
+    Vehicle->CurrentPassengers.Empty();
+
+    if (Mission->TargetContactId.IsValid())
+    {
+        if (URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>())
+        {
+            ContactMgr->UnmarkContactTargeted(Mission->TargetContactId);
+        }
+    }
+
+    if (Mission->VehiclesInFleet.Num() == 0)
+    {
+        ActiveMissions.Remove(Mission);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[MISSION] Preempted deferred %s for %s — reassigned to base expansion"),
+        *UEnum::GetValueAsString(MissionType),
+        Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"));
+
+    return true;
 }
 
 /** Resolves wreck site from explicit mission target, lead ActiveSalvageSite, or waypoint/position lookup. */
@@ -2029,19 +2195,28 @@ void UMissionManagerSubsystem::HandleVehicleDestroyed(UStrategyVehicle* Vehicle,
         return;
     }
 
-    if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+
+    if (Vehicle->CurrentMission && Vehicle->CurrentMission->MissionType == EMissionType::BaseExpansion && BaseMgr)
     {
-        if (!Campaign->bSalvageSitesEnabled)
+        UStrategyBase* ExpansionBase = Vehicle->CurrentMission->ExpansionBaseUnderConstruction.Get();
+        if (!ExpansionBase && Vehicle->CurrentMission->TargetExpansionSite)
         {
-            return;
+            ExpansionBase = BaseMgr->FindExpansionBaseAtSite(Vehicle->CurrentMission->TargetExpansionSite);
+        }
+
+        if (ExpansionBase && !BaseMgr->IsCommandCenterOperational(ExpansionBase))
+        {
+            BaseMgr->CancelExpansionConstruction(ExpansionBase, Vehicle->CurrentMission->TargetExpansionSite);
+            Vehicle->CurrentMission->ExpansionBaseUnderConstruction = nullptr;
         }
     }
 
-    Vehicle->bWreckSalvageProcessed = true;
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    const bool bSalvageSitesEnabled = !Campaign || Campaign->bSalvageSitesEnabled;
 
-    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     UStrategySiteDefinition* WreckSite = nullptr;
-    if (BaseMgr)
+    if (bSalvageSitesEnabled && BaseMgr)
     {
         WreckSite = BaseMgr->CreateSalvageSite(Vehicle->CurrentPosition, Vehicle);
     }
@@ -2090,10 +2265,15 @@ void UMissionManagerSubsystem::HandleVehicleDestroyed(UStrategyVehicle* Vehicle,
         ? TEXT("combat")
         : TEXT("destroyed");
 
-    UE_LOG(LogTemp, Display, TEXT("[WRECK] Vehicle '%s' %s — salvage site created at (%.0f, %.0f)"),
-        Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Unknown"),
-        *DestroyContext,
-        Vehicle->CurrentPosition.X, Vehicle->CurrentPosition.Y);
+    if (WreckSite)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[WRECK] Vehicle '%s' %s — salvage site created at (%.0f, %.0f)"),
+            Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Unknown"),
+            *DestroyContext,
+            Vehicle->CurrentPosition.X, Vehicle->CurrentPosition.Y);
+    }
+
+    Vehicle->bWreckSalvageProcessed = true;
 }
 
 /** Launches mission with optional vehicle subset override. */
@@ -2177,8 +2357,11 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         Vehicle->CurrentPassengers.Empty();
         Vehicle->CurrentMission = nullptr;
         Vehicle->ActiveSalvageSite = nullptr;
+        Vehicle->ActiveExpansionSite = nullptr;
+        Vehicle->bExpansionGuardActive = false;
     }
 
+    Mission->ExpansionBaseUnderConstruction = nullptr;
     Mission->VehiclesLost = DestroyedVehicles;
     Mission->SoldiersKilled = 0;
 
