@@ -1224,29 +1224,72 @@ bool UAIControllerSubsystem::ShouldEngageVehicle(UStrategyVehicle* DetectingVehi
         return false;
     }
 
-    if (DetectingVehicle->GetEquippedWeapons().Num() == 0)
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    const int32 MinOffense = Campaign ? Campaign->MinOffenseToEngage : 10;
+    if (DetectingVehicle->GetVehicleOffensiveRating() < MinOffense)
     {
         return false;
     }
 
-    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
-    const int32 MinOffense = Campaign ? Campaign->MinOffenseToEngage : 10;
-    return DetectingVehicle->GetVehicleOffensiveRating() >= MinOffense;
+    if (DetectingVehicle->VehicleDefinition && IsCombatVehicleType(DetectingVehicle->VehicleDefinition->VehicleType))
+    {
+        return true;
+    }
+
+    if (DetectingVehicle->CurrentMission)
+    {
+        const EMissionType MissionType = DetectingVehicle->CurrentMission->MissionType;
+        if (MissionType == EMissionType::Offensive
+            || MissionType == EMissionType::Interception
+            || MissionType == EMissionType::Defensive)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool UAIControllerSubsystem::ShouldPrioritizeEnRouteIntercept(UStrategyVehicle* DetectingVehicle,
+    UStrategyVehicle* DetectedVehicle) const
+{
+    if (!DetectingVehicle || !DetectedVehicle)
+    {
+        return false;
+    }
+
+    auto IsInboundStrike = [](const UStrategyVehicle* Vehicle) -> bool
+    {
+        if (!Vehicle || !Vehicle->CurrentMission || !Vehicle->CurrentMission->bMovementActivated)
+        {
+            return false;
+        }
+
+        return Vehicle->CurrentMission->MissionType == EMissionType::Offensive
+            || Vehicle->CurrentMission->MissionType == EMissionType::Interception;
+    };
+
+    return IsInboundStrike(DetectingVehicle) || IsInboundStrike(DetectedVehicle);
 }
 
 void UAIControllerSubsystem::HandleVehicleDetection(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle)
 {
     if (!DetectingVehicle || !DetectedVehicle) return;
 
-    UE_LOG(LogTemp, Display, TEXT("[DETECT] %s detected enemy vehicle %s (offense: %d, armed: %s)"),
+    const bool bCanEngage = ShouldEngageVehicle(DetectingVehicle, DetectedVehicle);
+    const bool bInterceptPriority = ShouldPrioritizeEnRouteIntercept(DetectingVehicle, DetectedVehicle);
+
+    UE_LOG(LogTemp, Display, TEXT("[DETECT] %s detected enemy vehicle %s (offense: %d, engage: %s%s)"),
         DetectingVehicle->VehicleDefinition ? *DetectingVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectingVehicle),
         DetectedVehicle->VehicleDefinition ? *DetectedVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectedVehicle),
         DetectingVehicle->GetVehicleOffensiveRating(),
-        DetectingVehicle->GetEquippedWeapons().Num() > 0 ? TEXT("yes") : TEXT("no"));
+        bCanEngage ? TEXT("yes") : TEXT("no"),
+        bInterceptPriority ? TEXT(", en-route intercept") : TEXT(""));
 
-    if (ShouldEngageVehicle(DetectingVehicle, DetectedVehicle))
+    if (bCanEngage)
     {
-        UE_LOG(LogTemp, Display, TEXT("[COMBAT] Engagement started: %s attacking %s"),
+        UE_LOG(LogTemp, Display, TEXT("%s %s attacking %s"),
+            bInterceptPriority ? TEXT("[COMBAT] En-route intercept:") : TEXT("[COMBAT] Engagement started:"),
             DetectingVehicle->VehicleDefinition ? *DetectingVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectingVehicle),
             DetectedVehicle->VehicleDefinition ? *DetectedVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectedVehicle));
         DetectingVehicle->SetBehavior(EVehicleBehavior::Attacking, DetectedVehicle);

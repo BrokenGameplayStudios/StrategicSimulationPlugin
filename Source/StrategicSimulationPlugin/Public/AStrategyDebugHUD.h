@@ -72,6 +72,7 @@ private:
     void DrawInspectedSiteHighlight();
     void AppendCommandCenterStats(UStrategyBase* Base, FString& DebugText);
     void DrawSalvageSite(UStrategySiteDefinition* Site, int32 SiteIndex, float Scale, const UBaseManagerSubsystem* BaseManager);
+    void DrawRadarBlockerZones();
     void DrawSiteTriangle(const FVector2D& ScreenPos, float Size, float LineThickness, const FLinearColor& Color);
     static FString BuildFacilityListText(UStrategyBase* Base);
 };

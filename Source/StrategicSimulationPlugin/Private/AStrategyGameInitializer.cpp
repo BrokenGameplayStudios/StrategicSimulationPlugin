@@ -1,11 +1,19 @@
 #include "AStrategyGameInitializer.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UAIControllerSubsystem.h"
+#include "URadarTerrainSubsystem.h"
 #include "Engine/Engine.h"
 
 AStrategyGameInitializer::AStrategyGameInitializer()
 {
     PrimaryActorTick.bCanEverTick = false;
+
+    FRadarBlockerZone CentralRidge;
+    CentralRidge.Shape = ERadarBlockerShape::Rect;
+    CentralRidge.Center = FVector2D(960.0f, 540.0f);
+    CentralRidge.HalfExtent = FVector2D(90.0f, 220.0f);
+    CentralRidge.Label = TEXT("Central Ridge");
+    RadarBlockerZones.Add(CentralRidge);
 }
 
 void AStrategyGameInitializer::BeginPlay()
@@ -163,6 +171,11 @@ void AStrategyGameInitializer::BeginPlay()
     Campaign->bAllowDebugExecCommands = bAllowDebugExecCommands;
     Campaign->bRadarLOSEnabled = bRadarLOSEnabled;
     Campaign->bStaleIntelEnabled = bStaleIntelEnabled;
+
+    if (URadarTerrainSubsystem* TerrainMgr = GetGameInstance()->GetSubsystem<URadarTerrainSubsystem>())
+    {
+        TerrainMgr->SetBlockerZones(RadarBlockerZones);
+    }
 
     UE_LOG(LogTemp, Display, TEXT("[MAP] Initializer applied map settings → Sites: %d | Site spacing: %.0f | Map: %.0fx%.0f | Border: %.0f | Faction separation: %.0f | Max bases/faction: %d"),
         NumberOfStrategicSites, MinimumDistanceBetweenSites, LogicalMapWidth, LogicalMapHeight,

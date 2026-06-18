@@ -4,6 +4,7 @@
 #include "Engine/Engine.h"
 #include "UMissionManagerSubsystem.h"
 #include "UFactionIntelSubsystem.h"
+#include "URadarTerrainSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
@@ -457,6 +458,11 @@ UMissionManagerSubsystem* UStrategyCampaignSubsystem::GetMissionManager() const 
 UFactionIntelSubsystem* UStrategyCampaignSubsystem::GetFactionIntelManager() const
 {
     return GetGameInstance() ? GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>() : nullptr;
+}
+
+URadarTerrainSubsystem* UStrategyCampaignSubsystem::GetRadarTerrainManager() const
+{
+    return GetGameInstance() ? GetGameInstance()->GetSubsystem<URadarTerrainSubsystem>() : nullptr;
 }
 
 void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)

@@ -1,4 +1,5 @@
 #include "UStrategyVehicle.h"
+#include "URadarTerrainSubsystem.h"
 #include "UStrategyBase.h"
 #include "UAIControllerSubsystem.h"
 #include "UStrategyFacility.h"
@@ -321,7 +322,7 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
         break;
     case EMissionType::Interception:
     case EMissionType::Offensive:
-        CurrentBehavior = EVehicleBehavior::Attacking;
+        CurrentBehavior = EVehicleBehavior::Patrolling;
         break;
     case EMissionType::Defensive:
         CurrentBehavior = EVehicleBehavior::Patrolling;
@@ -788,6 +789,7 @@ void UStrategyVehicle::PerformRadarPing()
     if (UBaseManagerSubsystem* BaseManager = GI->GetSubsystem<UBaseManagerSubsystem>())
     {
         UFactionIntelSubsystem* IntelMgr = GI->GetSubsystem<UFactionIntelSubsystem>();
+        URadarTerrainSubsystem* TerrainMgr = GI->GetSubsystem<URadarTerrainSubsystem>();
 
         for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
         {
@@ -797,6 +799,11 @@ void UStrategyVehicle::PerformRadarPing()
             }
 
             if (FVector2D::Distance(Site->Location, CurrentPosition) > GetRadarRange())
+            {
+                continue;
+            }
+
+            if (TerrainMgr && !TerrainMgr->HasRadarLineOfSight(CurrentPosition, Site->Location))
             {
                 continue;
             }
@@ -916,6 +923,14 @@ void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
         if (UMissionManagerSubsystem* MissionMgr = GI->GetSubsystem<UMissionManagerSubsystem>())
         {
             CurrentGameHours = MissionMgr->GetCurrentGameHours();
+        }
+
+        if (URadarTerrainSubsystem* TerrainMgr = GI->GetSubsystem<URadarTerrainSubsystem>())
+        {
+            if (!TerrainMgr->HasRadarLineOfSight(CurrentPosition, OtherVehicle->CurrentPosition))
+            {
+                return;
+            }
         }
     }
 

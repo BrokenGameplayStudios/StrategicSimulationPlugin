@@ -698,8 +698,19 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
         return true;
     }
 
-    case EMissionType::Offensive:
     case EMissionType::Defensive:
+    {
+        const float GuardRoundTrip = FMath::Min(Vehicle->CurrentRangeLeft, 500.0f);
+        OutTarget = PickPatrolPointWithinRange(Origin, GuardRoundTrip, MinX, MinY, MaxX, MaxY);
+
+        UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → guard patrol near '%s' at (%.0f, %.0f)"),
+            Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+            Vehicle->HomeBase ? *Vehicle->HomeBase->BaseName.ToString() : TEXT("Unknown"),
+            OutTarget.X, OutTarget.Y);
+        return true;
+    }
+
+    case EMissionType::Offensive:
     {
         TArray<UStrategyBase*> InRangeEnemyBases;
         for (UStrategyBase* EnemyBase : BaseMgr->GetBases(EnemyFaction))

@@ -7,6 +7,7 @@
 #include "USoldierClassDatabase.h"
 #include "UResearchDatabase.h"
 #include "UVehicleDatabase.h" // NEW
+#include "StrategicSimulationTypes.h"
 #include "AStrategyGameInitializer.generated.h"
 
 UCLASS()
@@ -124,6 +125,10 @@ public:
     /** Enables stale per-faction site intel when PR-9 subsystem is active. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel")
     bool bStaleIntelEnabled = true;
+
+    /** Mountain / terrain zones that block radar line-of-sight (PR-10). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel")
+    TArray<FRadarBlockerZone> RadarBlockerZones;
 
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")

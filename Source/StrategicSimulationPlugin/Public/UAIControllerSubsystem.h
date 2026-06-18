@@ -86,6 +86,7 @@ private:
     UVehicleDefinition* SelectVehicleDefinitionToBuild(EFactionType Faction) const;
     EMissionType PickAIMissionTypeForVehicle(UStrategyVehicle* Vehicle, int32 CurrentDay) const;
     bool ShouldEngageVehicle(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle) const;
+    bool ShouldPrioritizeEnRouteIntercept(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle) const;
 
     static bool IsReconVehicleType(EVehicleType Type);
     static bool IsCombatVehicleType(EVehicleType Type);

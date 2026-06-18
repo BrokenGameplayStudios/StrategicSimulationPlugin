@@ -173,6 +173,37 @@ struct FSoldierStats
     int32 Mobility = 12;
 };
 
+/** Mountain / terrain blocker shape for radar LOS (PR-10). */
+UENUM(BlueprintType)
+enum class ERadarBlockerShape : uint8
+{
+    Circle  UMETA(DisplayName = "Circle"),
+    Rect    UMETA(DisplayName = "Rectangle")
+};
+
+USTRUCT(BlueprintType)
+struct FRadarBlockerZone
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar LOS")
+    ERadarBlockerShape Shape = ERadarBlockerShape::Circle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar LOS")
+    FVector2D Center = FVector2D::ZeroVector;
+
+    /** Radius for circle blockers (logical map pixels). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar LOS", meta = (ClampMin = "10.0", ClampMax = "800.0"))
+    float Radius = 120.0f;
+
+    /** Half-extents for rectangle blockers (logical map pixels). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar LOS")
+    FVector2D HalfExtent = FVector2D(80.0f, 60.0f);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar LOS")
+    FString Label;
+};
+
 // === NEW: Mission Types ===
 UENUM(BlueprintType)
 enum class EMissionType : uint8

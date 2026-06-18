@@ -6,6 +6,8 @@
 #include "StrategicSiteDefinition.h"
 #include "UStrategicSimulationDisplayHelpers.h"
 #include "UFactionIntelSubsystem.h"
+#include "URadarTerrainSubsystem.h"
+#include "UStrategyCampaignSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategySoldier.h"
 #include "UMissionGroup.h"
@@ -279,6 +281,7 @@ void AStrategyDebugHUD::DrawHUD()
     }
 
     // === PHASE 1: Draw ALL potential nodes + fog-of-war markers ===
+    DrawRadarBlockerZones();
     DrawAllPotentialSites();
 
     DrawInspectedSiteHighlight();
@@ -290,8 +293,9 @@ void AStrategyDebugHUD::DrawHUD()
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths"), 50, 140, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 170, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE/RED TRIANGLE = Salvage Wreck (destroyed vehicle faction)"), 50, 200, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 230, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 260, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GRAY = Radar LOS blocker zones (mountains)"), 50, 230, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 260, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 290, 1.0f, 1.0f, FFontRenderInfo());
 
     // === SITE INSPECTOR (Bottom of screen) ===
     if (SelectedSiteIndex >= 0)
@@ -514,6 +518,49 @@ void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 Sit
         {
             Canvas->K2_DrawBox(ScreenPos + FVector2D(4.0f * Scale, -12.0f * Scale),
                 FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Red);
+        }
+    }
+}
+
+void AStrategyDebugHUD::DrawRadarBlockerZones()
+{
+    if (!Canvas || !bShowStrategyMap)
+    {
+        return;
+    }
+
+    URadarTerrainSubsystem* TerrainMgr = GetGameInstance()->GetSubsystem<URadarTerrainSubsystem>();
+    if (!TerrainMgr || !TerrainMgr->IsRadarLOSEnabled())
+    {
+        return;
+    }
+
+    const float Scale = GetCurrentMapScale();
+    const FLinearColor BlockerColor(0.45f, 0.45f, 0.45f, 0.55f);
+
+    for (const FRadarBlockerZone& Zone : TerrainMgr->GetBlockerZones())
+    {
+        if (Zone.Shape == ERadarBlockerShape::Circle)
+        {
+            const FVector2D ScreenCenter = GetScreenPosition(Zone.Center);
+            const float ScreenRadius = Zone.Radius * Scale;
+            const int32 Segments = 24;
+            FVector2D PreviousPoint = ScreenCenter + FVector2D(ScreenRadius, 0.0f);
+
+            for (int32 Segment = 1; Segment <= Segments; ++Segment)
+            {
+                const float Angle = (2.0f * PI * Segment) / Segments;
+                const FVector2D NextPoint = ScreenCenter + FVector2D(FMath::Cos(Angle), FMath::Sin(Angle)) * ScreenRadius;
+                Canvas->K2_DrawLine(PreviousPoint, NextPoint, 2.0f, BlockerColor);
+                PreviousPoint = NextPoint;
+            }
+        }
+        else
+        {
+            const FVector2D TopLeft = GetScreenPosition(Zone.Center - Zone.HalfExtent);
+            const FVector2D BottomRight = GetScreenPosition(Zone.Center + Zone.HalfExtent);
+            const FVector2D Size = BottomRight - TopLeft;
+            Canvas->K2_DrawBox(TopLeft, Size, 2.0f, BlockerColor);
         }
     }
 }

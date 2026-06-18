@@ -190,6 +190,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Managers")
     class UFactionIntelSubsystem* GetFactionIntelManager() const;
 
+    UFUNCTION(BlueprintCallable, Category = "Managers")
+    class URadarTerrainSubsystem* GetRadarTerrainManager() const;
+
     UFUNCTION(BlueprintCallable, Category = "Databases")
     class UItemDatabase* GetItemDatabase() const { return ItemDatabaseAsset.Get(); }
 

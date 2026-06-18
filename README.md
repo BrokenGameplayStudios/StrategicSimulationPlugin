@@ -36,11 +36,12 @@ This plugin implements a turn-of-time strategic simulation layer: factions build
 - Debug strategic map HUD (bases, vehicles, paths, radar circles)
 - Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
 
-### In progress (PR-10+)
+### In progress (PR-11+)
 
-- **Radar & intel** — LOS blocker zones, base passive radar, contact tracks, patrol/guard and interception ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
+- **Radar & intel** — base passive radar, contact tracks, patrol/guard and interception ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
 - PR-8 shipped: docs wiki hub, `bAllowDebugExecCommands`, `bRadarLOSEnabled`, `bStaleIntelEnabled` feature flags
 - PR-9 shipped: `UFactionIntelSubsystem`, stale wreck tooltips, save schema v3 intel arrays
+- PR-10 shipped: `URadarTerrainSubsystem`, LOS blocker zones, combat engagement fix (gunship `AttackPower`), defensive guard patrols
 
 ### What is not implemented yet
 
@@ -572,7 +573,13 @@ Campaign defaults `bAllowDebugExecCommands` to `false` until initializer runs. S
 
 v2 saves seed intel from discovery lists on load. Toggle off via `bStaleIntelEnabled` to restore ground-truth UI.
 
-### 2.17 Build dependencies
+### 2.17 Radar LOS (PR-10)
+
+`URadarTerrainSubsystem` stores `FRadarBlockerZone` shapes (circle / rect) from `AStrategyGameInitializer::RadarBlockerZones`. When `bRadarLOSEnabled`, site discovery and vehicle detection require `HasRadarLineOfSight` between ping origin and target. Blocked pings log `[RADAR LOS]` at verbose level; debug HUD draws zones in gray.
+
+Vehicular combat: gunships engage when `GetVehicleOffensiveRating() >= MinOffenseToEngage` (intrinsic `AttackPower` counts). Offensive / interception missions log `[COMBAT] En-route intercept:` when strike fleets meet. `Defensive` missions patrol near their origin base instead of targeting enemy bases.
+
+### 2.18 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 
