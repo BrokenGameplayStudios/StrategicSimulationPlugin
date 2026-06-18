@@ -214,11 +214,13 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
 
     if (CommandFacility)
     {
+        const int32 BuildDays = CommandDef ? FMath::Max(1, CommandDef->BuildTimeDays) : 4;
         CommandFacility->bIsOperational = false;
+        CommandFacility->BuildProgressDays = BuildDays;
         NewBase->UpdatePowerFromFacilities();
 
         UE_LOG(LogTemp, Display, TEXT("[FACILITY] Command Center construction started in new base '%s' (%d days)"),
-            *NewBase->BaseName.ToString(), CommandDef ? CommandDef->BuildTimeDays : 4);
+            *NewBase->BaseName.ToString(), BuildDays);
     }
 
     UE_LOG(LogTemp, Display, TEXT("[AI] Expanded to new base '%s'"), *NewBase->BaseName.ToString());
@@ -351,15 +353,21 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
 
     UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Facility object created and added to base"));
 
-    if (FacilityDef->BuildTimeDays > 0)
+    if (FacilityDef->BuildTimeDays <= 0)
+    {
+        NewFacility->bIsOperational = true;
+        NewFacility->BuildProgressDays = 0;
+        UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Instant operational facility (0 build days)"));
+    }
+    else if (FacilityDef->FacilityType != EFacilityType::Command)
     {
         NewFacility->StartConstruction(FacilityDef);
         UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] StartConstruction called (BuildTime = %d days)"), FacilityDef->BuildTimeDays);
     }
     else
     {
-        NewFacility->bIsOperational = true;
-        UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Instant operational facility (0 build days)"));
+        UE_LOG(LogTemp, Display, TEXT("[BUILD DEBUG] Command Center using day countdown only (%d days remaining)"),
+            NewFacility->BuildProgressDays);
     }
 
     OnFacilityListChanged.Broadcast(Faction);
@@ -459,6 +467,12 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
         for (UStrategyFacility* Fac : Base->Facilities)
         {
             if (!Fac || Fac->bIsOperational || !Fac->FacilityDefinition) continue;
+
+            if (Fac->FacilityDefinition->FacilityType != EFacilityType::Command
+                && Fac->ActiveProductionJobs.Num() > 0)
+            {
+                continue;
+            }
 
             Fac->BuildProgressDays--;
 
@@ -1457,7 +1471,7 @@ bool UBaseManagerSubsystem::IsCommandCenterOperational(const UStrategyBase* Base
 
     for (const UStrategyFacility* Fac : Base->Facilities)
     {
-        if (Fac && Fac->bIsOperational && Fac->FacilityDefinition
+        if (Fac && Fac->bIsOperational && Fac->BuildProgressDays <= 0 && Fac->FacilityDefinition
             && Fac->FacilityDefinition->FacilityType == EFacilityType::Command)
         {
             return true;

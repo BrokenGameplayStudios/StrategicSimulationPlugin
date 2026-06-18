@@ -12,6 +12,11 @@ User-facing changes to the Strategic Simulation Plugin. For setup and usage, see
 - Blueprint events: `OnBaseExpansionOrdered`, `OnBaseExpansionClaimed`, `OnBaseExpansionCancelled`, `OnBaseExpansionGuardComplete`
 - Tuning: `MaxActiveExpansionMissionsPerFaction`, `bBaseExpansionRequiresVehicleGuard`
 
+### Construction timing
+- Forward-base Command Centers now respect `BuildTimeDays` from the facility definition (initial starting bases remain instant)
+- Fixed construction advancing up to 3× per day because AI duplicated `AdvanceFacilityConstruction` calls
+- Command Centers use a single day-countdown path (no parallel production-queue build that could finish early)
+
 ### Radar contacts
 - First-detection marker placed on the **passive radar ring** (backtracked along flight path), not at the vehicle's ping position
 - Debug HUD contact diamonds use uniform size and opacity for Human and Enemy tracks

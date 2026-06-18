@@ -49,13 +49,6 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("   → Human AI enabled: %s"), bSimulateHumanAI ? TEXT("YES") : TEXT("NO"));
     UE_LOG(LogTemp, Display, TEXT("   → Enemy AI enabled: %s"), bSimulateEnemyAI ? TEXT("YES") : TEXT("NO"));
 
-    if (UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>())
-    {
-        BaseMgr->AdvanceFacilityConstruction(EFactionType::Enemy);
-        BaseMgr->AdvanceFacilityConstruction(EFactionType::Human);
-        BaseMgr->AdvanceAllConstruction();
-    }
-
     if (bSimulateHumanAI)
     {
         UE_LOG(LogTemp, Display, TEXT("[AI] Human AI — Calling RunAIForFaction..."));
@@ -123,7 +116,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     }
 
     // === PER-BASE DEVELOPMENT — FOCUS BASE ===
-    BaseMgr->AdvanceFacilityConstruction(Faction);
     ResourceMgr->ApplyFacilityIncome(Faction);
 
     const TArray<UStrategyBase*>& AllBases = BaseMgr->GetBases(Faction);
