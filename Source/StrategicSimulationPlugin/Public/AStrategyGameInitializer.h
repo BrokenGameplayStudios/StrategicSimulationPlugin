@@ -113,6 +113,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "100.0", ClampMax = "2000.0"))
     float LoserSalvageMaxDistance = 700.0f;
 
+    /** Enables AStrategyDebugHUD console Exec commands (ToggleStrategyMap, ShowSiteInfo, etc.). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel")
+    bool bAllowDebugExecCommands = true;
+
+    /** Enables LOS checks against mountain blocker zones when PR-10 terrain subsystem is active. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel")
+    bool bRadarLOSEnabled = true;
+
+    /** Enables stale per-faction site intel when PR-9 subsystem is active. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel")
+    bool bStaleIntelEnabled = true;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;

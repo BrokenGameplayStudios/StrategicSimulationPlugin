@@ -107,6 +107,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "14"))
     int32 SalvageCombatMemoryDays = 3;
 
+    /** When false, AStrategyDebugHUD Exec commands are no-ops (shipping safety). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
+    bool bAllowDebugExecCommands = false;
+
+    /** Master toggle for radar line-of-sight checks against terrain blockers (PR-10). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
+    bool bRadarLOSEnabled = true;
+
+    /** Master toggle for per-faction stale site intel snapshots (PR-9). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
+    bool bStaleIntelEnabled = true;
+
     /** Days a wreck remains on the map before auto-removal if not salvaged. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "90"))
     int32 SalvageWreckExpiryDays = 7;

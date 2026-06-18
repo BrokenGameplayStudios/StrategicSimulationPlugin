@@ -1319,6 +1319,12 @@ bool UBaseManagerSubsystem::CanBuildBaseOnSite(EFactionType Faction, UStrategySi
 {
     if (!Site) return false;
 
+    if (Site->SiteType == EStrategySiteType::SalvageSite)
+    {
+        ensureMsgf(false, TEXT("CanBuildBaseOnSite must not be called on SalvageSite '%s'"), *Site->SiteName);
+        return false;
+    }
+
     if (Site->SiteType != EStrategySiteType::PotentialBase)
     {
         return false;

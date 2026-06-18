@@ -12,6 +12,29 @@
 #include "UStrategyVehicle.h"
 #include "Engine/Canvas.h"
 
+namespace
+{
+    bool IsDebugExecAllowed(const UGameInstance* GameInstance)
+    {
+        if (!GameInstance)
+        {
+            return false;
+        }
+
+        const UStrategyCampaignSubsystem* Campaign = GameInstance->GetSubsystem<UStrategyCampaignSubsystem>();
+        if (!Campaign)
+        {
+#if UE_BUILD_SHIPPING
+            return false;
+#else
+            return true;
+#endif
+        }
+
+        return Campaign->bAllowDebugExecCommands;
+    }
+}
+
 AStrategyDebugHUD::AStrategyDebugHUD()
 {
     PrimaryActorTick.bCanEverTick = true;
@@ -159,18 +182,36 @@ void AStrategyDebugHUD::AppendCommandCenterStats(UStrategyBase* Base, FString& D
 
 void AStrategyDebugHUD::ToggleDebugHUD()
 {
+    if (!IsDebugExecAllowed(GetGameInstance()))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[DEBUG HUD] ToggleDebugHUD blocked — set bAllowDebugExecCommands on campaign or initializer"));
+        return;
+    }
+
     bDebugVisible = !bDebugVisible;
     UE_LOG(LogTemp, Display, TEXT("Debug HUD %s"), bDebugVisible ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
 void AStrategyDebugHUD::ToggleStrategyMap()
 {
+    if (!IsDebugExecAllowed(GetGameInstance()))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[DEBUG HUD] ToggleStrategyMap blocked — set bAllowDebugExecCommands on campaign or initializer"));
+        return;
+    }
+
     bShowStrategyMap = !bShowStrategyMap;
     UE_LOG(LogTemp, Display, TEXT("[DEBUG HUD] Strategy Map %s"), bShowStrategyMap ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
 void AStrategyDebugHUD::ShowSiteInfo(int32 SiteIndex)
 {
+    if (!IsDebugExecAllowed(GetGameInstance()))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[DEBUG HUD] ShowSiteInfo blocked — set bAllowDebugExecCommands on campaign or initializer"));
+        return;
+    }
+
     UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (!BaseManager) return;
 
@@ -186,6 +227,12 @@ void AStrategyDebugHUD::ShowSiteInfo(int32 SiteIndex)
 
 void AStrategyDebugHUD::ClearSiteInfo()
 {
+    if (!IsDebugExecAllowed(GetGameInstance()))
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[DEBUG HUD] ClearSiteInfo blocked — set bAllowDebugExecCommands on campaign or initializer"));
+        return;
+    }
+
     SelectedSiteIndex = -1;
     UE_LOG(LogTemp, Display, TEXT("[Debug HUD] Site inspector cleared"));
 }

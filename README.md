@@ -4,6 +4,8 @@
 
 **Broken Gameplay Studios** · Runtime module · Requires **CommonUI**
 
+**Design wiki:** [`docs/README.md`](docs/README.md) — linked PR plans (salvage PR-1–7, radar/intel PR-8–14)
+
 | Audience | Section |
 |----------|---------|
 | **Designers / level setup** | [Part I — Designer Guide](#part-i--designer-guide) |
@@ -33,6 +35,11 @@ This plugin implements a turn-of-time strategic simulation layer: factions build
 - Salvage missions (`EMissionType::Salvage`) — Transport/Support/Scout recover wreck resources hourly
 - Debug strategic map HUD (bases, vehicles, paths, radar circles)
 - Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
+
+### In progress (PR-8+)
+
+- **Radar & intel** — stale site snapshots, LOS blocker zones, base passive radar, contact tracks, patrol/guard and interception ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
+- PR-8 shipped: docs wiki hub, `bAllowDebugExecCommands`, `bRadarLOSEnabled`, `bStaleIntelEnabled` feature flags
 
 ### What is not implemented yet
 
@@ -539,7 +546,19 @@ When Human and Enemy both have active `Salvage` missions at the same `SiteId`, t
 
 Payload: `FSalvageContestForceSnapshot` per faction (vehicles, soldiers, origin base). Clock resumes after `ResolveSalvageContest`.
 
-### 2.15 Build dependencies
+### 2.15 Radar & intel foundation (PR-8)
+
+Feature flags on `AStrategyGameInitializer` (copied to campaign). Full plan: [`docs/design-radar-intel-patrol.md`](docs/design-radar-intel-patrol.md).
+
+| Setting | Default (initializer) | Role |
+|---------|----------------------|------|
+| `bAllowDebugExecCommands` | `true` | Enables debug HUD Exec (`ToggleStrategyMap`, `ShowSiteInfo`, …) |
+| `bRadarLOSEnabled` | `true` | Master toggle for terrain LOS (wired PR-10) |
+| `bStaleIntelEnabled` | `true` | Master toggle for stale site intel (wired PR-9) |
+
+Campaign defaults `bAllowDebugExecCommands` to `false` until initializer runs. Shipping builds should leave it off unless cheats are intended.
+
+### 2.16 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 
