@@ -21,7 +21,8 @@ public class StrategicSimulationPlugin : ModuleRules
         PrivateDependencyModuleNames.AddRange(
             new string[]
             {
-                // add more later if needed
+                "Slate",
+                "SlateCore"
             }
         );
     }

@@ -86,6 +86,10 @@ public:
     bool IsSiteTargetedByActiveMissions(const class UStrategySiteDefinition* Site,
         const UMissionGroup* IgnoreMission = nullptr) const;
 
+    /** Clears in-flight missions and vehicle movement state before a site-map load (PR-4 QA path). */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Save")
+    void ClearRuntimeMissionStateForSiteMapLoad();
+
 private:
     /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
     float CalculateFleetEffectiveness(const UMissionGroup* Mission) const;

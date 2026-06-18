@@ -6,6 +6,7 @@
 #include "UStrategyFacility.h"
 #include "UFacilityDefinition.h"
 #include "StrategicSiteDefinition.h"
+#include "UStrategySaveGame.h"
 #include "UStrategyBase.h"
 #include "UTimeManagerSubsystem.h"
 #include "UBaseManagerSubsystem.generated.h"
@@ -113,6 +114,12 @@ public:
     void RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired = false);
 
     void ProcessSalvageSiteExpiry(int32 CurrentSimulationDay);
+
+    UFUNCTION(BlueprintCallable, Category = "Expansion|Save")
+    TArray<FStrategySiteSaveData> SerializeAllSites() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Expansion|Save")
+    void DeserializeAllSites(const TArray<FStrategySiteSaveData>& SavedSites);
 
     /** Attempts to build a new base on a discovered site. Returns true if successful. */
     UFUNCTION(BlueprintCallable, Category = "Base Expansion")

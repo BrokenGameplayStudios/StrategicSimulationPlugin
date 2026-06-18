@@ -11,6 +11,7 @@
 #include "USoldierManagerSubsystem.h"
 #include "UMissionManagerSubsystem.h"
 #include "UTimeManagerSubsystem.h"
+#include "UStrategySaveGame.h"
 
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -541,6 +542,97 @@ void UBaseManagerSubsystem::ProcessSalvageSiteExpiry(int32 CurrentSimulationDay)
     {
         RemoveSalvageSite(Site, true);
     }
+}
+
+TArray<FStrategySiteSaveData> UBaseManagerSubsystem::SerializeAllSites() const
+{
+    TArray<FStrategySiteSaveData> Result;
+    Result.Reserve(AllPotentialSites.Num());
+
+    for (const UStrategySiteDefinition* Site : AllPotentialSites)
+    {
+        if (!Site)
+        {
+            continue;
+        }
+
+        FStrategySiteSaveData Data;
+        Data.SiteId = Site->SiteId;
+        Data.Location = Site->Location;
+        Data.SiteType = Site->SiteType;
+        Data.WreckOwnerFaction = Site->WreckOwnerFaction;
+        Data.SiteName = Site->SiteName;
+        Data.MaxResources = Site->MaxResources;
+        Data.CurrentResources = Site->CurrentResources;
+        Data.bHasBeenUsed = Site->bHasBeenUsed;
+        Data.SalvageState = Site->SalvageState;
+        Data.CreatedOnSimulationDay = Site->CreatedOnSimulationDay;
+        Data.SalvageExpiresOnDay = Site->SalvageExpiresOnDay;
+        Data.KIACrashCount = Site->KIACrashCount;
+        Data.KnownFactions = Site->KnownFactions;
+        Data.bDiscoveredByHuman = DiscoveredSitesHuman.Contains(Site);
+        Data.bDiscoveredByEnemy = DiscoveredSitesEnemy.Contains(Site);
+
+        const FSoftObjectPath VehiclePath = Site->SourceVehicleDefinition.ToSoftObjectPath();
+        if (VehiclePath.IsValid())
+        {
+            Data.SourceVehicleDefinitionPath = VehiclePath;
+        }
+
+        Result.Add(Data);
+    }
+
+    return Result;
+}
+
+void UBaseManagerSubsystem::DeserializeAllSites(const TArray<FStrategySiteSaveData>& SavedSites)
+{
+    AllPotentialSites.Empty();
+    DiscoveredSitesHuman.Empty();
+    DiscoveredSitesEnemy.Empty();
+
+    for (const FStrategySiteSaveData& Data : SavedSites)
+    {
+        if (Data.SalvageState == ESalvageSiteState::Removed)
+        {
+            continue;
+        }
+
+        UStrategySiteDefinition* Site = NewObject<UStrategySiteDefinition>(this);
+        Site->SiteId = Data.SiteId;
+        Site->Location = Data.Location;
+        Site->SiteType = Data.SiteType;
+        Site->WreckOwnerFaction = Data.WreckOwnerFaction;
+        Site->SiteName = Data.SiteName;
+        Site->MaxResources = Data.MaxResources;
+        Site->CurrentResources = Data.CurrentResources;
+        Site->bHasBeenUsed = Data.bHasBeenUsed;
+        Site->SalvageState = Data.SalvageState;
+        Site->CreatedOnSimulationDay = Data.CreatedOnSimulationDay;
+        Site->SalvageExpiresOnDay = Data.SalvageExpiresOnDay;
+        Site->KIACrashCount = Data.KIACrashCount;
+        Site->KnownFactions = Data.KnownFactions;
+        Site->MIASoldiers.Empty();
+
+        if (Data.SourceVehicleDefinitionPath.IsValid())
+        {
+            Site->SourceVehicleDefinition = TSoftObjectPtr<UVehicleDefinition>(Data.SourceVehicleDefinitionPath);
+        }
+
+        AllPotentialSites.Add(Site);
+
+        if (Data.bDiscoveredByHuman)
+        {
+            DiscoveredSitesHuman.Add(Site);
+        }
+        if (Data.bDiscoveredByEnemy)
+        {
+            DiscoveredSitesEnemy.Add(Site);
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[SAVE] Deserialized %d site(s) (%d human discoveries, %d enemy discoveries)"),
+        AllPotentialSites.Num(), DiscoveredSitesHuman.Num(), DiscoveredSitesEnemy.Num());
 }
 
 bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const

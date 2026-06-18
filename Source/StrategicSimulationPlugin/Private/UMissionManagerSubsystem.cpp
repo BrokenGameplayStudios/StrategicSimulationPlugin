@@ -18,6 +18,85 @@ void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     UE_LOG(LogTemp, Display, TEXT("UMissionManagerSubsystem initialized — vehicle missions ready"));
 }
 
+void UMissionManagerSubsystem::ClearRuntimeMissionStateForSiteMapLoad()
+{
+    const TArray<UMissionGroup*> MissionsToClear = ActiveMissions;
+    const int32 ClearedCount = MissionsToClear.Num();
+    TSet<UMissionGroup*> MissionSet(MissionsToClear);
+
+    auto ResetVehicleForSiteMapLoad = [](UStrategyVehicle* Vehicle)
+    {
+        if (!Vehicle)
+        {
+            return;
+        }
+
+        for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+        {
+            if (Soldier)
+            {
+                Soldier->CurrentMission = nullptr;
+            }
+        }
+        Vehicle->CurrentPassengers.Empty();
+        Vehicle->CurrentMission = nullptr;
+        Vehicle->CurrentPhase = EVehicleMissionPhase::Docked;
+        Vehicle->CurrentBehavior = EVehicleBehavior::Idle;
+        Vehicle->CurrentTargetVehicle = nullptr;
+        Vehicle->CombatBehaviorStartTime = -1.0f;
+        Vehicle->CurrentWaypoints.Empty();
+        Vehicle->ReturningWaypoints.Empty();
+        Vehicle->ReturningDistanceTraveled = 0.0f;
+        Vehicle->ReturningPathLength = 0.0f;
+        Vehicle->TotalTravelTimeHours = 0.0f;
+        Vehicle->OutboundTravelTime = 0.0f;
+        Vehicle->ReturnTravelTime = 0.0f;
+        Vehicle->SearchTimeAtTarget = 0.0f;
+        Vehicle->PlannedRoundTripRange = 0.0f;
+        Vehicle->RangeTraveledThisMission = 0.0f;
+
+        if (Vehicle->CurrentHanger)
+        {
+            Vehicle->CurrentHanger->ParkedVehicles.Remove(Vehicle);
+        }
+        Vehicle->CurrentHanger = nullptr;
+    };
+
+    for (UMissionGroup* Mission : MissionsToClear)
+    {
+        if (!Mission)
+        {
+            continue;
+        }
+
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            ResetVehicleForSiteMapLoad(Vehicle);
+        }
+    }
+
+    if (USoldierManagerSubsystem* SoldierMgr = GetSoldierManager())
+    {
+        for (const EFactionType Faction : { EFactionType::Human, EFactionType::Enemy })
+        {
+            for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
+            {
+                if (Soldier && Soldier->CurrentMission && MissionSet.Contains(Soldier->CurrentMission))
+                {
+                    Soldier->CurrentMission = nullptr;
+                }
+            }
+        }
+    }
+
+    ActiveMissions.Empty();
+
+    if (ClearedCount > 0)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[SAVE] Cleared %d stale mission(s) from pre-load session"), ClearedCount);
+    }
+}
+
 void UMissionManagerSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[MISSION] Day %d — SimulateOneDay() called (ActiveMissions: %d)"), NewDay, ActiveMissions.Num());

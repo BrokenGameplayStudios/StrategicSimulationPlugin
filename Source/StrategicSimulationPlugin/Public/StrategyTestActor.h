@@ -22,10 +22,17 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
     TSubclassOf<UUserWidget> StrategicHUDClass;
 
+    /** Fog-aware salvage wreck overlay for WBP_StrategicHUD (PR-5). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+    TSubclassOf<class UStrategySalvageMapWidget> SalvageMapWidgetClass;
+
 private:
     UFUNCTION()
     void OnSoldierRecruited_Test(EFactionType Faction, UStrategySoldier* Soldier);
 
     UFUNCTION()
     void OnResearchCompleted_Test(EFactionType Faction, UResearchTechDefinition* Tech);
+
+    UFUNCTION()
+    void OnSiteDiscovered_Test(EFactionType Faction, class UStrategySiteDefinition* Site, EDiscoveryReason Reason);
 };

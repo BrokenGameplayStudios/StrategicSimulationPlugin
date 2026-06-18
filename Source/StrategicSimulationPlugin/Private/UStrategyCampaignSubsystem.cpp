@@ -461,8 +461,34 @@ void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)
     SaveGame->HumanSoldierCount = GetSoldierManager()->GetRoster(EFactionType::Human).Num();
     SaveGame->HumanSummary = FText::FromString(FString::Printf(TEXT("%d Soldiers"), SaveGame->HumanSoldierCount));
 
+    if (bSitesPersistenceEnabled)
+    {
+        if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
+        {
+            SaveGame->SavedSites = BaseMgr->SerializeAllSites();
+        }
+        SaveGame->SaveSchemaVersion = StrategySiteMapSaveSchemaVersion;
+        SaveGame->bIsContinuedCampaign = true;
+    }
+    else
+    {
+        SaveGame->SavedSites.Empty();
+        SaveGame->SaveSchemaVersion = 0;
+        SaveGame->bIsContinuedCampaign = false;
+    }
+
     UGameplayStatics::SaveGameToSlot(SaveGame, SlotName, 0);
-    UE_LOG(LogTemp, Display, TEXT("CAMPAIGN SAVED to slot %d (Day %d)"), SlotIndex, SaveGame->CurrentDay);
+
+    if (bSitesPersistenceEnabled)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[SAVE] Campaign saved to slot %d (Day %d, %d sites, schema %d)"),
+            SlotIndex, SaveGame->CurrentDay, SaveGame->SavedSites.Num(), SaveGame->SaveSchemaVersion);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("[SAVE] Campaign saved to slot %d (Day %d, sites skipped — bSitesPersistenceEnabled=false)"),
+            SlotIndex, SaveGame->CurrentDay);
+    }
 }
 
 void UStrategyCampaignSubsystem::LoadCampaign(int32 SlotIndex)
@@ -473,15 +499,61 @@ void UStrategyCampaignSubsystem::LoadCampaign(int32 SlotIndex)
     UStrategySaveGame* Loaded = Cast<UStrategySaveGame>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
     if (!Loaded)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No save found in slot %d — starting fresh"), SlotIndex);
+        UE_LOG(LogTemp, Error, TEXT("[SAVE] No save found in slot %d — load aborted"), SlotIndex);
         return;
     }
+
+    if (Loaded->SaveSchemaVersion < StrategySiteMapSaveSchemaVersion)
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("[SAVE] Save slot %d has schema version %d (requires >= %d) — load aborted. Re-save after PR-4 or use StartSimulation for a new game."),
+            SlotIndex, Loaded->SaveSchemaVersion, StrategySiteMapSaveSchemaVersion);
+        return;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GetBaseManager();
+    UMissionManagerSubsystem* MissionMgr = GetMissionManager();
+    if (!BaseMgr || !MissionMgr)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[SAVE] Required subsystems missing — load aborted"));
+        return;
+    }
+
+    BaseMgr->AllPotentialSites.Empty();
+    BaseMgr->DiscoveredSitesHuman.Empty();
+    BaseMgr->DiscoveredSitesEnemy.Empty();
+
+    MissionMgr->ClearRuntimeMissionStateForSiteMapLoad();
+
+    const int32 ExistingBases = BaseMgr->GetBases(EFactionType::Human).Num() + BaseMgr->GetBases(EFactionType::Enemy).Num();
+    if (ExistingBases > 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SAVE] WARNING: bases exist before site load — clearing bases only"));
+        BaseMgr->ResetAllBases();
+    }
+
+    BaseMgr->DeserializeAllSites(Loaded->SavedSites);
 
     GetTimeManager()->AdvanceDays(Loaded->CurrentDay - GetTimeManager()->GetCurrentDay());
     GetResourceManager()->SetResources(EFactionType::Human, Loaded->HumanResources);
     GetResourceManager()->SetResources(EFactionType::Enemy, Loaded->EnemyResources);
 
-    UE_LOG(LogTemp, Display, TEXT("CAMPAIGN LOADED from slot %d (Day %d)"), SlotIndex, Loaded->CurrentDay);
+    bSitesPersistenceEnabled = true;
+
+    const int32 SiteCount = BaseMgr->AllPotentialSites.Num();
+    const int32 HumanBaseCount = BaseMgr->GetBases(EFactionType::Human).Num();
+    const int32 EnemyBaseCount = BaseMgr->GetBases(EFactionType::Enemy).Num();
+
+    if (HumanBaseCount == 0 && EnemyBaseCount == 0)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[SAVE] Site map loaded (%d sites, 0 missions). Simulation NOT runnable — no bases. Use StartSimulation for playable sessions."),
+            SiteCount);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("[SAVE] Site map loaded (%d sites, 0 missions)."), SiteCount);
+    }
 }
 
 TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() const

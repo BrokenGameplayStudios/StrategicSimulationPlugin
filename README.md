@@ -29,7 +29,7 @@ This plugin implements a turn-of-time strategic simulation layer: factions build
 - Offensive base-attack missions after a configurable start day (default: day 5)
 - Base attack flow: fighter flies to enemy base, logs `[BASE ATTACK EVENT]` on launch and arrival
 - Salvage sites created when vehicles are destroyed; combat participants know wreck location immediately (`KnownFactions`)
-- Save/load hooks on the campaign subsystem
+- Site-map save/load round-trip (`SaveCampaign` / `LoadCampaign`, schema v2) for QA — not a playable Continue Game
 - Debug strategic map HUD (bases, vehicles, paths, radar circles)
 - Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
 
@@ -454,14 +454,52 @@ PerformRadarPing (every PingIntervalHours, default 0.5 game hours)
 | Day rollover uses calendar day-of-month | `UTimeManagerSubsystem::RealTimeTick` uses `FDateTime::GetDay()`, not elapsed simulation days |
 | Abstract `SimulateOneDay` path unused | All `StartMission` calls set `bIsLiveMovement = true` |
 | `CalculateFleetEffectiveness` unused | Defined in mission manager; not called in live resolution |
-| Salvage site persistence / missions | PR-4–6 in `docs/design-salvage-sites.md`; combat-known wrecks registered in PR-1 |
+| Salvage missions | PR-6 in `docs/design-salvage-sites.md` |
 | `HasCompletedResearch` stub | Always returns `true` in campaign subsystem |
 | `SoldiersKilled` always 0 | `ResolveMissionOutcome` — no abstract casualties |
 | Ammo infinite when `MaxAmmo == 0` | `UItemDefinition` stub |
 | `Defensive` / `Interception` not scheduled by AI | Targeting exists in `TryPickMissionTarget` only |
 | Base attack is log-only | `HandleBaseAttackArrival` — placeholder for future resolver |
 
-### 2.10 Build dependencies
+### 2.10 Site-map save/load (PR-4 — QA / dev tooling)
+
+`SaveCampaign` / `LoadCampaign` round-trip **sites only** (generated nodes + salvage wrecks). This is **not** a playable Continue Game — bases, vehicles, missions, and soldiers are not restored.
+
+| Setting | Location | Default |
+|---------|----------|---------|
+| `bSitesPersistenceEnabled` | `UStrategyCampaignSubsystem` | `true` — when `false`, save skips `SavedSites` (dev fast-save) |
+| `StrategySiteMapSaveSchemaVersion` | `UStrategySaveGame.h` | `2` — older slots abort load with `[SAVE]` error |
+
+**Recommended workflow**
+
+1. **Playable session** → `StartSimulation()` (generates map + Command Centers).
+2. **Verify site persistence** → play → `SaveCampaign` → `LoadCampaign` → inspect debug strategy map (`SiteId`, discovery dots, wreck resources).
+3. **New game** → `ResetSimulation()` then `StartSimulation()`, or fresh PIE session.
+
+**Post-`LoadCampaign` state**
+
+| Restored | Not restored |
+|----------|----------------|
+| `AllPotentialSites`, discovery lists, per-site resources / salvage metadata, `SiteId` | Bases, facilities, vehicles, active missions |
+| Faction resource pools, simulation day | AI scheduling (no hangars) |
+
+After load, `GetBases(Human).Num() == 0` — log warns: *Simulation NOT runnable — no bases.* Do **not** call `StartSimulation()` after `LoadCampaign` in the same session (that regenerates the map). Same-session play → save → load clears stale missions via `ClearRuntimeMissionStateForSiteMapLoad`.
+
+### 2.11 Player salvage map (PR-5)
+
+`UStrategySalvageMapWidget` draws fog-aware wreck triangles on the player HUD. `AStrategyTestActor` spawns it above `WBP_StrategicHUD` (z-order 10).
+
+| Gate | Requirement |
+|------|-------------|
+| Layer visible | `bSalvageSitesEnabled && bSitesPersistenceEnabled` on campaign subsystem |
+| Wreck shown | `ShouldShowSalvageToFaction` (discovered / combat-known, `SalvageState == Active`) |
+| Icon color | `GetSalvageWreckColor(WreckOwnerFaction)` — blue Human, red Enemy |
+| Tooltip | `FormatSalvageTooltipText` — site name + remaining resources |
+| Toast | `OnSiteDiscovered` / combat-known wreck creation |
+
+Blueprint helpers: `BuildSalvageMapMarkers`, `GetVisibleSalvageSitesForFaction`, `IsPlayerSalvageMapLayerEnabled`. To embed in a custom HUD, add `UStrategySalvageMapWidget` as a full-screen child or call the helpers from `WBP_StrategicHUD`.
+
+### 2.12 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 
@@ -479,7 +517,8 @@ Plugin dependency in `.uplugin`: **CommonUI** (must be enabled in host project).
 | Unpause simulation | `UTimeManagerSubsystem::TogglePause` or `StartSimulation` |
 | Stop simulation | `UStrategyCampaignSubsystem::StopSimulation` |
 | Reset all state | `UStrategyCampaignSubsystem::ResetSimulation` |
-| Save / load | `SaveCampaign` / `LoadCampaign` |
+| Save / load site map (QA) | `SaveCampaign` / `LoadCampaign` (schema >= 2) |
+| New playable game | `StartSimulation` |
 | Force AI tick | `Debug_RunAI` on Campaign or AI subsystem |
 | Get managers | `GetResourceManager`, `GetBaseManager`, `GetMissionManager`, etc. on Campaign |
 

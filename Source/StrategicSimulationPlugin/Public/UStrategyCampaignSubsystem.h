@@ -67,6 +67,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage")
     bool bSalvageSitesEnabled = true;
 
+    /** When false, SaveCampaign skips site-map data (dev fast-save). LoadCampaign requires schema >= 2 with sites. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage")
+    bool bSitesPersistenceEnabled = true;
+
     /** Days a wreck remains on the map before auto-removal if not salvaged. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "90"))
     int32 SalvageWreckExpiryDays = 7;
