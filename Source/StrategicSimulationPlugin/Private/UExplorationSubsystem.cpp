@@ -219,7 +219,7 @@ bool UExplorationSubsystem::PickThreatBearingPatrolTarget(UStrategyBase* OriginB
             continue;
         }
 
-        ThreatCentroid += Contact.LastPosition;
+        ThreatCentroid += URadarContactSubsystem::GetContactInterceptPosition(Contact);
         ++ThreatCount;
     }
 

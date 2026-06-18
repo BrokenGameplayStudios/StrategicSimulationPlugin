@@ -430,6 +430,13 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FR
         ActionLine = TEXT("No idle gunship in range");
     }
 
+    const FString FactionLine = FString::Printf(TEXT("\nDetected by: %s"),
+        *UEnum::GetValueAsString(Contact.DetectingFaction));
+
+    const FString BaseLine = Contact.DetectingBaseName.IsEmpty()
+        ? FString()
+        : FString::Printf(TEXT(" (%s)"), *Contact.DetectingBaseName);
+
     const FString ThreatLine = Contact.ThreatenedBaseName.IsEmpty()
         ? FString()
         : FString::Printf(TEXT("\nThreatens: %s"), *Contact.ThreatenedBaseName);
@@ -438,13 +445,17 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FR
         ? FString::Printf(TEXT("\nLast seen: %.1fh ago  Expires in: %.1fh"), AgeHours, RemainingHours)
         : FString();
 
+    const FVector2D InterceptPos = URadarContactSubsystem::GetContactInterceptPosition(Contact);
+
     return FText::FromString(FString::Printf(
-        TEXT("%s%s%s\nPos: (%.0f, %.0f)\nSpeed: %.0f px/h  Heading: %.0f°%s\n%s"),
+        TEXT("%s%s%s%s\nEntry point: (%.0f, %.0f)\nSpeed: %.0f px/h  Heading: %.0f deg%s%s\n%s"),
         *Contact.TrackedVehicleName,
         Contact.bIsInboundThreat ? TEXT(" — INBOUND") : TEXT(""),
-        *ThreatLine,
-        Contact.LastPosition.X, Contact.LastPosition.Y,
+        *FactionLine,
+        *BaseLine,
+        InterceptPos.X, InterceptPos.Y,
         Speed, HeadingDeg,
+        *ThreatLine,
         *StalenessLine,
         *ActionLine));
 }
@@ -456,10 +467,16 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactDiscoveryToast(const
         return FText::GetEmpty();
     }
 
+    const FString DetectorLine = Contact.DetectingBaseName.IsEmpty()
+        ? UEnum::GetValueAsString(Contact.DetectingFaction)
+        : FString::Printf(TEXT("%s (%s)"),
+            *UEnum::GetValueAsString(Contact.DetectingFaction), *Contact.DetectingBaseName);
+
     return FText::FromString(FString::Printf(
-        TEXT("Radar contact%s: %s"),
+        TEXT("Radar contact%s: %s\nDetected by %s"),
         Contact.bIsInboundThreat ? TEXT(" (INBOUND)") : TEXT(""),
-        *Contact.TrackedVehicleName));
+        *Contact.TrackedVehicleName,
+        *DetectorLine));
 }
 
 TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarContactMapMarkers(
@@ -506,7 +523,8 @@ TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarCon
 
         FRadarContactMapMarker Marker;
         Marker.ContactId = Contact.ContactId;
-        Marker.WidgetPosition = MapLogicalToWidgetPosition(Contact.LastPosition, WidgetSize, Campaign, MapScaleMultiplier);
+        Marker.WidgetPosition = MapLogicalToWidgetPosition(
+            URadarContactSubsystem::GetContactInterceptPosition(Contact), WidgetSize, Campaign, MapScaleMultiplier);
         Marker.bIsInboundThreat = Contact.bIsInboundThreat;
         Marker.bCanIntercept = bCanIntercept;
         Marker.bAlreadyTargeted = bAlreadyTargeted;

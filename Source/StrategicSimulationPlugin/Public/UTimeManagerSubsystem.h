@@ -8,6 +8,7 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDayPassed, int32, NewDay);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSimulationStarted);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSimulationClockStateChanged, float, TimeScale, bool, bIsPaused, bool, bStrategicClockPaused);
 
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UTimeManagerSubsystem : public UGameInstanceSubsystem
@@ -79,6 +80,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Time")
     bool IsPaused() const { return bIsPaused; }
 
+    /** True when simulation time is not advancing (user pause, strategic pause, or zero scale). */
+    UFUNCTION(BlueprintPure, Category = "Time")
+    bool IsSimulationClockHalted() const { return bIsPaused || bStrategicClockPaused || TimeScale <= 0.0f; }
+
     /** Pauses simulation advancement without toggling user pause (contested salvage hook). */
     UFUNCTION(BlueprintCallable, Category = "Time|Strategic Pause")
     void SetStrategicClockPaused(bool bPaused);
@@ -88,6 +93,10 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnDayPassed OnDayPassed;
+
+    /** Fires when time scale or pause state changes — bind UI speed/pause buttons here. */
+    UPROPERTY(BlueprintAssignable, Category = "Events")
+    FOnSimulationClockStateChanged OnSimulationClockStateChanged;
 
 private:
     FDateTime CurrentGameDate;
@@ -106,4 +115,5 @@ private:
 
     void RealTimeTick();
     void ProcessSimulationStep(float StepSeconds);
+    void BroadcastClockStateChanged();
 };

@@ -622,8 +622,8 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
 
     const bool bIsHuman = Vehicle->HomeBase && Vehicle->HomeBase->OwningFaction == EFactionType::Human;
     const FLinearColor VehicleColor = bIsHuman
-        ? FLinearColor(0.55f, 0.78f, 1.0f, 1.0f)
-        : FLinearColor(1.0f, 0.55f, 0.72f, 1.0f);
+        ? FLinearColor(0.22f, 0.52f, 0.95f, 1.0f)
+        : FLinearColor(0.92f, 0.22f, 0.42f, 1.0f);
 
     // Vehicle dot
     float VehicleSize = 8.0f * Scale;
@@ -671,8 +671,8 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
     {
         float ScreenRadius = RadarRange * Scale;
         const FLinearColor RadarColor = bIsHuman
-            ? FLinearColor(0.72f, 0.86f, 1.0f, 0.42f)
-            : FLinearColor(1.0f, 0.72f, 0.86f, 0.42f);
+            ? FLinearColor(0.28f, 0.58f, 0.92f, 0.55f)
+            : FLinearColor(0.92f, 0.28f, 0.48f, 0.55f);
 
         const int32 NumSegments = 48;
         for (int32 i = 0; i < NumSegments; ++i)
@@ -720,8 +720,8 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
             const float RadarRange = Campaign->BaseRadarRangePixels * Scale;
             const bool bHumanBase = Base->OwningFaction == EFactionType::Human;
             const FLinearColor RadarColor = bHumanBase
-                ? FLinearColor(0.84f, 0.93f, 1.0f, 0.45f)
-                : FLinearColor(1.0f, 0.84f, 0.92f, 0.45f);
+                ? FLinearColor(0.32f, 0.62f, 0.95f, 0.55f)
+                : FLinearColor(0.95f, 0.32f, 0.55f, 0.55f);
             const int32 Segments = 32;
             FVector2D PreviousPoint = ScreenPos + FVector2D(RadarRange, 0.0f);
 

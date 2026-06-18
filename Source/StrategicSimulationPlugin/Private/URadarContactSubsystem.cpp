@@ -21,6 +21,60 @@ float URadarContactSubsystem::GetBaseRadarRange()
     return 512.0f;
 }
 
+namespace RadarContactHelpers
+{
+    FVector2D EstimateVehicleVelocity(const UStrategyVehicle* Vehicle)
+    {
+        if (!Vehicle)
+        {
+            return FVector2D::ZeroVector;
+        }
+
+        const float Speed = Vehicle->CruiseSpeedPixelsPerHour > 0.0f
+            ? Vehicle->CruiseSpeedPixelsPerHour
+            : 180.0f;
+
+        FVector2D Direction = FVector2D::ZeroVector;
+
+        if (Vehicle->GetMissionPhase() == EVehicleMissionPhase::Returning)
+        {
+            if (Vehicle->HomeBase)
+            {
+                Direction = (Vehicle->HomeBase->MapLocation - Vehicle->CurrentPosition).GetSafeNormal();
+            }
+            else if (Vehicle->ReturningWaypoints.Num() >= 2)
+            {
+                Direction = (Vehicle->ReturningWaypoints.Last() - Vehicle->CurrentPosition).GetSafeNormal();
+            }
+        }
+        else if (Vehicle->CurrentWaypoints.Num() >= 2)
+        {
+            Direction = (Vehicle->CurrentWaypoints[1] - Vehicle->CurrentPosition).GetSafeNormal();
+            if (Direction.IsNearlyZero())
+            {
+                Direction = (Vehicle->CurrentWaypoints[1] - Vehicle->CurrentWaypoints[0]).GetSafeNormal();
+            }
+        }
+
+        if (Direction.IsNearlyZero() && Vehicle->HomeBase)
+        {
+            Direction = (Vehicle->CurrentPosition - Vehicle->HomeBase->MapLocation).GetSafeNormal();
+        }
+
+        return Direction * Speed;
+    }
+}
+
+FVector2D URadarContactSubsystem::GetContactInterceptPosition(const FRadarContact& Contact)
+{
+    if (Contact.bHasFirstDetectedPosition)
+    {
+        return Contact.FirstDetectedPosition;
+    }
+
+    return Contact.LastPosition;
+}
+
 TMap<FGuid, FRadarContact>& URadarContactSubsystem::GetContactMap(EFactionType Faction)
 {
     return (Faction == EFactionType::Human) ? HumanContactsById : EnemyContactsById;
@@ -86,7 +140,7 @@ bool URadarContactSubsystem::FindBestContactForInterception(EFactionType Faction
         }
 
         const FRadarContact& Contact = Pair.Value;
-        const float Dist = FVector2D::Distance(Origin, Contact.LastPosition);
+        const float Dist = FVector2D::Distance(Origin, GetContactInterceptPosition(Contact));
         const float RoundTrip = Dist * 2.0f;
         if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
         {
@@ -404,20 +458,32 @@ FRadarContact URadarContactSubsystem::UpsertVehicleContact(EFactionType Detectin
     FRadarContact& Contact = ContactMap.FindOrAdd(ContactId);
     const FVector2D PreviousPosition = Contact.LastPosition;
     const bool bHadPrevious = Contact.LastSeenGameHours > 0.0f;
+    const FVector2D CurrentPosition = EnemyVehicle->CurrentPosition;
 
-    if (bHadPrevious)
-    {
-        const float DeltaHours = FMath::Max(0.01f, CurrentGameHours - Contact.LastSeenGameHours);
-        Contact.EstimatedVelocity = (EnemyVehicle->CurrentPosition - PreviousPosition) / DeltaHours;
-    }
-    else
+    if (!bHadPrevious)
     {
         Contact.ContactId = ContactId;
         Contact.DetectingFaction = DetectingFaction;
-        Contact.EstimatedVelocity = FVector2D::ZeroVector;
+        Contact.DetectingBaseName = DetectingBase->BaseName.ToString();
+        Contact.FirstDetectedPosition = CurrentPosition;
+        Contact.bHasFirstDetectedPosition = true;
+        Contact.EstimatedVelocity = RadarContactHelpers::EstimateVehicleVelocity(EnemyVehicle);
+    }
+    else
+    {
+        const float DeltaHours = FMath::Max(0.01f, CurrentGameHours - Contact.LastSeenGameHours);
+        const FVector2D MeasuredVelocity = (CurrentPosition - PreviousPosition) / DeltaHours;
+        if (!MeasuredVelocity.IsNearlyZero())
+        {
+            Contact.EstimatedVelocity = MeasuredVelocity;
+        }
+        else if (Contact.EstimatedVelocity.IsNearlyZero())
+        {
+            Contact.EstimatedVelocity = RadarContactHelpers::EstimateVehicleVelocity(EnemyVehicle);
+        }
     }
 
-    Contact.LastPosition = EnemyVehicle->CurrentPosition;
+    Contact.LastPosition = CurrentPosition;
     Contact.LastSeenGameHours = CurrentGameHours;
     Contact.bIsInboundThreat = bIsInboundThreat;
     Contact.EstimatedHeadingDegrees = Contact.EstimatedVelocity.IsNearlyZero()

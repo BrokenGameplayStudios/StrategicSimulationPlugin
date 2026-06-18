@@ -98,6 +98,11 @@ int32 UTimeManagerSubsystem::GetTotalSimulationDays() const
     return Elapsed.GetDays();
 }
 
+void UTimeManagerSubsystem::BroadcastClockStateChanged()
+{
+    OnSimulationClockStateChanged.Broadcast(TimeScale, bIsPaused, bStrategicClockPaused);
+}
+
 void UTimeManagerSubsystem::StartSimulation()
 {
     SetTimeScale(1.0f);
@@ -105,6 +110,7 @@ void UTimeManagerSubsystem::StartSimulation()
 
     UE_LOG(LogTemp, Display, TEXT("SIMULATION STARTED (unpaused) — Current date remains %s"), *CurrentGameDate.ToString());
     OnSimulationStarted.Broadcast();
+    BroadcastClockStateChanged();
 }
 
 void UTimeManagerSubsystem::SetStartingDate(FDateTime NewStartDate)
@@ -123,6 +129,7 @@ void UTimeManagerSubsystem::StopSimulation()
 {
     bIsPaused = true;
     UE_LOG(LogTemp, Display, TEXT("SIMULATION STOPPED"));
+    BroadcastClockStateChanged();
 }
 
 void UTimeManagerSubsystem::AdvanceDays(int32 NumDays)
@@ -150,12 +157,15 @@ void UTimeManagerSubsystem::SetTimeScale(float NewScale)
     {
         UE_LOG(LogTemp, Warning, TEXT("[TIME] Extreme time scale (%.0fx) — expect heavy CPU/log load. Use Verbose=OFF for long unattended runs."), TimeScale);
     }
+
+    BroadcastClockStateChanged();
 }
 
 void UTimeManagerSubsystem::TogglePause()
 {
     bIsPaused = !bIsPaused;
     UE_LOG(LogTemp, Display, TEXT("Pause toggled — Now %s"), bIsPaused ? TEXT("PAUSED") : TEXT("RUNNING"));
+    BroadcastClockStateChanged();
 }
 
 void UTimeManagerSubsystem::SetStrategicClockPaused(bool bPaused)
@@ -167,6 +177,7 @@ void UTimeManagerSubsystem::SetStrategicClockPaused(bool bPaused)
 
     bStrategicClockPaused = bPaused;
     UE_LOG(LogTemp, Display, TEXT("[TIME] Strategic clock %s"), bPaused ? TEXT("PAUSED (salvage contest)") : TEXT("RESUMED"));
+    BroadcastClockStateChanged();
 }
 
 int32 UTimeManagerSubsystem::GetCurrentDay() const

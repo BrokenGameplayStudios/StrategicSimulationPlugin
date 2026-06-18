@@ -16,6 +16,41 @@
 #include "UStrategySaveGame.h"
 #include "UStrategicSimulationDisplayHelpers.h"
 
+namespace SiteGenerationHelpers
+{
+    void PopulateMineableResources(UStrategySiteDefinition* Site)
+    {
+        if (!Site)
+        {
+            return;
+        }
+
+        const float Richness = FMath::FRandRange(0.75f, 1.35f);
+        const bool bResourceRich = FMath::FRand() < 0.25f;
+
+        if (bResourceRich)
+        {
+            Site->SiteType = EStrategySiteType::ResourceNode;
+            Site->MaxResources.Metals = FMath::RoundToInt(FMath::RandRange(500, 900) * Richness);
+            Site->MaxResources.Chemicals = FMath::RoundToInt(FMath::RandRange(250, 500) * Richness);
+            Site->MaxResources.Biologicals = FMath::RoundToInt(FMath::RandRange(80, 220) * Richness);
+            Site->MaxResources.Money = FMath::RoundToInt(FMath::RandRange(150, 350) * Richness);
+            Site->MaxResources.ExoticMaterial = FMath::RoundToInt(FMath::RandRange(20, 80) * Richness);
+        }
+        else
+        {
+            Site->SiteType = EStrategySiteType::PotentialBase;
+            Site->MaxResources.Metals = FMath::RoundToInt(FMath::RandRange(200, 450) * Richness);
+            Site->MaxResources.Chemicals = FMath::RoundToInt(FMath::RandRange(100, 280) * Richness);
+            Site->MaxResources.Biologicals = FMath::RoundToInt(FMath::RandRange(40, 160) * Richness);
+            Site->MaxResources.Money = FMath::RoundToInt(FMath::RandRange(120, 320) * Richness);
+            Site->MaxResources.ExoticMaterial = FMath::RoundToInt(FMath::RandRange(0, 40) * Richness);
+        }
+
+        Site->CurrentResources = Site->MaxResources;
+    }
+}
+
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Collection.InitializeDependency<UTimeManagerSubsystem>();
@@ -1033,6 +1068,10 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSiteAtLocation(EFac
         ExistingSite->SiteId = FGuid::NewGuid();
         ExistingSite->Location = Location;
         ExistingSite->SiteType = Type;
+        if (Type != EStrategySiteType::SalvageSite && ExistingSite->CurrentResources.IsEmpty())
+        {
+            SiteGenerationHelpers::PopulateMineableResources(ExistingSite);
+        }
         AllPotentialSites.Add(ExistingSite);
     }
     else if (ExistingSite->SiteType != Type)
@@ -1304,8 +1343,12 @@ void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistan
             UStrategySiteDefinition* NewSite = NewObject<UStrategySiteDefinition>(this);
             NewSite->SiteId = FGuid::NewGuid();
             NewSite->Location = NewLoc;
-            NewSite->SiteType = EStrategySiteType::PotentialBase;
             NewSite->SiteName = FString::Printf(TEXT("Potential Base %d"), SitesPlaced + 1);
+            SiteGenerationHelpers::PopulateMineableResources(NewSite);
+            if (NewSite->SiteType == EStrategySiteType::ResourceNode)
+            {
+                NewSite->SiteName = FString::Printf(TEXT("Resource Node %d"), SitesPlaced + 1);
+            }
 
             AllPotentialSites.Add(NewSite);
 

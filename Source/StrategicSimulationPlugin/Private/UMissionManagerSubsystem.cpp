@@ -331,7 +331,8 @@ bool UMissionManagerSubsystem::LaunchInterceptionAtContact(UStrategyBase* Origin
     }
 
     UStrategyVehicle* TrackedVehicle = ContactMgr->ResolveTrackedVehicle(Contact, OriginBase->OwningFaction);
-    const float RoundTrip = FVector2D::Distance(OriginBase->MapLocation, Contact.LastPosition) * 2.0f;
+    const FVector2D InterceptPos = URadarContactSubsystem::GetContactInterceptPosition(Contact);
+    const float RoundTrip = FVector2D::Distance(OriginBase->MapLocation, InterceptPos) * 2.0f;
     if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
     {
         return false;
@@ -352,7 +353,7 @@ bool UMissionManagerSubsystem::LaunchInterceptionAtContact(UStrategyBase* Origin
         *UEnum::GetValueAsString(OriginBase->OwningFaction),
         *OriginBase->BaseName.ToString(),
         *Contact.TrackedVehicleName,
-        Contact.LastPosition.X, Contact.LastPosition.Y);
+        InterceptPos.X, InterceptPos.Y);
 
     return true;
 }
@@ -401,7 +402,8 @@ bool UMissionManagerSubsystem::CanFactionInterceptContact(EFactionType Faction, 
                 continue;
             }
 
-            const float RoundTrip = FVector2D::Distance(Base->MapLocation, Contact.LastPosition) * 2.0f;
+            const FVector2D InterceptPos = URadarContactSubsystem::GetContactInterceptPosition(Contact);
+            const float RoundTrip = FVector2D::Distance(Base->MapLocation, InterceptPos) * 2.0f;
             if (Vehicle->HasEnoughRangeForMission(RoundTrip))
             {
                 return true;
@@ -459,7 +461,8 @@ bool UMissionManagerSubsystem::TryLaunchInterceptionAtContactAuto(EFactionType F
                 continue;
             }
 
-            const float Dist = FVector2D::Distance(Base->MapLocation, Contact.LastPosition);
+            const FVector2D InterceptPos = URadarContactSubsystem::GetContactInterceptPosition(Contact);
+            const float Dist = FVector2D::Distance(Base->MapLocation, InterceptPos);
             const float RoundTrip = Dist * 2.0f;
             if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
             {
@@ -972,7 +975,7 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
             FRadarContact Contact;
             if (ContactMgr->FindBestContactForInterception(Faction, Vehicle->HomeBase, Vehicle, Contact))
             {
-                OutTarget = Contact.LastPosition;
+                OutTarget = URadarContactSubsystem::GetContactInterceptPosition(Contact);
                 UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → radar contact '%s' at (%.0f, %.0f)%s"),
                     Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
                     *Contact.TrackedVehicleName, OutTarget.X, OutTarget.Y,

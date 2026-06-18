@@ -42,6 +42,10 @@ public:
     static bool IsInboundThreatVehicle(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
         UBaseManagerSubsystem* BaseMgr);
 
+    /** Intercept/map marker position — first detection point when available. */
+    UFUNCTION(BlueprintPure, Category = "Radar Contact")
+    static FVector2D GetContactInterceptPosition(const FRadarContact& Contact);
+
 private:
     UPROPERTY()
     TMap<FGuid, FRadarContact> HumanContactsById;

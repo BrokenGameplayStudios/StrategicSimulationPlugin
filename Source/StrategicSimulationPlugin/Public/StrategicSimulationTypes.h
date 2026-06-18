@@ -194,6 +194,16 @@ struct FRadarContact
     EFactionType DetectingFaction = EFactionType::Neutral;
 
     UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    FString DetectingBaseName;
+
+    /** Map position where the contact first entered radar range (intercept waypoint for gunships). */
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    FVector2D FirstDetectedPosition = FVector2D::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    bool bHasFirstDetectedPosition = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
     FVector2D LastPosition = FVector2D::ZeroVector;
 
     UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
