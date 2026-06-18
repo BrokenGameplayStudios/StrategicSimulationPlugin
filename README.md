@@ -36,10 +36,11 @@ This plugin implements a turn-of-time strategic simulation layer: factions build
 - Debug strategic map HUD (bases, vehicles, paths, radar circles)
 - Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
 
-### In progress (PR-8+)
+### In progress (PR-10+)
 
-- **Radar & intel** — stale site snapshots, LOS blocker zones, base passive radar, contact tracks, patrol/guard and interception ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
+- **Radar & intel** — LOS blocker zones, base passive radar, contact tracks, patrol/guard and interception ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
 - PR-8 shipped: docs wiki hub, `bAllowDebugExecCommands`, `bRadarLOSEnabled`, `bStaleIntelEnabled` feature flags
+- PR-9 shipped: `UFactionIntelSubsystem`, stale wreck tooltips, save schema v3 intel arrays
 
 ### What is not implemented yet
 
@@ -502,7 +503,7 @@ After load, `GetBases(Human).Num() == 0` — log warns: *Simulation NOT runnable
 | Layer visible | `bSalvageSitesEnabled && bSitesPersistenceEnabled` on campaign subsystem |
 | Wreck shown | `ShouldShowSalvageToFaction` (discovered / combat-known, `SalvageState == Active`) |
 | Icon color | `GetSalvageWreckColor(WreckOwnerFaction)` — blue Human, red Enemy |
-| Tooltip | `FormatSalvageTooltipText` — site name + remaining resources |
+| Tooltip | `FormatSalvageTooltipText` — site name + last-known resources; appends `Intel stale` when snapshot is outdated |
 | Toast | `OnSiteDiscovered` / combat-known wreck creation |
 
 Blueprint helpers: `BuildSalvageMapMarkers`, `GetVisibleSalvageSitesForFaction`, `IsPlayerSalvageMapLayerEnabled`. To embed in a custom HUD, add `UStrategySalvageMapWidget` as a full-screen child or call the helpers from `WBP_StrategicHUD`.
@@ -558,7 +559,20 @@ Feature flags on `AStrategyGameInitializer` (copied to campaign). Full plan: [`d
 
 Campaign defaults `bAllowDebugExecCommands` to `false` until initializer runs. Shipping builds should leave it off unless cheats are intended.
 
-### 2.16 Build dependencies
+### 2.16 Stale site intel (PR-9)
+
+`UFactionIntelSubsystem` stores per-faction `FSiteIntelSnapshot` (location, last-known resources, base-built flag, freshness). Observations come from radar pings, on-station refresh, and discovery (`UBaseManagerSubsystem::AddDiscoveredSite`). Fresh flags clear at end of each mission movement tick; intel becomes stale until the next observation.
+
+| API | Role |
+|-----|------|
+| `ObserveSite` | Capture ground-truth snapshot for a faction |
+| `GetDisplayResources` / `GetDisplayHasBase` | UI reads last-known values when `bStaleIntelEnabled` |
+| `IsIntelFresh` | True only during the step when site was re-observed |
+| `SerializeIntel` / `DeserializeIntel` | Save schema v3 (`SavedIntelHuman` / `SavedIntelEnemy`) |
+
+v2 saves seed intel from discovery lists on load. Toggle off via `bStaleIntelEnabled` to restore ground-truth UI.
+
+### 2.17 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 
@@ -576,7 +590,7 @@ Plugin dependency in `.uplugin`: **CommonUI** (must be enabled in host project).
 | Unpause simulation | `UTimeManagerSubsystem::TogglePause` or `StartSimulation` |
 | Stop simulation | `UStrategyCampaignSubsystem::StopSimulation` |
 | Reset all state | `UStrategyCampaignSubsystem::ResetSimulation` |
-| Save / load site map (QA) | `SaveCampaign` / `LoadCampaign` (schema >= 2) |
+| Save / load site map (QA) | `SaveCampaign` / `LoadCampaign` (schema >= 2; intel arrays at schema 3) |
 | New playable game | `StartSimulation` |
 | Force AI tick | `Debug_RunAI` on Campaign or AI subsystem |
 | Resolve contested salvage | `UStrategyCampaignSubsystem::ResolveSalvageContest` (after `OnSalvageContestStarted`) |

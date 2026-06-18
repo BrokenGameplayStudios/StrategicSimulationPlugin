@@ -13,6 +13,7 @@
 #include "UStrategicSimulationDisplayHelpers.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UStrategyEventDispatcher.h"
+#include "UFactionIntelSubsystem.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -23,6 +24,11 @@ void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMissionManagerSubsystem::ClearRuntimeMissionStateForSiteMapLoad()
 {
+    if (UFactionIntelSubsystem* IntelMgr = GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>())
+    {
+        IntelMgr->ClearAllIntel();
+    }
+
     RecentCombatSalvageWrecks.Empty();
 
     const TArray<UMissionGroup*> MissionsToClear = ActiveMissions;
@@ -1671,6 +1677,11 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
             ActiveMissions.RemoveAt(i);
             UE_LOG(LogTemp, Verbose, TEXT("[LIVE MISSION] Mission fully completed — all vehicles docked or destroyed"));
         }
+    }
+
+    if (UFactionIntelSubsystem* IntelMgr = GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>())
+    {
+        IntelMgr->ClearFreshIntelFlags();
     }
 }
 

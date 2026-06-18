@@ -9,6 +9,7 @@
 #include "UMissionManagerSubsystem.h"
 #include "StrategicSiteDefinition.h"
 #include "UStrategyCampaignSubsystem.h"
+#include "UFactionIntelSubsystem.h"
 #include "UResourceManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategicSimulationDisplayHelpers.h"
@@ -605,6 +606,36 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
         }
     }
 
+    if (CurrentPhase == EVehicleMissionPhase::OnStation && HomeBase)
+    {
+        UGameInstance* GI = GetTypedOuter<UGameInstance>();
+        if (!GI)
+        {
+            if (UWorld* World = GetWorld())
+            {
+                GI = World->GetGameInstance();
+            }
+        }
+
+        if (GI)
+        {
+            if (UBaseManagerSubsystem* BaseManager = GI->GetSubsystem<UBaseManagerSubsystem>())
+            {
+                if (UStrategySiteDefinition* StationSite = BaseManager->FindSiteAtLocation(CurrentPosition))
+                {
+                    if (BaseManager->IsSiteKnownToFaction(HomeBase->OwningFaction, StationSite))
+                    {
+                        if (UFactionIntelSubsystem* IntelMgr = GI->GetSubsystem<UFactionIntelSubsystem>())
+                        {
+                            IntelMgr->ObserveSite(HomeBase->OwningFaction, StationSite, EDiscoveryReason::Radar,
+                                CurrentGameHours);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     TickRadarPings(CurrentGameHours);
 
     if (Progress >= 1.0f)
@@ -748,23 +779,40 @@ void UStrategyVehicle::PerformRadarPing()
     }
     if (!GI) return;
 
+    float CurrentGameHours = 0.0f;
+    if (UMissionManagerSubsystem* MissionMgr = GI->GetSubsystem<UMissionManagerSubsystem>())
+    {
+        CurrentGameHours = MissionMgr->GetCurrentGameHours();
+    }
+
     if (UBaseManagerSubsystem* BaseManager = GI->GetSubsystem<UBaseManagerSubsystem>())
     {
+        UFactionIntelSubsystem* IntelMgr = GI->GetSubsystem<UFactionIntelSubsystem>();
+
         for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
         {
-            if (!Site || Site->bHasBeenUsed) continue;
-
-            if (FVector2D::Distance(Site->Location, CurrentPosition) <= GetRadarRange())
+            if (!Site)
             {
-                const TArray<UStrategySiteDefinition*>& DiscoveredList =
-                    (VehicleFaction == EFactionType::Human) ?
-                    BaseManager->DiscoveredSitesHuman : BaseManager->DiscoveredSitesEnemy;
+                continue;
+            }
 
-                if (!DiscoveredList.Contains(Site))
+            if (FVector2D::Distance(Site->Location, CurrentPosition) > GetRadarRange())
+            {
+                continue;
+            }
+
+            const bool bAlreadyKnown = BaseManager->IsSiteKnownToFaction(VehicleFaction, Site);
+            if (!bAlreadyKnown)
+            {
+                if (!Site->bHasBeenUsed)
                 {
                     BaseManager->AddDiscoveredSite(VehicleFaction, Site);
                     OnSiteDetected.Broadcast(VehicleFaction, Site);
                 }
+            }
+            else if (IntelMgr)
+            {
+                IntelMgr->ObserveSite(VehicleFaction, Site, EDiscoveryReason::Radar, CurrentGameHours);
             }
         }
 

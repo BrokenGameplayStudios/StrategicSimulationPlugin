@@ -5,6 +5,7 @@
 #include "UBaseManagerSubsystem.h"
 #include "StrategicSiteDefinition.h"
 #include "UStrategicSimulationDisplayHelpers.h"
+#include "UFactionIntelSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategySoldier.h"
 #include "UMissionGroup.h"
@@ -356,12 +357,34 @@ void AStrategyDebugHUD::DrawHUD()
                     }
                 }
 
-                InspectorText += FString::Printf(TEXT("Salvage Resources — M: %d Mt: %d Bio: %d Chem: %d Exo: %d\n\n"),
+                InspectorText += FString::Printf(TEXT("Salvage Resources (ground) — M: %d Mt: %d Bio: %d Chem: %d Exo: %d\n"),
                     Site->CurrentResources.Money,
                     Site->CurrentResources.Metals,
                     Site->CurrentResources.Biologicals,
                     Site->CurrentResources.Chemicals,
                     Site->CurrentResources.ExoticMaterial);
+
+                if (UFactionIntelSubsystem* IntelMgr = GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>())
+                {
+                    if (IntelMgr->IsStaleIntelEnabled())
+                    {
+                        auto AppendIntelLine = [&](EFactionType Faction, const TCHAR* Label)
+                        {
+                            const FResourceStockpile IntelRes = IntelMgr->GetDisplayResources(Faction, Site);
+                            const bool bFresh = IntelMgr->IsIntelFresh(Faction, Site);
+                            InspectorText += FString::Printf(
+                                TEXT("%s intel — M: %d Mt: %d Chem: %d Exo: %d (%s)\n"),
+                                Label,
+                                IntelRes.Money, IntelRes.Metals, IntelRes.Chemicals, IntelRes.ExoticMaterial,
+                                bFresh ? TEXT("fresh") : TEXT("stale"));
+                        };
+
+                        AppendIntelLine(EFactionType::Human, TEXT("Human"));
+                        AppendIntelLine(EFactionType::Enemy, TEXT("Enemy"));
+                    }
+                }
+
+                InspectorText += TEXT("\n");
 
                 // === FIND OWNING BASE ===
                 UStrategyBase* OwningBase = nullptr;

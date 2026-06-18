@@ -4,10 +4,14 @@
 #include "GameFramework/SaveGame.h"
 #include "StrategicSimulationTypes.h"
 #include "StrategicSiteDefinition.h"
+#include "UFactionIntelSubsystem.h"
 #include "UStrategySaveGame.generated.h"
 
 /** Minimum schema version that includes site-map round-trip data (PR-4). */
 constexpr int32 StrategySiteMapSaveSchemaVersion = 2;
+
+/** Schema version that adds per-faction stale site intel snapshots (PR-9). */
+constexpr int32 StrategyIntelSaveSchemaVersion = 3;
 
 USTRUCT(BlueprintType)
 struct FStrategySiteSaveData
@@ -77,6 +81,12 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Save")
     TArray<FStrategySiteSaveData> SavedSites;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Save")
+    TArray<FSiteIntelSnapshot> SavedIntelHuman;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Save")
+    TArray<FSiteIntelSnapshot> SavedIntelEnemy;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Save")
     int32 CurrentDay = 1;

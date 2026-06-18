@@ -2,6 +2,8 @@
 #include "UStrategyVehicle.h"
 #include "UVehicleDefinition.h"
 #include "UStrategyEventDispatcher.h"
+#include "UFactionIntelSubsystem.h"
+#include "UMissionManagerSubsystem.h"
 #include "Engine/Engine.h"
 #include "UFacilityDatabase.h"
 #include "UResourceManagerSubsystem.h"
@@ -990,6 +992,16 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
         {
             EventDisp->OnSiteDiscovered.Broadcast(Faction, Site, Reason);
         }
+    }
+
+    if (UFactionIntelSubsystem* IntelMgr = GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>())
+    {
+        float ObservedHours = 0.0f;
+        if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
+        {
+            ObservedHours = MissionMgr->GetCurrentGameHours();
+        }
+        IntelMgr->ObserveSite(Faction, Site, Reason, ObservedHours);
     }
 
     return Site;

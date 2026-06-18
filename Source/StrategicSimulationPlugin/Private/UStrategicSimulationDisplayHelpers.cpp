@@ -1,6 +1,7 @@
 #include "UStrategicSimulationDisplayHelpers.h"
 #include "StrategicSiteDefinition.h"
 #include "UBaseManagerSubsystem.h"
+#include "UFactionIntelSubsystem.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UVehicleDefinition.h"
 #include "Engine/Engine.h"
@@ -67,6 +68,54 @@ FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(const UStra
     default:
         return Site->bHasBeenUsed ? TEXT("Used") : TEXT("Available");
     }
+}
+
+FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayTextForFaction(const UStrategySiteDefinition* Site,
+    EFactionType ViewerFaction, const UObject* WorldContextObject)
+{
+    if (!Site)
+    {
+        return TEXT("Unknown");
+    }
+
+    if (Site->SiteType == EStrategySiteType::SalvageSite)
+    {
+        return GetSiteStatusDisplayText(Site);
+    }
+
+    UFactionIntelSubsystem* IntelMgr = nullptr;
+    if (WorldContextObject)
+    {
+        if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
+        {
+            if (World->GetGameInstance())
+            {
+                IntelMgr = World->GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>();
+            }
+        }
+    }
+
+    if (!IntelMgr || !IntelMgr->IsStaleIntelEnabled())
+    {
+        return GetSiteStatusDisplayText(Site);
+    }
+
+    FString Status;
+    if (Site->SiteType == EStrategySiteType::PotentialBase)
+    {
+        Status = IntelMgr->GetDisplayHasBase(ViewerFaction, Site) ? TEXT("Base Built") : TEXT("Available");
+    }
+    else
+    {
+        Status = IntelMgr->GetDisplayHasBase(ViewerFaction, Site) ? TEXT("Used") : TEXT("Available");
+    }
+
+    if (!IntelMgr->IsIntelFresh(ViewerFaction, Site))
+    {
+        Status += TEXT(" (intel stale)");
+    }
+
+    return Status;
 }
 
 bool UStrategicSimulationDisplayHelpers::IsSalvageCapableVehicleType(EVehicleType VehicleType)
@@ -171,7 +220,7 @@ FVector2D UStrategicSimulationDisplayHelpers::MapLogicalToWidgetPosition(FVector
 }
 
 FText UStrategicSimulationDisplayHelpers::FormatSalvageTooltipText(const UStrategySiteDefinition* Site,
-    const UBaseManagerSubsystem* BaseManager)
+    const UBaseManagerSubsystem* BaseManager, EFactionType ViewerFaction)
 {
     if (!Site)
     {
@@ -184,20 +233,37 @@ FText UStrategicSimulationDisplayHelpers::FormatSalvageTooltipText(const UStrate
         DaysRemaining = BaseManager->GetSalvageDaysRemaining(Site);
     }
 
-    const FResourceStockpile& Res = Site->CurrentResources;
+    UFactionIntelSubsystem* IntelMgr = nullptr;
+    if (BaseManager && BaseManager->GetGameInstance())
+    {
+        IntelMgr = BaseManager->GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>();
+    }
+
+    FResourceStockpile Res = Site->CurrentResources;
+    bool bIntelStale = false;
+    if (IntelMgr && IntelMgr->IsStaleIntelEnabled())
+    {
+        Res = IntelMgr->GetDisplayResources(ViewerFaction, Site);
+        bIntelStale = !IntelMgr->IsIntelFresh(ViewerFaction, Site);
+    }
+
+    const FString StaleSuffix = bIntelStale ? TEXT("\nIntel stale") : TEXT("");
+
     if (DaysRemaining >= 0)
     {
         return FText::FromString(FString::Printf(
-            TEXT("%s\nRemaining — M: %d  Mt: %d  Chem: %d  Exo: %d\nDays left: %d"),
+            TEXT("%s\nRemaining — M: %d  Mt: %d  Chem: %d  Exo: %d\nDays left: %d%s"),
             *Site->SiteName,
             Res.Money, Res.Metals, Res.Chemicals, Res.ExoticMaterial,
-            DaysRemaining));
+            DaysRemaining,
+            *StaleSuffix));
     }
 
     return FText::FromString(FString::Printf(
-        TEXT("%s\nRemaining — M: %d  Mt: %d  Chem: %d  Exo: %d"),
+        TEXT("%s\nRemaining — M: %d  Mt: %d  Chem: %d  Exo: %d%s"),
         *Site->SiteName,
-        Res.Money, Res.Metals, Res.Chemicals, Res.ExoticMaterial));
+        Res.Money, Res.Metals, Res.Chemicals, Res.ExoticMaterial,
+        *StaleSuffix));
 }
 
 FText UStrategicSimulationDisplayHelpers::FormatSalvageDiscoveryToast(EFactionType Faction,
@@ -284,7 +350,7 @@ TArray<FSalvageMapMarker> UStrategicSimulationDisplayHelpers::BuildSalvageMapMar
         Marker.Site = Site;
         Marker.WidgetPosition = MapLogicalToWidgetPosition(Site->Location, WidgetSize, Campaign, MapScaleMultiplier);
         Marker.Color = GetSalvageWreckColor(Site->WreckOwnerFaction);
-        Marker.Tooltip = FormatSalvageTooltipText(Site, BaseManager);
+        Marker.Tooltip = FormatSalvageTooltipText(Site, BaseManager, ViewerFaction);
         Markers.Add(Marker);
     }
 

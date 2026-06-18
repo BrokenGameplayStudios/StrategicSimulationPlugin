@@ -7,6 +7,7 @@
 #include "UStrategicSimulationDisplayHelpers.generated.h"
 
 class UBaseManagerSubsystem;
+class UFactionIntelSubsystem;
 class UStrategyCampaignSubsystem;
 
 USTRUCT(BlueprintType)
@@ -51,6 +52,11 @@ public:
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display")
     static FString GetSiteStatusDisplayText(const class UStrategySiteDefinition* Site);
 
+    /** Faction-aware status using last-known base-built state when stale intel is enabled. */
+    UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display", meta = (WorldContext = "WorldContextObject"))
+    static FString GetSiteStatusDisplayTextForFaction(const class UStrategySiteDefinition* Site, EFactionType ViewerFaction,
+        const UObject* WorldContextObject);
+
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display")
     static FLinearColor GetSalvageWreckColor(EFactionType WreckOwnerFaction);
 
@@ -76,7 +82,8 @@ public:
         const UStrategyCampaignSubsystem* Campaign, float MapScaleMultiplier = 0.85f);
 
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Salvage Map")
-    static FText FormatSalvageTooltipText(const UStrategySiteDefinition* Site, const UBaseManagerSubsystem* BaseManager);
+    static FText FormatSalvageTooltipText(const UStrategySiteDefinition* Site, const UBaseManagerSubsystem* BaseManager,
+        EFactionType ViewerFaction);
 
     UFUNCTION(BlueprintPure, Category = "Strategic Simulation|Display|Salvage Map")
     static FText FormatSalvageDiscoveryToast(EFactionType Faction, const UStrategySiteDefinition* Site,

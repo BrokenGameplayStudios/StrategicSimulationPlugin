@@ -3,6 +3,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 #include "UMissionManagerSubsystem.h"
+#include "UFactionIntelSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
@@ -156,6 +157,11 @@ void UStrategyCampaignSubsystem::ResetSimulation()
     if (auto* EngineeringMgr = GetEngineeringManager())
     {
         EngineeringMgr->ResetProduction();
+    }
+
+    if (UFactionIntelSubsystem* IntelMgr = GetFactionIntelManager())
+    {
+        IntelMgr->ClearAllIntel();
     }
 
     UE_LOG(LogTemp, Display, TEXT("[RESET] Simulation has been fully cleared."));
@@ -448,6 +454,11 @@ UTimeManagerSubsystem* UStrategyCampaignSubsystem::GetTimeManager() const { retu
 UAIControllerSubsystem* UStrategyCampaignSubsystem::GetAIController() const { return GetGameInstance()->GetSubsystem<UAIControllerSubsystem>(); }
 UMissionManagerSubsystem* UStrategyCampaignSubsystem::GetMissionManager() const { return GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>(); }
 
+UFactionIntelSubsystem* UStrategyCampaignSubsystem::GetFactionIntelManager() const
+{
+    return GetGameInstance() ? GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>() : nullptr;
+}
+
 void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)
 {
     if (SlotIndex < 1) SlotIndex = 1;
@@ -469,7 +480,12 @@ void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)
         {
             SaveGame->SavedSites = BaseMgr->SerializeAllSites();
         }
-        SaveGame->SaveSchemaVersion = StrategySiteMapSaveSchemaVersion;
+        if (UFactionIntelSubsystem* IntelMgr = GetFactionIntelManager())
+        {
+            SaveGame->SavedIntelHuman = IntelMgr->SerializeIntel(EFactionType::Human);
+            SaveGame->SavedIntelEnemy = IntelMgr->SerializeIntel(EFactionType::Enemy);
+        }
+        SaveGame->SaveSchemaVersion = StrategyIntelSaveSchemaVersion;
         SaveGame->bIsContinuedCampaign = true;
     }
     else
@@ -535,6 +551,22 @@ void UStrategyCampaignSubsystem::LoadCampaign(int32 SlotIndex)
     }
 
     BaseMgr->DeserializeAllSites(Loaded->SavedSites);
+
+    if (UFactionIntelSubsystem* IntelMgr = GetFactionIntelManager())
+    {
+        IntelMgr->ClearAllIntel();
+        if (Loaded->SaveSchemaVersion >= StrategyIntelSaveSchemaVersion)
+        {
+            IntelMgr->DeserializeIntel(EFactionType::Human, Loaded->SavedIntelHuman, BaseMgr);
+            IntelMgr->DeserializeIntel(EFactionType::Enemy, Loaded->SavedIntelEnemy, BaseMgr);
+            UE_LOG(LogTemp, Display, TEXT("[INTEL] Restored intel snapshots — Human:%d Enemy:%d"),
+                Loaded->SavedIntelHuman.Num(), Loaded->SavedIntelEnemy.Num());
+        }
+        else
+        {
+            IntelMgr->SeedIntelFromDiscoveredSites(BaseMgr);
+        }
+    }
 
     GetTimeManager()->AdvanceDays(Loaded->CurrentDay - GetTimeManager()->GetCurrentDay());
     GetResourceManager()->SetResources(EFactionType::Human, Loaded->HumanResources);
