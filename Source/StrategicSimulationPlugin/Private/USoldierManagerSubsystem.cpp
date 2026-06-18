@@ -154,6 +154,42 @@ const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetRoster(EFactionTyp
     return (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
 }
 
+bool USoldierManagerSubsystem::IsSoldierEligibleForMission(const UStrategySoldier* Soldier)
+{
+    return Soldier
+        && !Soldier->bIsKIA
+        && !Soldier->bIsMIA
+        && !Soldier->bIsPOW
+        && Soldier->CurrentMission == nullptr;
+}
+
+TArray<UStrategySoldier*> USoldierManagerSubsystem::GatherMissionReadySoldiersAtBase(UStrategyBase* Base,
+    EFactionType Faction) const
+{
+    TArray<UStrategySoldier*> ReadySoldiers;
+    if (!Base)
+    {
+        return ReadySoldiers;
+    }
+
+    for (UStrategySoldier* Soldier : GetRoster(Faction))
+    {
+        if (!IsSoldierEligibleForMission(Soldier))
+        {
+            continue;
+        }
+
+        if (Soldier->StationedBase != Base)
+        {
+            continue;
+        }
+
+        ReadySoldiers.Add(Soldier);
+    }
+
+    return ReadySoldiers;
+}
+
 /** Logs every soldier in the faction roster via PrintInfo. */
 void USoldierManagerSubsystem::Debug_PrintTeamRoster(EFactionType Faction) const
 {
@@ -322,6 +358,14 @@ void USoldierManagerSubsystem::ProcessCrewOnVehicleDestruction(UStrategyVehicle*
     }
 
     TArray<UStrategySoldier*> Passengers = Vehicle->CurrentPassengers;
+    if (Passengers.Num() == 0)
+    {
+        const FString VehicleName = Vehicle->VehicleDefinition
+            ? Vehicle->VehicleDefinition->VehicleName.ToString()
+            : Vehicle->GetName();
+        UE_LOG(LogTemp, Warning, TEXT("[SALVAGE] Vehicle '%s' destroyed with no crew aboard"), *VehicleName);
+    }
+
     for (UStrategySoldier* Soldier : Passengers)
     {
         if (!Soldier)

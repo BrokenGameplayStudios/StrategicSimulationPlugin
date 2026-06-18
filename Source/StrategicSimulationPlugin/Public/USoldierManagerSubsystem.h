@@ -40,6 +40,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Soldier")
     int32 GetNumSoldiersStationedAt(UStrategyBase* Base, EFactionType Faction) const;
 
+    /** True when the soldier can be assigned to a vehicle mission from a base. */
+    UFUNCTION(BlueprintPure, Category = "Soldier|Mission")
+    static bool IsSoldierEligibleForMission(const UStrategySoldier* Soldier);
+
+    /** Stationed at Base, not on mission, and not KIA/MIA/POW. */
+    UFUNCTION(BlueprintCallable, Category = "Soldier|Mission")
+    TArray<UStrategySoldier*> GatherMissionReadySoldiersAtBase(UStrategyBase* Base, EFactionType Faction) const;
+
     /** Broadcasts OnSoldierListChanged with the current roster for Faction. */
     UFUNCTION(BlueprintCallable, Category = "Soldier")
     void BroadcastSoldierListChanged(EFactionType Faction);

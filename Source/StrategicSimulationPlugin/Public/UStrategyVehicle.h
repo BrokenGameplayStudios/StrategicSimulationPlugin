@@ -83,6 +83,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vehicle|State")
     void InitializeParkedAtBase();
 
+    /** Number of soldiers currently aboard. */
+    UFUNCTION(BlueprintPure, Category = "Vehicle|Crew")
+    int32 GetCrewCount() const { return CurrentPassengers.Num(); }
+
+    /** True when at least one soldier is aboard (minimum to depart). */
+    UFUNCTION(BlueprintPure, Category = "Vehicle|Crew")
+    bool HasMinimumCrew() const { return CurrentPassengers.Num() > 0; }
+
     /** Begin live mission movement toward a target */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void BeginMissionMovement(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget, EMissionType MissionType);

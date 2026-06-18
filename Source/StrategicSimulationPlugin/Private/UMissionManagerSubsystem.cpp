@@ -1388,6 +1388,11 @@ bool UMissionManagerSubsystem::IsVehicleReadyForMissionLaunch(UStrategyVehicle* 
         return false;
     }
 
+    if (!Vehicle->HasMinimumCrew())
+    {
+        return false;
+    }
+
     if (IsVehicleCommittedToAnyMission(Vehicle, Mission))
     {
         for (const UMissionGroup* OtherMission : ActiveMissions)
@@ -1448,11 +1453,211 @@ TArray<UStrategyVehicle*> UMissionManagerSubsystem::GatherIdleVehiclesAtBase(USt
                 continue;
             }
 
+            if (!Vehicle->HasMinimumCrew() && !BaseHasMissionReadySoldiers(Base, Base->OwningFaction))
+            {
+                continue;
+            }
+
             IdleVehicles.Add(Vehicle);
         }
     }
 
     return IdleVehicles;
+}
+
+bool UMissionManagerSubsystem::IsSoldierAboardAnyVehicle(const UStrategySoldier* Soldier) const
+{
+    if (!Soldier)
+    {
+        return false;
+    }
+
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseMgr)
+    {
+        return false;
+    }
+
+    auto VehicleHasSoldier = [&](const UStrategyVehicle* Vehicle) -> bool
+    {
+        return Vehicle && Vehicle->CurrentPassengers.Contains(const_cast<UStrategySoldier*>(Soldier));
+    };
+
+    for (const EFactionType Faction : { EFactionType::Human, EFactionType::Enemy })
+    {
+        for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
+        {
+            if (!Base)
+            {
+                continue;
+            }
+
+            for (UStrategyFacility* Facility : Base->Facilities)
+            {
+                if (!Facility)
+                {
+                    continue;
+                }
+
+                for (UStrategyVehicle* Vehicle : Facility->ParkedVehicles)
+                {
+                    if (VehicleHasSoldier(Vehicle))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    for (const UMissionGroup* Mission : ActiveMissions)
+    {
+        if (!Mission)
+        {
+            continue;
+        }
+
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (VehicleHasSoldier(Vehicle))
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool UMissionManagerSubsystem::BaseHasMissionReadySoldiers(UStrategyBase* Base, EFactionType Faction) const
+{
+    USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
+    if (!SoldierMgr || !Base)
+    {
+        return false;
+    }
+
+    TArray<UStrategySoldier*> Pool = SoldierMgr->GatherMissionReadySoldiersAtBase(Base, Faction);
+    Pool.RemoveAll([this](UStrategySoldier* Soldier)
+    {
+        return Soldier && IsSoldierAboardAnyVehicle(Soldier);
+    });
+
+    return Pool.Num() > 0;
+}
+
+bool UMissionManagerSubsystem::TryAssignMissionCrew(UMissionGroup* Mission, UStrategyBase* OriginBase,
+    EFactionType Faction, bool bMaxFill)
+{
+    if (!Mission || !OriginBase)
+    {
+        return false;
+    }
+
+    USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
+    if (!SoldierMgr)
+    {
+        return false;
+    }
+
+    TArray<UStrategySoldier*> AvailableSoldiers = SoldierMgr->GatherMissionReadySoldiersAtBase(OriginBase, Faction);
+    AvailableSoldiers.RemoveAll([this](UStrategySoldier* Soldier)
+    {
+        return Soldier && IsSoldierAboardAnyVehicle(Soldier);
+    });
+
+    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+    {
+        if (!Vehicle)
+        {
+            continue;
+        }
+
+        for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+        {
+            if (Soldier && Soldier->CurrentMission == Mission)
+            {
+                Soldier->CurrentMission = nullptr;
+            }
+        }
+        Vehicle->CurrentPassengers.Empty();
+
+        const int32 Capacity = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->SoldierCapacity : 4;
+        const int32 TargetCrew = bMaxFill ? Capacity : 1;
+        int32 Assigned = 0;
+
+        while (Assigned < TargetCrew && AvailableSoldiers.Num() > 0)
+        {
+            UStrategySoldier* Soldier = AvailableSoldiers[0];
+            AvailableSoldiers.RemoveAt(0);
+            if (!Soldier)
+            {
+                continue;
+            }
+
+            Vehicle->CurrentPassengers.Add(Soldier);
+            Soldier->CurrentMission = Mission;
+            ++Assigned;
+        }
+
+        const FString VehicleName = Vehicle->VehicleDefinition
+            ? Vehicle->VehicleDefinition->VehicleName.ToString()
+            : Vehicle->GetName();
+
+        if (Assigned == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[CREW] No soldiers available at '%s' for vehicle '%s'"),
+                *OriginBase->BaseName.ToString(), *VehicleName);
+            return false;
+        }
+
+        UE_LOG(LogTemp, Display, TEXT("[CREW] Assigned %d/%d soldiers to '%s' for %s"),
+            Assigned, Capacity, *VehicleName, *UEnum::GetValueAsString(Mission->MissionType));
+    }
+
+    return true;
+}
+
+void UMissionManagerSubsystem::AbortMissionBeforeLaunch(UMissionGroup* Mission, const FString& Reason)
+{
+    if (!Mission)
+    {
+        return;
+    }
+
+    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+    {
+        if (!Vehicle)
+        {
+            continue;
+        }
+
+        for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+        {
+            if (Soldier && Soldier->CurrentMission == Mission)
+            {
+                Soldier->CurrentMission = nullptr;
+            }
+        }
+
+        Vehicle->CurrentPassengers.Empty();
+        if (Vehicle->CurrentMission == Mission)
+        {
+            Vehicle->CurrentMission = nullptr;
+            Vehicle->InitializeParkedAtBase();
+        }
+    }
+
+    if (Mission->TargetContactId.IsValid())
+    {
+        if (URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>())
+        {
+            ContactMgr->UnmarkContactTargeted(Mission->TargetContactId);
+        }
+    }
+
+    ActiveMissions.Remove(Mission);
+    UE_LOG(LogTemp, Warning, TEXT("[MISSION] Aborted before launch — %s"), *Reason);
 }
 
 /** Unparks vehicles and sets home hangar before launch. */
@@ -1513,6 +1718,12 @@ void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
             continue;
         }
 
+        if (!TryAssignMissionCrew(Mission, Mission->OriginBase, Mission->AttackingFaction, true))
+        {
+            ToCancel.Add(Mission);
+            continue;
+        }
+
         TArray<UStrategyVehicle*> ReadyVehicles;
         for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
         {
@@ -1556,15 +1767,7 @@ void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
 
     for (UMissionGroup* Mission : ToCancel)
     {
-        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
-        {
-            if (Vehicle && Vehicle->CurrentMission == Mission)
-            {
-                Vehicle->CurrentMission = nullptr;
-            }
-        }
-        ActiveMissions.Remove(Mission);
-        UE_LOG(LogTemp, Warning, TEXT("[MISSION] Cancelled deferred mission — no vehicles ready at launch time"));
+        AbortMissionBeforeLaunch(Mission, TEXT("deferred launch failed (crew or vehicle readiness)"));
     }
 }
 
@@ -1732,40 +1935,13 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         }
     }
 
-    USoldierManagerSubsystem* SoldierMgr = GetSoldierManager();
-    if (SoldierMgr)
+    if (!bDeferLaunch)
     {
-        TArray<UStrategySoldier*> SoldiersToUse = SoldiersToAssign;
-        if (SoldiersToUse.Num() == 0)
+        if (!TryAssignMissionCrew(NewMission, OriginBase, AttackingFaction, true))
         {
-            SoldiersToUse = SoldierMgr->GetRoster(AttackingFaction);
-        }
-
-        int32 SoldierIndex = 0;
-
-        for (UStrategyVehicle* Vehicle : Vehicles)
-        {
-            if (!Vehicle) continue;
-
-            int32 Capacity = Vehicle->VehicleDefinition ? Vehicle->VehicleDefinition->SoldierCapacity : 4;
-            for (int32 i = 0; i < Capacity && SoldierIndex < SoldiersToUse.Num(); ++i)
-            {
-                UStrategySoldier* Soldier = SoldiersToUse[SoldierIndex++];
-                Vehicle->CurrentPassengers.Add(Soldier);
-                Soldier->CurrentMission = NewMission;
-
-                if (Soldier->HomeBarracks == nullptr)
-                {
-                    for (UStrategyFacility* Barracks : OriginBase->Facilities)
-                    {
-                        if (Barracks && Barracks->FacilityDefinition && Barracks->FacilityDefinition->FacilityType == EFacilityType::LivingQuarters)
-                        {
-                            Soldier->HomeBarracks = Barracks;
-                            break;
-                        }
-                    }
-                }
-            }
+            AbortMissionBeforeLaunch(NewMission, FString::Printf(
+                TEXT("no crew available at '%s'"), *OriginBase->BaseName.ToString()));
+            return nullptr;
         }
     }
 
@@ -1780,7 +1956,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
         PrepareVehiclesForDeparture(NewMission);
         if (!ActivateLiveMovementForVehicles(NewMission, MissionType))
         {
-            ActiveMissions.Remove(NewMission);
+            AbortMissionBeforeLaunch(NewMission, TEXT("live movement activation failed"));
             return nullptr;
         }
 

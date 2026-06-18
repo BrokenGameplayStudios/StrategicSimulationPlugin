@@ -237,4 +237,16 @@ private:
     bool IsVehicleReadyForMissionLaunch(UStrategyVehicle* Vehicle, const UMissionGroup* Mission) const;
     /** Cancels deferred missions from prior days that never launched. */
     void CancelStaleDeferredMissions(int32 CurrentSimulationDay);
+
+    /** True when the soldier is already listed on a vehicle's CurrentPassengers. */
+    bool IsSoldierAboardAnyVehicle(const UStrategySoldier* Soldier) const;
+
+    /** Max-fills each fleet vehicle from stationed soldiers; requires >=1 crew per vehicle. */
+    bool TryAssignMissionCrew(UMissionGroup* Mission, UStrategyBase* OriginBase, EFactionType Faction, bool bMaxFill = true);
+
+    /** Rolls back a mission that failed before movement activation. */
+    void AbortMissionBeforeLaunch(UMissionGroup* Mission, const FString& Reason);
+
+    /** True when at least one mission-ready soldier is stationed at the base. */
+    bool BaseHasMissionReadySoldiers(UStrategyBase* Base, EFactionType Faction) const;
 };
