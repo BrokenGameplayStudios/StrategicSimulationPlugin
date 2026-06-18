@@ -254,7 +254,7 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
         {
             OutTarget = BestSite->Location;
             InOutReservedSites.Add(BestSite);
-            UE_LOG(LogTemp, Display, TEXT("[MISSION TARGET] %s → recon site '%s' at (%.0f, %.0f)"),
+            UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → recon site '%s' at (%.0f, %.0f)"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
                 *BestSite->SiteName, OutTarget.X, OutTarget.Y);
             return true;
@@ -269,7 +269,7 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
             return false;
         }
 
-        UE_LOG(LogTemp, Display, TEXT("[MISSION TARGET] %s → patrol point (%.0f, %.0f) — no undiscovered sites in range"),
+        UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → patrol point (%.0f, %.0f) — no undiscovered sites in range"),
             Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
             OutTarget.X, OutTarget.Y);
         return true;
@@ -302,7 +302,7 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
                 *OutTargetBase = TargetBase;
             }
 
-            UE_LOG(LogTemp, Display, TEXT("[BASE ATTACK EVENT] %s from '%s' → enemy base '%s' at (%.0f, %.0f)"),
+            UE_LOG(LogTemp, Verbose, TEXT("[BASE ATTACK EVENT] %s from '%s' → enemy base '%s' at (%.0f, %.0f)"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
                 Vehicle->HomeBase ? *Vehicle->HomeBase->BaseName.ToString() : TEXT("Unknown"),
                 *TargetBase->BaseName.ToString(), OutTarget.X, OutTarget.Y);
@@ -493,7 +493,7 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
         }
         LaunchedVehicles.Add(Vehicle);
 
-        UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Activated %s for %s from (%.0f,%.0f) → (%.0f,%.0f) round-trip %.0f, range left: %.0f"),
+        UE_LOG(LogTemp, Verbose, TEXT("[LIVE MISSION] Activated %s for %s from (%.0f,%.0f) → (%.0f,%.0f) round-trip %.0f, range left: %.0f"),
             *UEnum::GetValueAsString(MissionType),
             Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
             OriginLocation.X, OriginLocation.Y, TargetLocation.X, TargetLocation.Y,
@@ -707,9 +707,16 @@ void UMissionManagerSubsystem::PrepareVehiclesForDeparture(UMissionGroup* Missio
 void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
 {
     TArray<UMissionGroup*> ToCancel;
+    static constexpr int32 MaxMissionLaunchesPerTick = 8;
+    int32 LaunchesThisTick = 0;
 
     for (UMissionGroup* Mission : ActiveMissions)
     {
+        if (LaunchesThisTick >= MaxMissionLaunchesPerTick)
+        {
+            break;
+        }
+
         if (!Mission || !Mission->bIsLiveMovement || Mission->bMovementActivated)
         {
             continue;
@@ -746,9 +753,10 @@ void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
         PrepareVehiclesForDeparture(Mission);
         ActivateLiveMovementForVehicles(Mission, Mission->MissionType);
         Mission->bMovementActivated = true;
+        ++LaunchesThisTick;
 
         const float HourOfDay = FMath::Fmod(CurrentHours, 24.f);
-        UE_LOG(LogTemp, Display, TEXT("[MISSION] Departing %s mission from '%s' at %.1fh (%d vehicles)"),
+        UE_LOG(LogTemp, Verbose, TEXT("[MISSION] Departing %s mission from '%s' at %.1fh (%d vehicles)"),
             *UEnum::GetValueAsString(Mission->MissionType),
             Mission->OriginBase ? *Mission->OriginBase->BaseName.ToString() : TEXT("Unknown"),
             HourOfDay,
@@ -851,7 +859,7 @@ void UMissionManagerSubsystem::HandleBaseAttackArrival(UStrategyVehicle* Vehicle
         ? Mission->TargetEnemyBase->BaseName.ToString()
         : TEXT("enemy base");
 
-    UE_LOG(LogTemp, Display, TEXT("[BASE ATTACK EVENT] %s from '%s' arrived at '%s' — base attack event here"),
+    UE_LOG(LogTemp, Verbose, TEXT("[BASE ATTACK EVENT] %s from '%s' arrived at '%s' — base attack event here"),
         *AttackerName, *OriginName, *TargetName);
 }
 
@@ -1027,7 +1035,7 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
         {
             ResolveMissionOutcome(Mission);
             ActiveMissions.RemoveAt(i);
-            UE_LOG(LogTemp, Display, TEXT("[LIVE MISSION] Mission fully completed — all vehicles docked or destroyed"));
+            UE_LOG(LogTemp, Verbose, TEXT("[LIVE MISSION] Mission fully completed — all vehicles docked or destroyed"));
         }
     }
 }
@@ -1159,7 +1167,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     if (bIsRecon)
     {
         Reward.ResearchPoints = FMath::RandRange(200, 500);
-        UE_LOG(LogTemp, Display, TEXT("[RECON] Mission complete — intel gathered via live radar pings"));
+        UE_LOG(LogTemp, Verbose, TEXT("[RECON] Mission complete — intel gathered via live radar pings"));
     }
     else
     {
@@ -1188,7 +1196,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
         ResourceMgr->AddResources(Mission->AttackingFaction, Reward);
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[MISSION] %s resolved as %s — Survived: %d | Combat losses: %d (no abstract casualties)"),
+    UE_LOG(LogTemp, Verbose, TEXT("[MISSION] %s resolved as %s — Survived: %d | Combat losses: %d (no abstract casualties)"),
         *UEnum::GetValueAsString(Mission->MissionType), *UEnum::GetValueAsString(Outcome),
         SurvivingVehicles, DestroyedVehicles);
 

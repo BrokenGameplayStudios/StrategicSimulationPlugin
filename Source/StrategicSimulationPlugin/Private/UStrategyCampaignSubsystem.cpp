@@ -44,6 +44,17 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
         {
             UE_LOG(LogTemp, Error, TEXT("Campaign could NOT get MissionManager!"));
         }
+
+        if (UAIControllerSubsystem* AI = GetAIController())
+        {
+            TimeMgr->OnDayPassed.RemoveDynamic(AI, &UAIControllerSubsystem::OnDayPassed);
+            TimeMgr->OnDayPassed.AddDynamic(AI, &UAIControllerSubsystem::OnDayPassed);
+            UE_LOG(LogTemp, Display, TEXT("Campaign bound AIController to OnDayPassed"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Campaign could NOT get AIController!"));
+        }
     }
     else
     {
@@ -64,7 +75,7 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("################################################################################"));
     UE_LOG(LogTemp, Display, TEXT("##############################   %s STARTED   ##############################"), *DateHeader);
     UE_LOG(LogTemp, Display, TEXT("################################################################################"));
-    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] %s passed — calling AI automatically"), *DateHeader);
+    UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] %s passed — daily repairs and mission housekeeping"), *DateHeader);
 
     // === DAILY SIMULATION (repairs + healing) ===
     if (UBaseManagerSubsystem* BaseMgr = GetBaseManager())
@@ -174,6 +185,18 @@ void UStrategyCampaignSubsystem::StartSimulation()
 
         UE_LOG(LogTemp, Display, TEXT("[MAP] StartSimulation generated %d sites on %.0fx%.0f map (max %d bases per faction)"),
             BaseMgr->AllPotentialSites.Num(), LogicalMapWidth, LogicalMapHeight, MaxAIBases);
+    }
+
+    if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
+    {
+        if (UAIControllerSubsystem* AI = GetAIController())
+        {
+            AI->ResetDailyProcessingState();
+        }
+
+        const int32 DayNumber = TimeMgr->GetSimulationDayNumber();
+        UE_LOG(LogTemp, Display, TEXT("[CAMPAIGN] Bases ready — triggering Day %d daily tick"), DayNumber);
+        TimeMgr->OnDayPassed.Broadcast(DayNumber);
     }
 
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG START ==="));

@@ -17,6 +17,7 @@
 
 void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+    Collection.InitializeDependency<UTimeManagerSubsystem>();
     Super::Initialize(Collection);
 
     if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
@@ -29,6 +30,11 @@ void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     UE_LOG(LogTemp, Display, TEXT("   Human AI: %s | Enemy AI: %s"),
         bSimulateHumanAI ? TEXT("ENABLED") : TEXT("DISABLED"),
         bSimulateEnemyAI ? TEXT("ENABLED") : TEXT("DISABLED"));
+}
+
+void UAIControllerSubsystem::ResetDailyProcessingState()
+{
+    LastProcessedDayPerFaction.Empty();
 }
 
 void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
@@ -308,7 +314,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     if (TryBuyAndEquip(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s purchase/equip action taken"), *UEnum::GetValueAsString(Faction));
     if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s production action taken"), *UEnum::GetValueAsString(Faction));
 
-    if (BaseMgr)
+    if (BaseMgr && Campaign && Campaign->bVerboseLogging)
     {
         BaseMgr->DebugPrintFullBaseState(Faction);
     }

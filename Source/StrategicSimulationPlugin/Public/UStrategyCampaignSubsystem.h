@@ -187,7 +187,7 @@ public:
 
     /** Master toggle for extra debug logging (Facility Ticks, etc.). Set false in production. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
-    bool bVerboseLogging = true;
+    bool bVerboseLogging = false;
 
     /** Debug toggles (controlled from AStrategyGameInitializer in the level) */    
     bool bShowUnlockMessages = true;

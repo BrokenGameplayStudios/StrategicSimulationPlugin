@@ -40,20 +40,20 @@ float UTimeManagerSubsystem::GetElapsedSimulationHours() const
     return static_cast<float>(Elapsed.GetTotalSeconds()) / 3600.0f;
 }
 
-void UTimeManagerSubsystem::RealTimeTick()
+void UTimeManagerSubsystem::ProcessSimulationStep(float StepSeconds)
 {
-    if (bIsPaused || TimeScale <= 0.0f) return;
+    if (StepSeconds <= 0.0f)
+    {
+        return;
+    }
 
-    float DeltaSeconds = 0.016f * TimeScale;
     PreviousTickGameDate = CurrentGameDate;
-    CurrentGameDate += FTimespan::FromSeconds(DeltaSeconds);
+    CurrentGameDate += FTimespan::FromSeconds(StepSeconds);
 
-    const FTimespan DeltaSpan = CurrentGameDate - PreviousTickGameDate;
-    const float DeltaGameHours = static_cast<float>(DeltaSpan.GetTotalSeconds()) / 3600.0f;
-
+    const float StepGameHours = StepSeconds / 3600.0f;
     if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
     {
-        MissionMgr->UpdateAllLiveVehicles(DeltaGameHours);
+        MissionMgr->UpdateAllLiveVehicles(StepGameHours);
     }
 
     const int32 CurrentSimulationDay = GetTotalSimulationDays();
@@ -64,6 +64,23 @@ void UTimeManagerSubsystem::RealTimeTick()
             SimulationDayNumber, GetElapsedSimulationHours(), CurrentSimulationDay);
         OnDayPassed.Broadcast(SimulationDayNumber);
         LastBroadcastSimulationDay = CurrentSimulationDay;
+    }
+}
+
+void UTimeManagerSubsystem::RealTimeTick()
+{
+    if (bIsPaused || TimeScale <= 0.0f) return;
+
+    float RemainingSeconds = 0.016f * TimeScale;
+    constexpr int32 MaxStepsPerRealTick = 32;
+    int32 StepsThisTick = 0;
+
+    while (RemainingSeconds > KINDA_SMALL_NUMBER && StepsThisTick < MaxStepsPerRealTick)
+    {
+        const float StepSeconds = FMath::Min(RemainingSeconds, MaxSimulationSecondsPerTick);
+        ProcessSimulationStep(StepSeconds);
+        RemainingSeconds -= StepSeconds;
+        ++StepsThisTick;
     }
 }
 
@@ -97,9 +114,8 @@ void UTimeManagerSubsystem::SetStartingDate(FDateTime NewStartDate)
     PreviousTickGameDate = NewStartDate;
     LastBroadcastSimulationDay = GetTotalSimulationDays();
 
-    UE_LOG(LogTemp, Display, TEXT("Starting date set to %s — simulation Day %d begins"),
+    UE_LOG(LogTemp, Display, TEXT("Starting date set to %s — awaiting campaign start for Day %d AI"),
         *CurrentGameDate.ToString(), GetSimulationDayNumber());
-    OnDayPassed.Broadcast(GetSimulationDayNumber());
     OnSimulationStarted.Broadcast();
 }
 
@@ -129,6 +145,11 @@ void UTimeManagerSubsystem::SetTimeScale(float NewScale)
 {
     TimeScale = FMath::Max(0.0f, NewScale);
     UE_LOG(LogTemp, Display, TEXT("Time scale set to %.4fx (Paused=%s)"), TimeScale, bIsPaused ? TEXT("YES") : TEXT("NO"));
+
+    if (TimeScale >= 1000.0f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[TIME] Extreme time scale (%.0fx) — expect heavy CPU/log load. Use Verbose=OFF for long unattended runs."), TimeScale);
+    }
 }
 
 void UTimeManagerSubsystem::TogglePause()

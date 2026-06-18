@@ -244,7 +244,7 @@ void UStrategyVehicle::DockAtHomeHangar()
         HomeHanger->ParkedVehicles.AddUnique(this);
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s docked at base '%s'"),
+    UE_LOG(LogTemp, Verbose, TEXT("[VEHICLE] %s docked at base '%s'"),
         VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
         HomeBase ? *HomeBase->BaseName.ToString() : TEXT("Unknown"));
 }
@@ -302,7 +302,7 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
         break;
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s began %s movement — out: %.1f hrs | search: %.1f hrs | return: %.1f hrs"),
+    UE_LOG(LogTemp, Verbose, TEXT("[VEHICLE] %s began %s movement — out: %.1f hrs | search: %.1f hrs | return: %.1f hrs"),
         VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
         *UEnum::GetValueAsString(MissionType),
         OutboundTravelTime, SearchTimeAtTarget, ReturnTravelTime);
@@ -571,7 +571,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
 
     if (Progress >= 1.0f)
     {
-        UE_LOG(LogTemp, Display, TEXT("[VEHICLE] %s mission path complete — docking"),
+        UE_LOG(LogTemp, Verbose, TEXT("[VEHICLE] %s mission path complete — docking"),
             VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this));
         DockAtHomeHangar();
     }

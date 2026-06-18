@@ -93,5 +93,9 @@ private:
 
     int32 LastBroadcastSimulationDay = -1;
 
+    /** Max simulated seconds processed per real-time tick (prevents single-frame meltdown at extreme time scale). */
+    static constexpr float MaxSimulationSecondsPerTick = 600.f;
+
     void RealTimeTick();
+    void ProcessSimulationStep(float StepSeconds);
 };

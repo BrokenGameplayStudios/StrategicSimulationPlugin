@@ -65,6 +65,9 @@ public:
     /** AI decision logic when one of its vehicles detects an enemy vehicle */
     void HandleVehicleDetection(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle);
 
+    /** Clears per-faction day guards so a restarted campaign can run Day 1 AI again. */
+    void ResetDailyProcessingState();
+
 private:
 
     // Per-faction day guard (fixes the skip bug)

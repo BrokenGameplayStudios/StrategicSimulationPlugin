@@ -12,6 +12,7 @@
 
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+    Collection.InitializeDependency<UTimeManagerSubsystem>();
     Super::Initialize(Collection);
 
     if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
@@ -800,18 +801,25 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
         AllPotentialSites.Add(ExistingSite);
     }
 
-    // Mark discovered for the correct faction
+    bool bNewDiscovery = false;
     if (Faction == EFactionType::Human)
     {
+        const int32 Before = DiscoveredSitesHuman.Num();
         DiscoveredSitesHuman.AddUnique(ExistingSite);
+        bNewDiscovery = DiscoveredSitesHuman.Num() > Before;
     }
     else
     {
+        const int32 Before = DiscoveredSitesEnemy.Num();
         DiscoveredSitesEnemy.AddUnique(ExistingSite);
+        bNewDiscovery = DiscoveredSitesEnemy.Num() > Before;
     }
 
-    UE_LOG(LogTemp, Display, TEXT("[DISCOVERY] %s discovered node at (%.0f, %.0f)"),
-        *UEnum::GetValueAsString(Faction), Location.X, Location.Y);
+    if (bNewDiscovery)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[DISCOVERY] %s discovered node at (%.0f, %.0f)"),
+            *UEnum::GetValueAsString(Faction), Location.X, Location.Y);
+    }
 
     return ExistingSite;
 }
