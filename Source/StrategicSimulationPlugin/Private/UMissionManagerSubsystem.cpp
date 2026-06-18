@@ -117,6 +117,18 @@ UStrategySiteDefinition* UMissionManagerSubsystem::FindSiteAtLocation(const FVec
     return BestMatch;
 }
 
+bool UMissionManagerSubsystem::IsSiteTargetedByActiveMissions(const UStrategySiteDefinition* Site, const UMissionGroup* IgnoreMission) const
+{
+    if (!Site)
+    {
+        return false;
+    }
+
+    TSet<UStrategySiteDefinition*> ReservedSites;
+    CollectSitesTargetedByActiveMissions(ReservedSites, IgnoreMission);
+    return ReservedSites.Contains(const_cast<UStrategySiteDefinition*>(Site));
+}
+
 void UMissionManagerSubsystem::CollectSitesTargetedByActiveMissions(TSet<UStrategySiteDefinition*>& OutSites, const UMissionGroup* IgnoreMission) const
 {
     for (const UMissionGroup* Mission : ActiveMissions)
@@ -1045,6 +1057,14 @@ void UMissionManagerSubsystem::HandleVehicleDestroyedInCombat(UStrategyVehicle* 
     if (!Vehicle || !Vehicle->IsDestroyed() || Vehicle->bWreckSalvageProcessed)
     {
         return;
+    }
+
+    if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+    {
+        if (!Campaign->bSalvageSitesEnabled)
+        {
+            return;
+        }
     }
 
     Vehicle->bWreckSalvageProcessed = true;

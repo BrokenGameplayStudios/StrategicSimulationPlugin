@@ -9,6 +9,8 @@
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
 #include "USoldierManagerSubsystem.h"
+#include "UMissionManagerSubsystem.h"
+#include "UTimeManagerSubsystem.h"
 
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -773,18 +775,53 @@ FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) con
     return Output;
 }
 
-// ==================== PASTE THIS FULL FUNCTION (replace the old AddDiscoveredSite) ====================
-UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type, float OptionalScore)
+UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType Faction, UStrategySiteDefinition* Site)
 {
-    // Match an existing generated site only when the ping is close to that node
+    if (!Site)
+    {
+        return nullptr;
+    }
+
+    Site->DiscoveringFaction = Faction;
+
+    bool bNewDiscovery = false;
+    if (Faction == EFactionType::Human)
+    {
+        const int32 Before = DiscoveredSitesHuman.Num();
+        DiscoveredSitesHuman.AddUnique(Site);
+        bNewDiscovery = DiscoveredSitesHuman.Num() > Before;
+    }
+    else if (Faction == EFactionType::Enemy)
+    {
+        const int32 Before = DiscoveredSitesEnemy.Num();
+        DiscoveredSitesEnemy.AddUnique(Site);
+        bNewDiscovery = DiscoveredSitesEnemy.Num() > Before;
+    }
+
+    if (bNewDiscovery)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[DISCOVERY] %s discovered %s at (%.0f, %.0f)"),
+            *UEnum::GetValueAsString(Faction),
+            *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(Site->SiteType)),
+            Site->Location.X, Site->Location.Y);
+    }
+
+    return Site;
+}
+
+UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSiteAtLocation(EFactionType Faction, FVector2D Location, EStrategySiteType Type, float OptionalScore)
+{
     UStrategySiteDefinition* ExistingSite = nullptr;
-    const float MatchTolerance = 128.f;
-    float BestDist = MatchTolerance;
+    float BestDist = SiteMatchTolerance;
 
     for (UStrategySiteDefinition* Site : AllPotentialSites)
     {
-        if (!Site || Site->Location.IsNearlyZero(10.f)) continue;
-        float Dist = FVector2D::Distance(Site->Location, Location);
+        if (!Site || Site->Location.IsNearlyZero(10.f))
+        {
+            continue;
+        }
+
+        const float Dist = FVector2D::Distance(Site->Location, Location);
         if (Dist <= BestDist)
         {
             BestDist = Dist;
@@ -794,45 +831,74 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
 
     if (!ExistingSite)
     {
-        // Fallback: create new only if truly new
         ExistingSite = NewObject<UStrategySiteDefinition>(this);
+        ExistingSite->SiteId = FGuid::NewGuid();
         ExistingSite->Location = Location;
         ExistingSite->SiteType = Type;
         AllPotentialSites.Add(ExistingSite);
     }
-
-    bool bNewDiscovery = false;
-    if (Faction == EFactionType::Human)
+    else if (ExistingSite->SiteType != Type)
     {
-        const int32 Before = DiscoveredSitesHuman.Num();
-        DiscoveredSitesHuman.AddUnique(ExistingSite);
-        bNewDiscovery = DiscoveredSitesHuman.Num() > Before;
-    }
-    else
-    {
-        const int32 Before = DiscoveredSitesEnemy.Num();
-        DiscoveredSitesEnemy.AddUnique(ExistingSite);
-        bNewDiscovery = DiscoveredSitesEnemy.Num() > Before;
+        static bool bLoggedTypeMismatch = false;
+        if (!bLoggedTypeMismatch)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("[DISCOVERY] WARNING: AddDiscoveredSiteAtLocation matched site type %s but caller requested %s — use AddDiscoveredSite(Faction, Site)"),
+                *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(ExistingSite->SiteType)),
+                *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(Type)));
+            bLoggedTypeMismatch = true;
+        }
     }
 
-    if (bNewDiscovery)
+    return AddDiscoveredSite(Faction, ExistingSite);
+}
+
+void UBaseManagerSubsystem::RegisterCombatKnownSalvage(UStrategySiteDefinition* Site)
+{
+    if (!Site || Site->SiteType != EStrategySiteType::SalvageSite)
     {
-        UE_LOG(LogTemp, Display, TEXT("[DISCOVERY] %s discovered node at (%.0f, %.0f)"),
-            *UEnum::GetValueAsString(Faction), Location.X, Location.Y);
+        return;
     }
 
-    return ExistingSite;
+    for (const EFactionType Faction : Site->KnownFactions)
+    {
+        if (Faction == EFactionType::Human || Faction == EFactionType::Enemy)
+        {
+            AddDiscoveredSite(Faction, Site);
+        }
+    }
 }
 
 UStrategySiteDefinition* UBaseManagerSubsystem::CreateSalvageSite(FVector2D Location, UStrategyVehicle* DestroyedVehicle)
 {
     UStrategySiteDefinition* Site = NewObject<UStrategySiteDefinition>(this);
+    Site->SiteId = FGuid::NewGuid();
     Site->Location = Location;
     Site->SiteType = EStrategySiteType::SalvageSite;
+    Site->SalvageState = ESalvageSiteState::Active;
     Site->bHasBeenUsed = false;
+
+    if (DestroyedVehicle && DestroyedVehicle->HomeBase)
+    {
+        Site->WreckOwnerFaction = DestroyedVehicle->HomeBase->OwningFaction;
+        Site->KnownFactions.AddUnique(Site->WreckOwnerFaction);
+    }
+
+    if (DestroyedVehicle && DestroyedVehicle->CurrentTargetVehicle.IsValid())
+    {
+        if (UStrategyVehicle* Opponent = DestroyedVehicle->CurrentTargetVehicle.Get())
+        {
+            if (Opponent->HomeBase)
+            {
+                Site->KnownFactions.AddUnique(Opponent->HomeBase->OwningFaction);
+            }
+        }
+    }
 
     if (DestroyedVehicle && DestroyedVehicle->VehicleDefinition)
     {
+        Site->SourceVehicleDefinition = DestroyedVehicle->VehicleDefinition;
+
         const FText& VehicleName = DestroyedVehicle->VehicleDefinition->VehicleName;
         Site->SiteName = FString::Printf(TEXT("Wreck: %s"), *VehicleName.ToString());
 
@@ -852,12 +918,96 @@ UStrategySiteDefinition* UBaseManagerSubsystem::CreateSalvageSite(FVector2D Loca
         Site->CurrentResources = Site->MaxResources;
     }
 
-    AllPotentialSites.Add(Site);
+    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
+    {
+        Site->CreatedOnSimulationDay = TimeMgr->GetTotalSimulationDays();
+    }
 
-    UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Wreck site created at (%.0f, %.0f) — discoverable via radar"),
-        Location.X, Location.Y);
+    for (UStrategySiteDefinition* Existing : AllPotentialSites)
+    {
+        if (!Existing)
+        {
+            continue;
+        }
+
+        if (FVector2D::Distance(Existing->Location, Location) <= SiteMatchTolerance)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("[SALVAGE] WARNING: Wreck within %.0f px of site '%s' (type %s)"),
+                SiteMatchTolerance,
+                *Existing->SiteName,
+                *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(Existing->SiteType)));
+            break;
+        }
+    }
+
+    AllPotentialSites.Add(Site);
+    RegisterCombatKnownSalvage(Site);
+
+    UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Wreck site created at (%.0f, %.0f) — owner %s — known to %d faction(s)"),
+        Location.X, Location.Y,
+        *UEnum::GetValueAsString(Site->WreckOwnerFaction),
+        Site->KnownFactions.Num());
 
     return Site;
+}
+
+bool UBaseManagerSubsystem::IsSalvageSite(const UStrategySiteDefinition* Site) const
+{
+    return Site != nullptr && Site->SiteType == EStrategySiteType::SalvageSite;
+}
+
+bool UBaseManagerSubsystem::IsSiteKnownToFaction(EFactionType Faction, const UStrategySiteDefinition* Site) const
+{
+    if (!Site)
+    {
+        return false;
+    }
+
+    if (Site->KnownFactions.Contains(Faction))
+    {
+        return true;
+    }
+
+    const TArray<UStrategySiteDefinition*>& Discovered =
+        (Faction == EFactionType::Human) ? DiscoveredSitesHuman : DiscoveredSitesEnemy;
+    return Discovered.Contains(Site);
+}
+
+bool UBaseManagerSubsystem::CanSalvageSite(EFactionType Faction, const UStrategySiteDefinition* Site,
+    const UStrategyVehicle* SalvageVehicle) const
+{
+    (void)SalvageVehicle;
+
+    if (!IsSalvageSite(Site))
+    {
+        return false;
+    }
+
+    if (Site->SalvageState != ESalvageSiteState::Active)
+    {
+        return false;
+    }
+
+    if (Site->bHasBeenUsed || Site->CurrentResources.IsEmpty())
+    {
+        return false;
+    }
+
+    if (!IsSiteKnownToFaction(Faction, Site))
+    {
+        return false;
+    }
+
+    if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
+    {
+        if (MissionMgr->IsSiteTargetedByActiveMissions(Site))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistanceBetweenSites,
@@ -892,7 +1042,8 @@ void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistan
             }
             if (bTooClose) continue;
 
-            UStrategySiteDefinition* NewSite = NewObject<UStrategySiteDefinition>();
+            UStrategySiteDefinition* NewSite = NewObject<UStrategySiteDefinition>(this);
+            NewSite->SiteId = FGuid::NewGuid();
             NewSite->Location = NewLoc;
             NewSite->SiteType = EStrategySiteType::PotentialBase;
             NewSite->SiteName = FString::Printf(TEXT("Potential Base %d"), SitesPlaced + 1);
@@ -920,6 +1071,11 @@ void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistan
 bool UBaseManagerSubsystem::CanBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* Site) const
 {
     if (!Site) return false;
+
+    if (Site->SiteType != EStrategySiteType::PotentialBase)
+    {
+        return false;
+    }
 
     // Site must be discovered by this faction
     const TArray<UStrategySiteDefinition*>& Discovered = (Faction == EFactionType::Human)

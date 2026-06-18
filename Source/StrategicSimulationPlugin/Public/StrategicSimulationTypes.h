@@ -4,6 +4,9 @@
 #include "UObject/NoExportTypes.h"
 #include "StrategicSimulationTypes.generated.h"
 
+/** Shared tolerance (px) for site discovery nearest-match, waypoint resolution, and mission dedup. */
+constexpr float SiteMatchTolerance = 128.f;
+
 // Faction symmetry
 UENUM(BlueprintType)
 enum class EFactionType : uint8
@@ -103,19 +106,19 @@ enum class ETechTier : uint8
 UENUM(BlueprintType)
 enum class EFacilityType : uint8
 {
-    Command,            // Base Heart.
-    LivingQuarters,     // Holds / Generates Soldiers
-    Laboratory,         // Research
-    Workshop,           // Generate Items and Metal
-    VehicleRepair,      // Will be used for VehicleRepair bay
-    Storage,            // Provides more metal, TODO Perbaee ITEM Stockpile limits.
-    Defense,            // Special for attack protection
-    Hanger,             // Generates and holds vehicles.
-    Medical,            // Heals Soldiers
-    Containment,        // NEW - holds POWs, daily intel/research bonus per POW
-    Autopsy,            // NEW - processes KIA bodies → research/exotics
-    PowerPlant,         // Increase base power bandiwdth.
-    Special             // Special
+    Command            UMETA(DisplayName = "Command"),
+    LivingQuarters     UMETA(DisplayName = "Living Quarters"),
+    Laboratory         UMETA(DisplayName = "Laboratory"),
+    Workshop           UMETA(DisplayName = "Workshop"),
+    VehicleRepair      UMETA(DisplayName = "Vehicle Repair"),
+    Storage            UMETA(DisplayName = "Storage"),
+    Defense            UMETA(DisplayName = "Defense"),
+    Hanger             UMETA(DisplayName = "Hanger"),
+    Medical            UMETA(DisplayName = "Medical"),
+    Containment        UMETA(DisplayName = "Containment"),
+    Autopsy            UMETA(DisplayName = "Autopsy"),
+    PowerPlant         UMETA(DisplayName = "Power Plant"),
+    Special            UMETA(DisplayName = "Special")
 };
 
 UENUM(BlueprintType)

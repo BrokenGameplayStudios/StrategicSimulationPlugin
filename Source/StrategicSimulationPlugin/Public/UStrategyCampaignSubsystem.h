@@ -63,6 +63,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | AI", meta = (ClampMin = "0", ClampMax = "500"))
     int32 MinOffenseToEngage = 10;
 
+    /** When false, destroyed vehicles do not spawn salvage wreck sites. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage")
+    bool bSalvageSitesEnabled = true;
+
     /** Full reset of the simulation (call from UI for New Game) */
     UFUNCTION(BlueprintCallable, Category = "Simulation")
     void ResetSimulation();

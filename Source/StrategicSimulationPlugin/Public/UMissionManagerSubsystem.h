@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "StrategicSimulationTypes.h"
 #include "UMissionGroup.h"
 #include "UMissionManagerSubsystem.generated.h"
 
@@ -80,6 +81,11 @@ public:
     /** Log placeholder when an Offensive mission reaches the target base */
     void HandleBaseAttackArrival(UStrategyVehicle* Vehicle, UMissionGroup* Mission);
 
+    /** True when an active mission already targets this site (waypoint within SiteMatchTolerance). */
+    UFUNCTION(BlueprintPure, Category = "Mission|Sites")
+    bool IsSiteTargetedByActiveMissions(const class UStrategySiteDefinition* Site,
+        const UMissionGroup* IgnoreMission = nullptr) const;
+
 private:
     /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
     float CalculateFleetEffectiveness(const UMissionGroup* Mission) const;
@@ -91,7 +97,7 @@ private:
 
     void GetMapBounds(float& OutWidth, float& OutHeight, float& OutPadding) const;
     void CollectSitesTargetedByActiveMissions(TSet<class UStrategySiteDefinition*>& OutSites, const UMissionGroup* IgnoreMission = nullptr) const;
-    class UStrategySiteDefinition* FindSiteAtLocation(const FVector2D& Location, float Tolerance = 25.f) const;
+    class UStrategySiteDefinition* FindSiteAtLocation(const FVector2D& Location, float Tolerance = SiteMatchTolerance) const;
     FVector2D PickPatrolPointWithinRange(const FVector2D& Origin, float MaxRoundTripRange, float MinX, float MinY, float MaxX, float MaxY) const;
     static bool IsValidMapLocation(const FVector2D& Location, float MinX, float MinY, float MaxX, float MaxY);
 

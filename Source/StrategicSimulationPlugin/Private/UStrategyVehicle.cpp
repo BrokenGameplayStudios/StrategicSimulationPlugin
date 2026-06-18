@@ -605,7 +605,7 @@ void UStrategyVehicle::PerformRadarPing()
 
                 if (!DiscoveredList.Contains(Site))
                 {
-                    BaseManager->AddDiscoveredSite(VehicleFaction, Site->Location, Site->SiteType);
+                    BaseManager->AddDiscoveredSite(VehicleFaction, Site);
                     OnSiteDetected.Broadcast(VehicleFaction, Site);
                 }
             }

@@ -14,12 +14,25 @@ enum class EStrategySiteType : uint8
     PointOfInterest
 };
 
+UENUM(BlueprintType)
+enum class ESalvageSiteState : uint8
+{
+    Active,
+    Depleted,
+    Removed
+};
+
+class UVehicleDefinition;
+
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategySiteDefinition : public UDataAsset
 {
     GENERATED_BODY()
 
 public:
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site")
+    FGuid SiteId;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site")
     FVector2D Location;
 
@@ -28,6 +41,23 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site")
     EFactionType DiscoveringFaction = EFactionType::Human;
+
+    /** Faction that owned the vehicle destroyed at this salvage site (Human = blue, Enemy = red on debug map). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    EFactionType WreckOwnerFaction = EFactionType::Neutral;
+
+    /** Factions that know this wreck location without radar (combat engagement participants). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    TArray<EFactionType> KnownFactions;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    ESalvageSiteState SalvageState = ESalvageSiteState::Active;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    TSoftObjectPtr<UVehicleDefinition> SourceVehicleDefinition;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    int32 CreatedOnSimulationDay = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Site")
     bool bHasBeenUsed = false;

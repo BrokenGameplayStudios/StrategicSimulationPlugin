@@ -4,7 +4,7 @@
 #include "UTimeManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "StrategicSiteDefinition.h"
-#include "USoldierManagerSubsystem.h"
+#include "UStrategicSimulationDisplayHelpers.h"
 #include "UStrategyBase.h"
 #include "UMissionGroup.h"
 #include "UMissionManagerSubsystem.h"
@@ -32,125 +32,128 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
 
     UBaseManagerSubsystem* BaseMgr = Campaign->GetBaseManager();
     UResourceManagerSubsystem* ResourceMgr = Campaign->GetResourceManager();
-    USoldierManagerSubsystem* SoldierMgr = Campaign->GetSoldierManager();
-    UMissionManagerSubsystem* MissionMgr = Campaign->GetMissionManager();
 
-    if (!BaseMgr || !ResourceMgr || !SoldierMgr) return;
+    if (!BaseMgr || !ResourceMgr) return;
+
+    auto ComputeFactionForceTotals = [](const TArray<UStrategyBase*>& Bases,
+        int32& OutSoldiersStationed, int32& OutSoldiersOnMission,
+        int32& OutVehiclesStationed, int32& OutVehiclesOnMission)
+    {
+        OutSoldiersStationed = 0;
+        OutSoldiersOnMission = 0;
+        OutVehiclesStationed = 0;
+        OutVehiclesOnMission = 0;
+
+        for (UStrategyBase* Base : Bases)
+        {
+            if (!Base) continue;
+            OutSoldiersStationed += Base->GetStationedSoldiersCount();
+            OutSoldiersOnMission += Base->GetSoldiersOnMissionCount();
+            OutVehiclesStationed += Base->GetStationedVehiclesCount();
+            OutVehiclesOnMission += Base->GetVehiclesOnMissionCount();
+        }
+    };
+
+    auto FindCommandCenterBase = [](const TArray<UStrategyBase*>& Bases) -> UStrategyBase*
+    {
+        for (UStrategyBase* Base : Bases)
+        {
+            if (Base && Base->BaseName.ToString() == TEXT("Command Center"))
+            {
+                return Base;
+            }
+        }
+        return nullptr;
+    };
 
     FString DebugText;
     DebugText += TEXT("=== STRATEGIC SIMULATION DEBUG ===\n");
     DebugText += FString::Printf(TEXT("DATE %s\n\n"), *Campaign->GetTimeManager()->GetCurrentGameDate().ToString());
 
-    // === FACTION SUMMARIES ===
     FResourceStockpile HumanRes = ResourceMgr->GetResources(EFactionType::Human);
     FResourceStockpile EnemyRes = ResourceMgr->GetResources(EFactionType::Enemy);
 
-    DebugText += FString::Printf(TEXT("[AI] Human | Bases: %d | M:%d Mt:%d Bio:%d Chem:%d Exo:%d RP:%d\n"),
-        BaseMgr->GetBases(EFactionType::Human).Num(),
+    const TArray<UStrategyBase*>& HumanBases = BaseMgr->GetBases(EFactionType::Human);
+    const TArray<UStrategyBase*>& EnemyBases = BaseMgr->GetBases(EFactionType::Enemy);
+
+    int32 HumanSoldiersSt = 0, HumanSoldiersMission = 0, HumanVehiclesSt = 0, HumanVehiclesMission = 0;
+    int32 EnemySoldiersSt = 0, EnemySoldiersMission = 0, EnemyVehiclesSt = 0, EnemyVehiclesMission = 0;
+    ComputeFactionForceTotals(HumanBases, HumanSoldiersSt, HumanSoldiersMission, HumanVehiclesSt, HumanVehiclesMission);
+    ComputeFactionForceTotals(EnemyBases, EnemySoldiersSt, EnemySoldiersMission, EnemyVehiclesSt, EnemyVehiclesMission);
+
+    DebugText += FString::Printf(
+        TEXT("[AI] Human | Bases: %d | M:%d Mt:%d Bio:%d Chem:%d Exo:%d RP:%d\n")
+        TEXT("  Soldiers St: %d | Soldiers Mission: %d | Vehicles St: %d | Vehicles Mission: %d\n"),
+        HumanBases.Num(),
         HumanRes.Money, HumanRes.Metals, HumanRes.Biologicals,
-        HumanRes.Chemicals, HumanRes.ExoticMaterial, HumanRes.ResearchPoints);
+        HumanRes.Chemicals, HumanRes.ExoticMaterial, HumanRes.ResearchPoints,
+        HumanSoldiersSt, HumanSoldiersMission, HumanVehiclesSt, HumanVehiclesMission);
 
-    DebugText += FString::Printf(TEXT("[AI] Enemy | Bases: %d | M:%d Mt:%d Bio:%d Chem:%d Exo:%d RP:%d\n\n"),
-        BaseMgr->GetBases(EFactionType::Enemy).Num(),
+    DebugText += FString::Printf(
+        TEXT("[AI] Enemy | Bases: %d | M:%d Mt:%d Bio:%d Chem:%d Exo:%d RP:%d\n")
+        TEXT("  Soldiers St: %d | Soldiers Mission: %d | Vehicles St: %d | Vehicles Mission: %d\n\n"),
+        EnemyBases.Num(),
         EnemyRes.Money, EnemyRes.Metals, EnemyRes.Biologicals,
-        EnemyRes.Chemicals, EnemyRes.ExoticMaterial, EnemyRes.ResearchPoints);
+        EnemyRes.Chemicals, EnemyRes.ExoticMaterial, EnemyRes.ResearchPoints,
+        EnemySoldiersSt, EnemySoldiersMission, EnemyVehiclesSt, EnemyVehiclesMission);
 
-    // === DETAILED BASE STATE (matching DebugPrintFullBaseState) ===
-    for (EFactionType Faction : { EFactionType::Human, EFactionType::Enemy })
+    if (UStrategyBase* HumanCC = FindCommandCenterBase(HumanBases))
     {
-        const TArray<UStrategyBase*>& Bases = BaseMgr->GetBases(Faction);
-        if (Bases.Num() == 0) continue;
+        DebugText += TEXT("=== Human Command Center ===\n");
+        AppendCommandCenterStats(HumanCC, DebugText);
+        DebugText += TEXT("\n");
+    }
 
-        DebugText += FString::Printf(TEXT("=== BASE STATE FOR %s (%d bases) ===\n"),
-            *UEnum::GetValueAsString(Faction), Bases.Num());
-
-        for (UStrategyBase* Base : Bases)
-        {
-            if (!Base) continue;
-
-            // === Soldiers Stationed (same logic as subsystem) ===
-            int32 SoldiersStationed = 0;
-            if (SoldierMgr)
-            {
-                for (UStrategySoldier* Soldier : SoldierMgr->GetRoster(Faction))
-                {
-                    if (Soldier && Soldier->StationedBase == Base)
-                        SoldiersStationed++;
-                }
-            }
-
-            // === Soldiers on Mission ===
-            int32 SoldiersOnMission = 0;
-            if (MissionMgr)
-            {
-                for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
-                {
-                    if (Mission && Mission->OriginBase == Base)
-                    {
-                        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
-                        {
-                            if (Vehicle)
-                                SoldiersOnMission += Vehicle->CurrentPassengers.Num();
-                        }
-                    }
-                }
-            }
-
-            // === Vehicles Stationed ===
-            int32 VehiclesStationed = 0;
-            for (UStrategyFacility* Fac : Base->Facilities)
-            {
-                if (Fac && Fac->bIsOperational && Fac->FacilityDefinition &&
-                    Fac->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-                {
-                    VehiclesStationed += Fac->ParkedVehicles.Num();
-                }
-            }
-
-            // === Vehicles on Mission ===
-            int32 VehiclesOnMission = 0;
-            if (MissionMgr)
-            {
-                for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
-                {
-                    if (Mission && Mission->OriginBase == Base)
-                        VehiclesOnMission += Mission->VehiclesInFleet.Num();
-                }
-            }
-
-            DebugText += FString::Printf(TEXT("Base: %s | Net Power: %d\n"),
-                *Base->BaseName.ToString(), Base->GetNetPower());
-
-            // Facilities
-            FString FacilityList;
-            TArray<EFacilityType> TypesToShow = {
-                EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
-                EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
-                EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy
-            };
-
-            for (EFacilityType Type : TypesToShow)
-            {
-                int32 Count = Base->GetTotalBuiltOfType(Type);
-                if (Count > 0)
-                {
-                    FacilityList += FString::Printf(TEXT("%d %s, "), Count, *UEnum::GetValueAsString(Type));
-                }
-            }
-            if (!FacilityList.IsEmpty())
-                FacilityList = FacilityList.LeftChop(2);
-
-            DebugText += FString::Printf(TEXT("  Facilities: %s\n"), *FacilityList);
-
-            DebugText += FString::Printf(TEXT("  Soldiers stationed: %d | Vehicles stationed: %d | POW Count: %d | KIA Bodies: %d\n"),
-                SoldiersStationed, VehiclesStationed, Base->GetPOWCount(), Base->GetKIABodyCount());
-
-            DebugText += FString::Printf(TEXT("  Soldiers on mission: %d | Vehicles on mission: %d\n\n"),
-                SoldiersOnMission, VehiclesOnMission);
-        }
+    if (UStrategyBase* EnemyCC = FindCommandCenterBase(EnemyBases))
+    {
+        DebugText += TEXT("=== Enemy Command Center ===\n");
+        AppendCommandCenterStats(EnemyCC, DebugText);
     }
 
     GEngine->AddOnScreenDebugMessage(999, 0.0f, FColor::Cyan, DebugText);
+}
+
+FString AStrategyDebugHUD::BuildFacilityListText(UStrategyBase* Base)
+{
+    if (!Base) return FString();
+
+    FString FacilityList;
+    const TArray<EFacilityType> TypesToShow = {
+        EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
+        EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
+        EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy
+    };
+
+    for (EFacilityType Type : TypesToShow)
+    {
+        const int32 Count = Base->GetTotalBuiltOfType(Type);
+        if (Count > 0)
+        {
+            if (!FacilityList.IsEmpty())
+            {
+                FacilityList += TEXT(", ");
+            }
+            FacilityList += UStrategicSimulationDisplayHelpers::FormatFacilityCount(Type, Count);
+        }
+    }
+
+    return FacilityList;
+}
+
+void AStrategyDebugHUD::AppendCommandCenterStats(UStrategyBase* Base, FString& DebugText)
+{
+    if (!Base) return;
+
+    DebugText += FString::Printf(TEXT("Base: %s | Net Power: %d\n"),
+        *Base->BaseName.ToString(), Base->GetNetPower());
+
+    const FString FacilityList = BuildFacilityListText(Base);
+    DebugText += FString::Printf(TEXT("  Facilities: %s\n"), *FacilityList);
+    DebugText += FString::Printf(TEXT("  Soldiers stationed: %d | Vehicles stationed: %d | POW Count: %d | KIA Bodies: %d\n"),
+        Base->GetStationedSoldiersCount(), Base->GetStationedVehiclesCount(),
+        Base->GetPOWCount(), Base->GetKIABodyCount());
+    DebugText += FString::Printf(TEXT("  Soldiers on mission: %d | Vehicles on mission: %d\n"),
+        Base->GetSoldiersOnMissionCount(), Base->GetVehiclesOnMissionCount());
 }
 
 void AStrategyDebugHUD::ToggleDebugHUD()
@@ -229,13 +232,17 @@ void AStrategyDebugHUD::DrawHUD()
     // === PHASE 1: Draw ALL potential nodes + fog-of-war markers ===
     DrawAllPotentialSites();
 
+    DrawInspectedSiteHighlight();
+
     // Legend (updated)
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE  = Human Bases"), 50, 50, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("RED   = Enemy Bases"), 50, 80, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GREEN = Human Vehicles  |  RED = Enemy Vehicles"), 50, 110, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths"), 50, 140, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 170, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 200, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE/RED TRIANGLE = Salvage Wreck (destroyed vehicle faction)"), 50, 200, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 230, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 260, 1.0f, 1.0f, FFontRenderInfo());
 
     // === SITE INSPECTOR (Bottom of screen) ===
     if (SelectedSiteIndex >= 0)
@@ -252,7 +259,28 @@ void AStrategyDebugHUD::DrawHUD()
                 InspectorText += FString::Printf(TEXT("=== SITE #%d INSPECTOR ===\n"), SelectedSiteIndex);
                 InspectorText += FString::Printf(TEXT("Name: %s\n"), *Site->SiteName);
                 InspectorText += FString::Printf(TEXT("Location: (%.0f, %.0f)\n"), Site->Location.X, Site->Location.Y);
-                InspectorText += FString::Printf(TEXT("Type: %s\n"), *UEnum::GetValueAsString(Site->SiteType));
+                InspectorText += FString::Printf(TEXT("Type: %s\n"),
+                    *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(Site->SiteType)));
+
+                if (Site->SiteType == EStrategySiteType::SalvageSite)
+                {
+                    InspectorText += FString::Printf(TEXT("Wreck Owner: %s\n"),
+                        *StaticEnum<EFactionType>()->GetDisplayNameTextByValue(static_cast<int64>(Site->WreckOwnerFaction)).ToString());
+
+                    FString KnownList;
+                    for (const EFactionType KnownFaction : Site->KnownFactions)
+                    {
+                        if (!KnownList.IsEmpty())
+                        {
+                            KnownList += TEXT(", ");
+                        }
+                        KnownList += StaticEnum<EFactionType>()->GetNameStringByValue(static_cast<int64>(KnownFaction));
+                    }
+                    InspectorText += FString::Printf(TEXT("Known Factions: %s\n"),
+                        KnownList.IsEmpty() ? TEXT("None") : *KnownList);
+                    InspectorText += FString::Printf(TEXT("Salvage State: %s\n"),
+                        *StaticEnum<ESalvageSiteState>()->GetNameStringByValue(static_cast<int64>(Site->SalvageState)));
+                }
 
                 bool bHumanDiscovered = BaseManager->DiscoveredSitesHuman.Contains(Site);
                 bool bEnemyDiscovered = BaseManager->DiscoveredSitesEnemy.Contains(Site);
@@ -306,27 +334,7 @@ void AStrategyDebugHUD::DrawHUD()
                         Extraction.Money, Extraction.Metals, Extraction.Biologicals,
                         Extraction.Chemicals, Extraction.ExoticMaterial, 0);
 
-                    // Facilities
-                    FString FacilityList;
-                    TArray<EFacilityType> Types = {
-                        EFacilityType::Command, EFacilityType::LivingQuarters, EFacilityType::Laboratory,
-                        EFacilityType::Workshop, EFacilityType::Hanger, EFacilityType::Medical,
-                        EFacilityType::VehicleRepair, EFacilityType::Containment, EFacilityType::Autopsy
-                    };
-
-                    for (EFacilityType Type : Types)
-                    {
-                        int32 Count = OwningBase->GetTotalBuiltOfType(Type);
-                        if (Count > 0)
-                        {
-                            FacilityList += FString::Printf(TEXT("%d %s, "), Count, *UEnum::GetValueAsString(Type));
-                        }
-                    }
-
-                    if (!FacilityList.IsEmpty())
-                        FacilityList = FacilityList.LeftChop(2);
-
-                    InspectorText += FString::Printf(TEXT("Facilities: %s\n"), *FacilityList);
+                    InspectorText += FString::Printf(TEXT("Facilities: %s\n"), *BuildFacilityListText(OwningBase));
 
                     // Dynamic Counts
                     int32 SoldiersStationed = OwningBase->GetStationedSoldiersCount();
@@ -353,7 +361,66 @@ void AStrategyDebugHUD::DrawHUD()
     }
 }
 
-// ==================== NEW FUNCTION - ADD THIS ANYWHERE IN THE FILE (e.g. after DrawDiscoveredSites) ====================
+void AStrategyDebugHUD::DrawInspectedSiteHighlight()
+{
+    if (!Canvas || SelectedSiteIndex < 0) return;
+
+    UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseManager || !BaseManager->AllPotentialSites.IsValidIndex(SelectedSiteIndex)) return;
+
+    UStrategySiteDefinition* Site = BaseManager->AllPotentialSites[SelectedSiteIndex];
+    if (!Site) return;
+
+    const float Scale = GetCurrentMapScale();
+    const FVector2D ScreenPos = GetScreenPosition(Site->Location);
+
+    const float BaseSize = 20.0f * Scale;
+    const float HighlightSize = BaseSize * 1.6f;
+    Canvas->K2_DrawBox(
+        ScreenPos - FVector2D(HighlightSize * 0.5f, HighlightSize * 0.5f),
+        FVector2D(HighlightSize, HighlightSize),
+        3.0f * Scale,
+        FLinearColor::Yellow);
+}
+
+void AStrategyDebugHUD::DrawSiteTriangle(const FVector2D& ScreenPos, float Size, float LineThickness, const FLinearColor& Color)
+{
+    if (!Canvas) return;
+
+    const FVector2D Top(ScreenPos.X, ScreenPos.Y - Size * 0.5f);
+    const FVector2D BottomLeft(ScreenPos.X - Size * 0.5f, ScreenPos.Y + Size * 0.5f);
+    const FVector2D BottomRight(ScreenPos.X + Size * 0.5f, ScreenPos.Y + Size * 0.5f);
+
+    Canvas->K2_DrawLine(Top, BottomLeft, LineThickness, Color);
+    Canvas->K2_DrawLine(BottomLeft, BottomRight, LineThickness, Color);
+    Canvas->K2_DrawLine(BottomRight, Top, LineThickness, Color);
+}
+
+void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 SiteIndex, float Scale)
+{
+    if (!Site || !Canvas) return;
+
+    const FVector2D ScreenPos = GetScreenPosition(Site->Location);
+    const float NodeSize = 10.0f * Scale;
+
+    FLinearColor WreckColor(0.7f, 0.7f, 0.7f, 0.9f);
+    if (Site->WreckOwnerFaction == EFactionType::Human)
+    {
+        WreckColor = FLinearColor::Blue;
+    }
+    else if (Site->WreckOwnerFaction == EFactionType::Enemy)
+    {
+        WreckColor = FLinearColor::Red;
+    }
+
+    DrawSiteTriangle(ScreenPos, NodeSize, 2.0f * Scale, WreckColor);
+
+    const FString IndexText = FString::Printf(TEXT("%d"), SiteIndex);
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(IndexText),
+        ScreenPos.X + 10.0f * Scale, ScreenPos.Y - 14.0f * Scale,
+        0.85f, 0.85f, FFontRenderInfo());
+}
+
 void AStrategyDebugHUD::DrawAllPotentialSites()
 {
     if (!Canvas || !bShowStrategyMap) return;
@@ -361,28 +428,31 @@ void AStrategyDebugHUD::DrawAllPotentialSites()
     UBaseManagerSubsystem* BaseManager = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     if (!BaseManager) return;
 
-    float Scale = GetCurrentMapScale();
+    const float Scale = GetCurrentMapScale();
 
     for (int32 i = 0; i < BaseManager->AllPotentialSites.Num(); i++)
     {
         UStrategySiteDefinition* Site = BaseManager->AllPotentialSites[i];
         if (!Site) continue;
 
-        FVector2D ScreenPos = GetScreenPosition(Site->Location);
+        if (Site->SiteType == EStrategySiteType::SalvageSite)
+        {
+            DrawSalvageSite(Site, i, Scale);
+            continue;
+        }
 
-        // Site Node
-        float NodeSize = 10.0f * Scale;
+        const FVector2D ScreenPos = GetScreenPosition(Site->Location);
+
+        const float NodeSize = 10.0f * Scale;
         Canvas->K2_DrawBox(ScreenPos - FVector2D(NodeSize * 0.5f, NodeSize * 0.5f),
             FVector2D(NodeSize, NodeSize), 1.0f, FLinearColor(0.85f, 0.85f, 0.85f, 0.8f));
 
-        // === Site Index Number (Bigger & Clearer) ===
-        FString IndexText = FString::Printf(TEXT("%d"), i);
+        const FString IndexText = FString::Printf(TEXT("%d"), i);
         Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(IndexText),
             ScreenPos.X + 10.0f * Scale, ScreenPos.Y - 14.0f * Scale,
-            0.85f, 0.85f, FFontRenderInfo());   // Increased size
+            0.85f, 0.85f, FFontRenderInfo());
 
-        // Discovery Markers
-        float MarkerSize = 4.0f * Scale;
+        const float MarkerSize = 4.0f * Scale;
         if (BaseManager->DiscoveredSitesHuman.Contains(Site))
         {
             Canvas->K2_DrawBox(ScreenPos - FVector2D(8.0f * Scale, 12.0f * Scale),

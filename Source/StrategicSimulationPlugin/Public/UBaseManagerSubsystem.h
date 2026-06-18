@@ -79,13 +79,31 @@ public:
     void GenerateInitialSites(int32 NumSites = 25, float MinDistanceBetweenSites = 180.0f,
         float LogicalMapWidth = 1920.0f, float LogicalMapHeight = 1080.0f, float BorderPadding = 100.0f);
 
-    /** Called by vehicles during recon when they find something good */
+    /** Registers the exact site pointer for a faction (canonical discovery path). */
     UFUNCTION(BlueprintCallable, Category = "Expansion")
-    UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, FVector2D Location, EStrategySiteType Type = EStrategySiteType::PotentialBase, float OptionalScore = 0.0f);
+    UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, UStrategySiteDefinition* Site);
 
-    /** Spawns a salvage site at a destroyed vehicle wreck (discoverable via radar) */
-    UFUNCTION(BlueprintCallable, Category = "Expansion")
+    /** Legacy location-based discovery. Prefer AddDiscoveredSite(Faction, Site) — nearest-match can register the wrong site. */
+    UFUNCTION(BlueprintCallable, Category = "Expansion", meta = (DeprecatedFunction, DeprecationMessage = "Use AddDiscoveredSite(Faction, Site)."))
+    UStrategySiteDefinition* AddDiscoveredSiteAtLocation(EFactionType Faction, FVector2D Location, EStrategySiteType Type = EStrategySiteType::PotentialBase, float OptionalScore = 0.0f);
+
+    /** Spawns a salvage site at a destroyed vehicle wreck. */
+    UFUNCTION(BlueprintCallable, Category = "Expansion|Salvage")
     UStrategySiteDefinition* CreateSalvageSite(FVector2D Location, class UStrategyVehicle* DestroyedVehicle);
+
+    /** Adds combat-known factions to discovery lists (no radar required). */
+    UFUNCTION(BlueprintCallable, Category = "Expansion|Salvage")
+    void RegisterCombatKnownSalvage(UStrategySiteDefinition* Site);
+
+    UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
+    bool IsSalvageSite(const UStrategySiteDefinition* Site) const;
+
+    UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
+    bool CanSalvageSite(EFactionType Faction, const UStrategySiteDefinition* Site,
+        const class UStrategyVehicle* SalvageVehicle = nullptr) const;
+
+    UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
+    bool IsSiteKnownToFaction(EFactionType Faction, const UStrategySiteDefinition* Site) const;
 
     /** Attempts to build a new base on a discovered site. Returns true if successful. */
     UFUNCTION(BlueprintCallable, Category = "Base Expansion")

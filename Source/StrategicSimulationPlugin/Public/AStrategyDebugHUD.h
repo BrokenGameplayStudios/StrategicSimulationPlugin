@@ -7,7 +7,8 @@
 
 class UStrategyBase;
 class UMissionGroup;
-class UStrategyVehicle;   // NEW
+class UStrategyVehicle;
+class UStrategySiteDefinition;
 
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API AStrategyDebugHUD : public AHUD
@@ -68,4 +69,9 @@ private:
     void DrawAllPotentialSites();
     void DrawVehicle(UStrategyVehicle* Vehicle);   // NEW    
     void DrawDiscoveredSites();
+    void DrawInspectedSiteHighlight();
+    void AppendCommandCenterStats(UStrategyBase* Base, FString& DebugText);
+    void DrawSalvageSite(UStrategySiteDefinition* Site, int32 SiteIndex, float Scale);
+    void DrawSiteTriangle(const FVector2D& ScreenPos, float Size, float LineThickness, const FLinearColor& Color);
+    static FString BuildFacilityListText(UStrategyBase* Base);
 };
