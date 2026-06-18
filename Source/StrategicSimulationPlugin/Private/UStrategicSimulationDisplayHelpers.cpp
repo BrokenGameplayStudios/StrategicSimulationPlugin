@@ -9,6 +9,7 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
+/** Returns the short enum name (e.g. "Command", "LivingQuarters") without the EFacilityType:: prefix. */
 FString UStrategicSimulationDisplayHelpers::GetFacilityTypeShortName(EFacilityType FacilityType)
 {
     const UEnum* Enum = StaticEnum<EFacilityType>();
@@ -20,6 +21,7 @@ FString UStrategicSimulationDisplayHelpers::GetFacilityTypeShortName(EFacilityTy
     return Enum->GetNameStringByValue(static_cast<int64>(FacilityType));
 }
 
+/** Returns a human-readable display name, using UMETA(DisplayName) when available. */
 FText UStrategicSimulationDisplayHelpers::GetFacilityTypeDisplayName(EFacilityType FacilityType)
 {
     const UEnum* Enum = StaticEnum<EFacilityType>();
@@ -31,11 +33,13 @@ FText UStrategicSimulationDisplayHelpers::GetFacilityTypeDisplayName(EFacilityTy
     return Enum->GetDisplayNameTextByValue(static_cast<int64>(FacilityType));
 }
 
+/** Formats a facility count for HUD text (e.g. "Command, 1"). */
 FString UStrategicSimulationDisplayHelpers::FormatFacilityCount(EFacilityType FacilityType, int32 Count)
 {
     return FString::Printf(TEXT("%s, %d"), *GetFacilityTypeShortName(FacilityType), Count);
 }
 
+/** Returns a human-readable site type name from EStrategySiteType UMETA(DisplayName). */
 FText UStrategicSimulationDisplayHelpers::GetSiteTypeDisplayName(EStrategySiteType SiteType)
 {
     const UEnum* Enum = StaticEnum<EStrategySiteType>();
@@ -46,6 +50,7 @@ FText UStrategicSimulationDisplayHelpers::GetSiteTypeDisplayName(EStrategySiteTy
     return Enum->GetDisplayNameTextByValue(static_cast<int64>(SiteType));
 }
 
+/** Returns a short status string for a site (wreck state, base built, available, etc.). */
 FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(const UStrategySiteDefinition* Site)
 {
     if (!Site)
@@ -72,6 +77,7 @@ FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(const UStra
     }
 }
 
+/** Faction-aware status using last-known base-built state when stale intel is enabled. */
 FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayTextForFaction(const UStrategySiteDefinition* Site,
     EFactionType ViewerFaction, const UObject* WorldContextObject)
 {
@@ -120,6 +126,7 @@ FString UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayTextForFaction(c
     return Status;
 }
 
+/** Returns true for Transport, Support, and Scout vehicles that can run salvage missions. */
 bool UStrategicSimulationDisplayHelpers::IsSalvageCapableVehicleType(EVehicleType VehicleType)
 {
     return VehicleType == EVehicleType::Transport
@@ -127,6 +134,7 @@ bool UStrategicSimulationDisplayHelpers::IsSalvageCapableVehicleType(EVehicleTyp
         || VehicleType == EVehicleType::Scout;
 }
 
+/** Returns the map marker color for a wreck based on WreckOwnerFaction (blue/red/gray). */
 FLinearColor UStrategicSimulationDisplayHelpers::GetSalvageWreckColor(EFactionType WreckOwnerFaction)
 {
     if (WreckOwnerFaction == EFactionType::Human)
@@ -140,6 +148,7 @@ FLinearColor UStrategicSimulationDisplayHelpers::GetSalvageWreckColor(EFactionTy
     return FLinearColor(0.7f, 0.7f, 0.7f, 0.9f);
 }
 
+/** Returns true when Site is an active salvage wreck known to ViewerFaction via fog-of-war rules. */
 bool UStrategicSimulationDisplayHelpers::ShouldShowSalvageToFaction(const UStrategySiteDefinition* Site,
     EFactionType ViewerFaction, const UBaseManagerSubsystem* BaseManager)
 {
@@ -156,6 +165,7 @@ bool UStrategicSimulationDisplayHelpers::ShouldShowSalvageToFaction(const UStrat
     return BaseManager->IsSiteKnownToFaction(ViewerFaction, Site);
 }
 
+/** Returns true when Site is visible to ViewerFaction (salvage rules or discovered-site list). */
 bool UStrategicSimulationDisplayHelpers::ShouldShowSiteToFaction(const UStrategySiteDefinition* Site,
     EFactionType ViewerFaction, const UBaseManagerSubsystem* BaseManager)
 {
@@ -175,11 +185,13 @@ bool UStrategicSimulationDisplayHelpers::ShouldShowSiteToFaction(const UStrategy
     return Discovered.Contains(Site);
 }
 
+/** Returns true when salvage sites and site persistence are both enabled on the campaign. */
 bool UStrategicSimulationDisplayHelpers::IsPlayerSalvageMapLayerEnabled(const UStrategyCampaignSubsystem* Campaign)
 {
     return Campaign && Campaign->bSalvageSitesEnabled && Campaign->bSitesPersistenceEnabled;
 }
 
+/** Computes aspect-fit uniform scale from widget size to logical map dimensions. */
 float UStrategicSimulationDisplayHelpers::GetMapUniformScale(FVector2D WidgetSize, const UStrategyCampaignSubsystem* Campaign)
 {
     float LogicalWidth = 1920.0f;
@@ -201,6 +213,7 @@ float UStrategicSimulationDisplayHelpers::GetMapUniformScale(FVector2D WidgetSiz
     return FMath::Min(ScaleX, ScaleY);
 }
 
+/** Converts a logical map position to centered widget coordinates with optional scale multiplier. */
 FVector2D UStrategicSimulationDisplayHelpers::MapLogicalToWidgetPosition(FVector2D LogicalPosition, FVector2D WidgetSize,
     const UStrategyCampaignSubsystem* Campaign, float MapScaleMultiplier)
 {
@@ -221,6 +234,7 @@ FVector2D UStrategicSimulationDisplayHelpers::MapLogicalToWidgetPosition(FVector
     return WidgetCenter + (ScaledPos - LogicalCenter * UniformScale);
 }
 
+/** Builds multi-line tooltip text for a salvage wreck (resources, days left, stale intel). */
 FText UStrategicSimulationDisplayHelpers::FormatSalvageTooltipText(const UStrategySiteDefinition* Site,
     const UBaseManagerSubsystem* BaseManager, EFactionType ViewerFaction)
 {
@@ -268,6 +282,7 @@ FText UStrategicSimulationDisplayHelpers::FormatSalvageTooltipText(const UStrate
         *StaleSuffix));
 }
 
+/** Formats a short discovery toast when a wreck is first revealed to Faction. */
 FText UStrategicSimulationDisplayHelpers::FormatSalvageDiscoveryToast(EFactionType Faction,
     const UStrategySiteDefinition* Site, EDiscoveryReason Reason)
 {
@@ -281,6 +296,7 @@ FText UStrategicSimulationDisplayHelpers::FormatSalvageDiscoveryToast(EFactionTy
         *ReasonText, *Site->SiteName));
 }
 
+/** Returns active salvage sites that pass ShouldShowSalvageToFaction for ViewerFaction. */
 TArray<UStrategySiteDefinition*> UStrategicSimulationDisplayHelpers::GetVisibleSalvageSitesForFaction(
     const UObject* WorldContextObject, EFactionType ViewerFaction)
 {
@@ -315,6 +331,7 @@ TArray<UStrategySiteDefinition*> UStrategicSimulationDisplayHelpers::GetVisibleS
     return VisibleSites;
 }
 
+/** Builds positioned salvage map markers for all wrecks visible to ViewerFaction. */
 TArray<FSalvageMapMarker> UStrategicSimulationDisplayHelpers::BuildSalvageMapMarkers(const UObject* WorldContextObject,
     EFactionType ViewerFaction, FVector2D WidgetSize, float MapScaleMultiplier)
 {
@@ -359,16 +376,19 @@ TArray<FSalvageMapMarker> UStrategicSimulationDisplayHelpers::BuildSalvageMapMar
     return Markers;
 }
 
+/** Returns true for Gunship and Heavy vehicles used in interception combat. */
 bool UStrategicSimulationDisplayHelpers::IsCombatVehicleType(EVehicleType VehicleType)
 {
     return VehicleType == EVehicleType::Gunship || VehicleType == EVehicleType::Heavy;
 }
 
+/** Returns true when passive base radar contacts are enabled on the campaign. */
 bool UStrategicSimulationDisplayHelpers::IsPlayerRadarContactLayerEnabled(const UStrategyCampaignSubsystem* Campaign)
 {
     return Campaign && Campaign->bBasePassiveRadarEnabled;
 }
 
+/** Picks marker color from threat state, intercept availability, and targeting status. */
 FLinearColor UStrategicSimulationDisplayHelpers::GetRadarContactMarkerColor(const FRadarContact& Contact,
     bool bCanIntercept, bool bAlreadyTargeted)
 {
@@ -389,6 +409,7 @@ FLinearColor UStrategicSimulationDisplayHelpers::GetRadarContactMarkerColor(cons
         : FLinearColor(0.55f, 0.75f, 0.95f, 0.7f);
 }
 
+/** Returns alpha 1.0 (fresh) down to 0.15 as the contact approaches expiry age. */
 float UStrategicSimulationDisplayHelpers::GetRadarContactStalenessAlpha(const FRadarContact& Contact,
     float CurrentGameHours, float ExpiryHours)
 {
@@ -401,6 +422,7 @@ float UStrategicSimulationDisplayHelpers::GetRadarContactStalenessAlpha(const FR
     return FMath::Clamp(1.0f - (AgeHours / ExpiryHours), 0.15f, 1.0f);
 }
 
+/** Builds multi-line tooltip text for a radar contact (position, speed, intercept action). */
 FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FRadarContact& Contact,
     bool bCanIntercept, bool bAlreadyTargeted, float CurrentGameHours, float ExpiryHours)
 {
@@ -460,6 +482,7 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactTooltipText(const FR
         *ActionLine));
 }
 
+/** Formats a short toast when a new radar contact is first detected. */
 FText UStrategicSimulationDisplayHelpers::FormatRadarContactDiscoveryToast(const FRadarContact& Contact)
 {
     if (!Contact.ContactId.IsValid())
@@ -479,6 +502,7 @@ FText UStrategicSimulationDisplayHelpers::FormatRadarContactDiscoveryToast(const
         *DetectorLine));
 }
 
+/** Builds positioned radar contact markers for all contacts visible to ViewerFaction. */
 TArray<FRadarContactMapMarker> UStrategicSimulationDisplayHelpers::BuildRadarContactMapMarkers(
     const UObject* WorldContextObject, EFactionType ViewerFaction, FVector2D WidgetSize, float MapScaleMultiplier)
 {

@@ -1,7 +1,7 @@
 #include "UProductionManagerSubsystem.h"
 #include "UStrategyFacility.h"
 #include "USoldierManagerSubsystem.h"
-#include "UBaseManagerSubsystem.h"          // ← NEW INCLUDE
+#include "UBaseManagerSubsystem.h"
 #include "UStrategyEventDispatcher.h"
 #include "UStrategyBase.h"
 #include "USoldierClassDefinition.h"
@@ -9,11 +9,13 @@
 #include "UResearchManagerSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 
+/** Registers the subsystem; job completion is driven by UStrategyFacility daily ticks. */
 void UProductionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 }
 
+/** Dispatches Job to the appropriate Complete* handler based on EProductionType. */
 void UProductionManagerSubsystem::CompleteJob(FProductionJob Job, UStrategyFacility* Facility)
 {
     if (!Job.TargetAsset) return;
@@ -36,6 +38,7 @@ void UProductionManagerSubsystem::CompleteJob(FProductionJob Job, UStrategyFacil
     }
 }
 
+/** Broadcasts research completion events and updates the research list for the job's faction. */
 void UProductionManagerSubsystem::CompleteResearchJob(const FProductionJob& Job, UStrategyFacility* Facility)
 {
     UStrategyBase* UseBase = Facility ? Facility->OwningBase : Job.AssignedBase;
@@ -69,6 +72,7 @@ void UProductionManagerSubsystem::CompleteResearchJob(const FProductionJob& Job,
     }
 }
 
+/** Finishes soldier training via USoldierManagerSubsystem::FinishSoldierTraining. */
 void UProductionManagerSubsystem::CompleteSoldierJob(const FProductionJob& Job, UStrategyFacility* Facility)
 {
     UStrategyBase* UseBase = Facility ? Facility->OwningBase : Job.AssignedBase;
@@ -86,10 +90,11 @@ void UProductionManagerSubsystem::CompleteSoldierJob(const FProductionJob& Job, 
                 JobFaction = EFactionType::Human;
         }
 
-        SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset, JobFaction);   // ← NOW 3 ARGS
+        SoldierMgr->FinishSoldierTraining(UseBase, Job.TargetAsset, JobFaction);
     }
 }
 
+/** Spawns a completed vehicle and parks it in the facility hanger. */
 void UProductionManagerSubsystem::CompleteVehicleJob(const FProductionJob& Job, UStrategyFacility* Facility)
 {
     UVehicleDefinition* VehDef = Cast<UVehicleDefinition>(Job.TargetAsset);
@@ -116,6 +121,7 @@ void UProductionManagerSubsystem::CompleteVehicleJob(const FProductionJob& Job, 
         Facility->ParkedVehicles.Num());
 }
 
+/** Marks the facility operational when its self-build job completes. */
 void UProductionManagerSubsystem::CompleteFacilityJob(const FProductionJob& Job, UStrategyFacility* Facility)
 {
     if (Facility)

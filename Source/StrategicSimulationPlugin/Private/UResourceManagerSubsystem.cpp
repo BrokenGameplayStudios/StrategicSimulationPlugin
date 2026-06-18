@@ -2,6 +2,7 @@
 #include "UBaseManagerSubsystem.h"
 #include "Engine/Engine.h"
 
+/** Seeds Human/Enemy starting stockpiles and registers them in FactionResources. */
 void UResourceManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -24,6 +25,7 @@ void UResourceManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     UE_LOG(LogTemp, Display, TEXT("UResourceManagerSubsystem initialized — configurable starting resources ready"));
 }
 
+/** Updates HumanStartingResources and live Human stockpile when already initialized. */
 void UResourceManagerSubsystem::SetHumanStartingResources(const FResourceStockpile& NewStart)
 {
     HumanStartingResources = NewStart;
@@ -31,6 +33,7 @@ void UResourceManagerSubsystem::SetHumanStartingResources(const FResourceStockpi
         FactionResources[EFactionType::Human] = NewStart;
 }
 
+/** Updates EnemyStartingResources and live Enemy stockpile when already initialized. */
 void UResourceManagerSubsystem::SetEnemyStartingResources(const FResourceStockpile& NewStart)
 {
     EnemyStartingResources = NewStart;
@@ -38,11 +41,13 @@ void UResourceManagerSubsystem::SetEnemyStartingResources(const FResourceStockpi
         FactionResources[EFactionType::Enemy] = NewStart;
 }
 
+/** Returns the current stockpile for the given faction (zeros if none registered). */
 FResourceStockpile UResourceManagerSubsystem::GetResources(EFactionType Faction) const
 {
     return FactionResources.FindRef(Faction);
 }
 
+/** Adds Amount to every resource field for Faction (creates the entry if missing). */
 void UResourceManagerSubsystem::AddResources(EFactionType Faction, const FResourceStockpile& Amount)
 {
     FResourceStockpile& Current = FactionResources.FindOrAdd(Faction);
@@ -54,11 +59,13 @@ void UResourceManagerSubsystem::AddResources(EFactionType Faction, const FResour
     Current.ResearchPoints += Amount.ResearchPoints;
 }
 
+/** Replaces the entire stockpile for Faction with NewStock. */
 void UResourceManagerSubsystem::SetResources(EFactionType Faction, const FResourceStockpile& NewStock)
 {
     FactionResources.FindOrAdd(Faction) = NewStock;
 }
 
+/** Sums operational facility ProductionPerDay across all bases and credits Faction. */
 void UResourceManagerSubsystem::ApplyFacilityIncome(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -115,6 +122,7 @@ void UResourceManagerSubsystem::ApplyFacilityIncome(EFactionType Faction)
     }
 }
 
+/** Logs every faction stockpile to the output log for debugging. */
 void UResourceManagerSubsystem::PrintAllResources() const
 {
     UE_LOG(LogTemp, Display, TEXT("=== RESOURCE MANAGER DEBUG ==="));
@@ -127,6 +135,7 @@ void UResourceManagerSubsystem::PrintAllResources() const
     }
 }
 
+/** Clears Faction stockpile; Enemy receives a small default grant for AI testing. */
 void UResourceManagerSubsystem::ResetResources(EFactionType Faction)
 {
     FResourceStockpile& Stock = FactionResources.FindOrAdd(Faction);
@@ -141,6 +150,7 @@ void UResourceManagerSubsystem::ResetResources(EFactionType Faction)
     }
 }
 
+/** Returns true when Faction's stockpile meets or exceeds Cost on all fields. */
 bool UResourceManagerSubsystem::CanAfford(EFactionType Faction, const FResourceStockpile& Cost) const
 {
     if (const FResourceStockpile* Current = FactionResources.Find(Faction))
@@ -150,6 +160,7 @@ bool UResourceManagerSubsystem::CanAfford(EFactionType Faction, const FResourceS
     return false; // no resources = can't afford
 }
 
+/** Deducts Cost when affordable; logs a warning and returns false otherwise. */
 bool UResourceManagerSubsystem::SubtractResources(EFactionType Faction, const FResourceStockpile& Cost)
 {
     if (!CanAfford(Faction, Cost))

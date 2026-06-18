@@ -19,6 +19,7 @@
 
 static UMissionManagerSubsystem* GetMissionManagerForVehicle(UStrategyVehicle* Vehicle);
 
+/** Default-constructs vehicle movement, health, and radar state. */
 UStrategyVehicle::UStrategyVehicle()
 {
     CurrentRangeLeft = 0.0f;
@@ -36,6 +37,7 @@ UStrategyVehicle::UStrategyVehicle()
     PingIntervalHours = 0.25f;
 }
 
+/** Returns cruise speed in pixels per game hour. */
 float UStrategyVehicle::GetCruiseSpeed() const
 {
     if (CruiseSpeedPixelsPerHour > 0.0f)
@@ -45,16 +47,19 @@ float UStrategyVehicle::GetCruiseSpeed() const
     return 180.0f;
 }
 
+/** Returns max range from vehicle definition. */
 float UStrategyVehicle::GetMaxRange() const
 {
     return VehicleDefinition ? VehicleDefinition->MaxRange : 800.0f;
 }
 
+/** True when CurrentRangeLeft covers required distance. */
 bool UStrategyVehicle::HasEnoughRangeForMission(float RequiredDistance) const
 {
     return CurrentRangeLeft >= RequiredDistance;
 }
 
+/** True when destroyed or docked after live movement activated. */
 bool UStrategyVehicle::IsMissionFinished() const
 {
     if (IsDestroyed())
@@ -75,6 +80,7 @@ bool UStrategyVehicle::IsMissionFinished() const
     return CurrentPhase == EVehicleMissionPhase::Docked;
 }
 
+/** Reduces health and updates damage state. */
 void UStrategyVehicle::ApplyDamage(int32 DamageAmount)
 {
     if (DamageAmount <= 0 || IsDestroyed()) return;
@@ -89,6 +95,7 @@ void UStrategyVehicle::ApplyDamage(int32 DamageAmount)
         *UEnum::GetValueAsString(DamageState));
 }
 
+/** Maps health percent to damage state; triggers wreck on destroy. */
 void UStrategyVehicle::UpdateDamageStateFromHealth()
 {
     const bool bWasDestroyed = IsDestroyed();
@@ -134,6 +141,7 @@ void UStrategyVehicle::UpdateDamageStateFromHealth()
     }
 }
 
+/** True when health or damage state indicates repair needed. */
 bool UStrategyVehicle::NeedsRepair() const
 {
     int32 MaxH = VehicleDefinition ? VehicleDefinition->MaxHealth : 100;
@@ -146,22 +154,26 @@ bool UStrategyVehicle::NeedsRepair() const
     return bNeeds;
 }
 
+/** Returns max weapon hardpoints from definition. */
 int32 UStrategyVehicle::GetMaxWeaponSlots() const
 {
     return VehicleDefinition ? VehicleDefinition->MaxWeaponSlots : 2;
 }
 
+/** Returns max defense hardpoints from definition. */
 int32 UStrategyVehicle::GetMaxDefenseSlots() const
 {
     return VehicleDefinition ? VehicleDefinition->MaxDefenseSlots : 1;
 }
 
+/** True when weapon is valid and slots remain. */
 bool UStrategyVehicle::CanEquipWeapon(UItemDefinition* Weapon) const
 {
     if (!Weapon || !Weapon->IsVehicleWeapon()) return false;
     return EquippedWeapons.Num() < GetMaxWeaponSlots();
 }
 
+/** Adds weapon and initializes ammo count. */
 bool UStrategyVehicle::EquipWeapon(UItemDefinition* Weapon)
 {
     if (!CanEquipWeapon(Weapon)) return false;
@@ -175,6 +187,7 @@ bool UStrategyVehicle::EquipWeapon(UItemDefinition* Weapon)
     return true;
 }
 
+/** Adds defense system if slot available. */
 bool UStrategyVehicle::EquipDefenseSystem(UItemDefinition* DefenseItem)
 {
     if (!DefenseItem || !DefenseItem->IsVehicleDefense() || EquippedDefenseSystems.Num() >= GetMaxDefenseSlots())
@@ -187,6 +200,7 @@ bool UStrategyVehicle::EquipDefenseSystem(UItemDefinition* DefenseItem)
     return true;
 }
 
+/** Resolves soft pointers to equipped weapon definitions. */
 TArray<UItemDefinition*> UStrategyVehicle::GetEquippedWeapons() const
 {
     TArray<UItemDefinition*> Result;
@@ -197,6 +211,7 @@ TArray<UItemDefinition*> UStrategyVehicle::GetEquippedWeapons() const
     return Result;
 }
 
+/** Computes attack rating from base power, weapons, and ammo. */
 int32 UStrategyVehicle::GetVehicleOffensiveRating() const
 {
     int32 Rating = VehicleDefinition ? VehicleDefinition->AttackPower : 0;
@@ -213,6 +228,7 @@ int32 UStrategyVehicle::GetVehicleOffensiveRating() const
     return Rating;
 }
 
+/** Sums defense bonuses from equipped systems. */
 int32 UStrategyVehicle::GetVehicleDefensiveRating() const
 {
     int32 Rating = 0;
@@ -224,6 +240,7 @@ int32 UStrategyVehicle::GetVehicleDefensiveRating() const
     return Rating;
 }
 
+/** Parks at home without clearing assigned mission. */
 void UStrategyVehicle::InitializeParkedAtBase()
 {
     if (HomeBase)
@@ -245,6 +262,7 @@ void UStrategyVehicle::InitializeParkedAtBase()
     RangeTraveledThisMission = 0.0f;
 }
 
+/** Reparks, refuels, and resets movement state at home. */
 void UStrategyVehicle::DockAtHomeHangar()
 {
     if (HomeBase)
@@ -283,6 +301,7 @@ void UStrategyVehicle::DockAtHomeHangar()
         HomeBase ? *HomeBase->BaseName.ToString() : TEXT("Unknown"));
 }
 
+/** Sets waypoints, timings, and behavior for live mission leg. */
 void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget, EMissionType MissionType)
 {
     if (!HomeBase) return;
@@ -365,11 +384,13 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
         OutboundTravelTime, SearchTimeAtTarget, ReturnTravelTime);
 }
 
+/** Begins recon mission movement toward target. */
 void UStrategyVehicle::LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget)
 {
     BeginMissionMovement(TargetLocation, CurrentGameHours, SearchHoursAtTarget, EMissionType::Recon);
 }
 
+/** Sets phase from outbound/search/return progress. */
 void UStrategyVehicle::UpdatePhaseFromPathProgress(float Progress)
 {
     if (TotalTravelTimeHours <= 0.0f || CurrentWaypoints.Num() < 3)
@@ -393,6 +414,7 @@ void UStrategyVehicle::UpdatePhaseFromPathProgress(float Progress)
     }
 }
 
+/** Fires radar pings at configured interval. */
 void UStrategyVehicle::TickRadarPings(float CurrentGameHours)
 {
     while (CurrentGameHours >= LastPingGameTimeHours + PingIntervalHours)
@@ -402,6 +424,7 @@ void UStrategyVehicle::TickRadarPings(float CurrentGameHours)
     }
 }
 
+/** Computes total returning waypoint path length. */
 float UStrategyVehicle::GetReturningPathLength() const
 {
     if (ReturningWaypoints.Num() < 2)
@@ -417,6 +440,7 @@ float UStrategyVehicle::GetReturningPathLength() const
     return TotalLength;
 }
 
+/** Interpolates position along returning path. */
 FVector2D UStrategyVehicle::GetPositionOnReturningPath(float DistanceAlongPath) const
 {
     if (ReturningWaypoints.Num() < 2)
@@ -445,6 +469,7 @@ FVector2D UStrategyVehicle::GetPositionOnReturningPath(float DistanceAlongPath) 
     return ReturningWaypoints.Last();
 }
 
+/** Accumulates distance against mission range budget. */
 void UStrategyVehicle::ConsumeMissionRange(float Distance)
 {
     if (Distance <= 0.0f)
@@ -455,11 +480,13 @@ void UStrategyVehicle::ConsumeMissionRange(float Distance)
     RangeTraveledThisMission += Distance;
 }
 
+/** True when traveled exceeds planned round-trip by 5%. */
 bool UStrategyVehicle::HasExceededMissionRangeBudget() const
 {
     return PlannedRoundTripRange > 0.0f && RangeTraveledThisMission > PlannedRoundTripRange * 1.05f;
 }
 
+/** Moves vehicle along return path toward home base. */
 void UStrategyVehicle::AdvanceReturningMovement(float DeltaGameHours)
 {
     if (!HomeBase)
@@ -501,6 +528,7 @@ void UStrategyVehicle::AdvanceReturningMovement(float DeltaGameHours)
     CurrentPosition = GetPositionOnReturningPath(ReturningDistanceTraveled);
 }
 
+/** Main live movement tick: path, combat, salvage, radar. */
 void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float DeltaGameHours)
 {
     if (CurrentMission == nullptr || CurrentPhase == EVehicleMissionPhase::Docked)
@@ -682,6 +710,7 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
     }
 }
 
+/** Hourly resource transfer while on-station at wreck. */
 bool UStrategyVehicle::ProcessSalvageExtractionTick(float DeltaGameHours)
 {
     if (DeltaGameHours <= 0.0f || !HomeBase || !CurrentMission
@@ -801,6 +830,7 @@ bool UStrategyVehicle::ProcessSalvageExtractionTick(float DeltaGameHours)
     return true;
 }
 
+/** Discovers sites, scans enemy bases, and detects vehicles. */
 void UStrategyVehicle::PerformRadarPing()
 {
     if (!HomeBase) return;
@@ -881,6 +911,7 @@ void UStrategyVehicle::PerformRadarPing()
     LastRadarSweepOrigin = CurrentPosition;
 }
 
+/** Interpolates position along mission outbound/search/return path. */
 FVector2D UStrategyVehicle::GetPositionOnPath(float Progress) const
 {
     if (CurrentWaypoints.Num() < 3) return CurrentPosition;
@@ -907,11 +938,13 @@ FVector2D UStrategyVehicle::GetPositionOnPath(float Progress) const
     }
 }
 
+/** True when docked with an active mission reference. */
 bool UStrategyVehicle::IsMissionComplete(float CurrentGameHours) const
 {
     return CurrentPhase == EVehicleMissionPhase::Docked && CurrentMission != nullptr;
 }
 
+/** Returns effective radar range from definition and vehicle type. */
 float UStrategyVehicle::GetRadarRange() const
 {
     if (VehicleDefinition)
@@ -931,6 +964,7 @@ float UStrategyVehicle::GetRadarRange() const
     return 96.0f;
 }
 
+/** Returns shortest distance from point to 2D line segment. */
 static float DistancePointToSegment2D(const FVector2D& Point, const FVector2D& SegStart, const FVector2D& SegEnd)
 {
     const FVector2D AB = SegEnd - SegStart;
@@ -944,6 +978,7 @@ static float DistancePointToSegment2D(const FVector2D& Point, const FVector2D& S
     return FVector2D::Distance(Point, SegStart + AB * T);
 }
 
+/** True when position is within sweep segment and range. */
 bool UStrategyVehicle::IsPositionWithinRadarSweep(const FVector2D& WorldPosition) const
 {
     const FVector2D SweepEnd = CurrentPosition;
@@ -951,6 +986,7 @@ bool UStrategyVehicle::IsPositionWithinRadarSweep(const FVector2D& WorldPosition
     return DistancePointToSegment2D(WorldPosition, SweepStart, SweepEnd) <= GetRadarRange();
 }
 
+/** Terrain-aware radar line of sight check. */
 bool UStrategyVehicle::HasLineOfSightToPosition(const FVector2D& WorldPosition) const
 {
     UGameInstance* GI = GetTypedOuter<UGameInstance>();
@@ -1043,6 +1079,7 @@ void UStrategyVehicle::ScanEnemyBasesAlongSweep(EFactionType VehicleFaction, flo
     }
 }
 
+/** Detects enemy vehicle with cooldown and forwards to handler. */
 void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
 {
     if (!OtherVehicle || OtherVehicle == this) return;
@@ -1088,6 +1125,7 @@ void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
     HandleVehicleDetected(OtherVehicle);
 }
 
+/** Sets tactical behavior and updates mission phase accordingly. */
 void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicle* Target)
 {
     if (CurrentBehavior == NewBehavior && CurrentTargetVehicle.Get() == Target)
@@ -1124,6 +1162,7 @@ void UStrategyVehicle::SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicl
     }
 }
 
+/** Forwards detection to AI controller for engagement. */
 void UStrategyVehicle::HandleVehicleDetected(UStrategyVehicle* DetectedVehicle)
 {
     if (!DetectedVehicle || DetectedVehicle == this) return;
@@ -1144,6 +1183,7 @@ void UStrategyVehicle::HandleVehicleDetected(UStrategyVehicle* DetectedVehicle)
     }
 }
 
+/** Resolves mission manager from vehicle outer/world. */
 static UMissionManagerSubsystem* GetMissionManagerForVehicle(UStrategyVehicle* Vehicle)
 {
     if (!Vehicle) return nullptr;
@@ -1159,6 +1199,7 @@ static UMissionManagerSubsystem* GetMissionManagerForVehicle(UStrategyVehicle* V
     return GI ? GI->GetSubsystem<UMissionManagerSubsystem>() : nullptr;
 }
 
+/** Applies mutual combat damage while in combat phase. */
 void UStrategyVehicle::ProcessCombatTick(float DeltaGameHours)
 {
     if (CurrentPhase != EVehicleMissionPhase::Combat || !CurrentTargetVehicle.IsValid() || IsDestroyed())
@@ -1195,6 +1236,7 @@ void UStrategyVehicle::ProcessCombatTick(float DeltaGameHours)
     }
 }
 
+/** Builds linear return waypoints from current position to base. */
 void UStrategyVehicle::GenerateReturnPath()
 {
     ReturningWaypoints.Empty();

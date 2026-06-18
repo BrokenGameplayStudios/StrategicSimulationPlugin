@@ -22,12 +22,17 @@ class UStrategyFacility;
 class UBaseManagerSubsystem;
 class UFactionIntelSubsystem;
 
+/**
+ * Runtime vehicle instance with mission movement, radar, combat behavior,
+ * hardpoints, range/fuel, and salvage extraction during live simulation.
+ */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategyVehicle : public UObject
 {
     GENERATED_BODY()
 
 public:
+    /** Default-constructs movement, health, and radar state. */
     UStrategyVehicle();
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
@@ -58,12 +63,15 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Behavior")
     EVehicleBehavior CurrentBehavior = EVehicleBehavior::Idle;
 
+    /** Sets tactical behavior and updates mission phase (combat, returning, idle). */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Behavior")
     void SetBehavior(EVehicleBehavior NewBehavior, UStrategyVehicle* Target = nullptr);
 
+    /** Returns the current tactical behavior enum. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Behavior")
     EVehicleBehavior GetBehavior() const { return CurrentBehavior; }
 
+    /** Returns the current mission movement phase. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|State")
     EVehicleMissionPhase GetMissionPhase() const { return CurrentPhase; }
 
@@ -97,27 +105,35 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadWrite, SaveGame, Category = "Vehicle|Hardpoints")
     TArray<int32> WeaponAmmoCounts;
 
+    /** Returns maximum weapon hardpoint count from vehicle definition. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     int32 GetMaxWeaponSlots() const;
 
+    /** Returns maximum defense hardpoint count from vehicle definition. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     int32 GetMaxDefenseSlots() const;
 
+    /** True when weapon is valid and a hardpoint slot is available. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     bool CanEquipWeapon(UItemDefinition* Weapon) const;
 
+    /** Equips a weapon and initializes its ammo count. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     bool EquipWeapon(UItemDefinition* Weapon);
 
+    /** Equips a defense system if a slot is available. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     bool EquipDefenseSystem(UItemDefinition* DefenseItem);
 
+    /** Resolves equipped weapon soft pointers to UObject instances. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Hardpoints")
     TArray<UItemDefinition*> GetEquippedWeapons() const;
 
+    /** Computes offensive rating from base attack, weapons, and ammo. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Stats")
     int32 GetVehicleOffensiveRating() const;
 
+    /** Sums defensive bonuses from equipped defense systems. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Stats")
     int32 GetVehicleDefensiveRating() const;
 
@@ -125,9 +141,11 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Range")
     float CurrentRangeLeft = 0.0f;
 
+    /** Returns maximum mission range from vehicle definition. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Range")
     float GetMaxRange() const;
 
+    /** True when CurrentRangeLeft covers the required round-trip distance. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Range")
     bool HasEnoughRangeForMission(float RequiredDistance) const;
 
@@ -142,18 +160,23 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Damage & Repair")
     bool bWreckSalvageProcessed = false;
 
+    /** True when docked with no active mission assignment. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle")
     bool IsAtHome() const { return CurrentPhase == EVehicleMissionPhase::Docked && CurrentMission == nullptr; }
 
+    /** Applies damage, updates damage state, and triggers wreck on destruction. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void ApplyDamage(int32 DamageAmount);
 
+    /** True when health is below max or damage state is not Undamaged. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Repair")
     bool NeedsRepair() const;
 
+    /** Maps health percentage to EVehicleDamageState and handles destroy side effects. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     void UpdateDamageStateFromHealth();
 
+    /** True when damage state is Destroyed. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Damage")
     bool IsDestroyed() const { return DamageState == EVehicleDamageState::Destroyed; }
 
@@ -230,12 +253,15 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar", meta = (DeprecatedProperty))
     float PingRadiusPixels = 64.0f;
 
+    /** Returns effective radar range from definition and vehicle type minimums. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
     float GetRadarRange() const;
     
+    /** Convenience wrapper to begin a recon mission toward TargetLocation. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget = 3.0f);
 
+    /** Main live-simulation tick: movement, combat, salvage, and radar pings. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void UpdatePositionAndPings(float CurrentGameHours, float DeltaGameHours);
 
@@ -243,15 +269,19 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Salvage")
     bool ProcessSalvageExtractionTick(float DeltaGameHours);
 
+    /** Executes one radar sweep: site discovery, base scan, and vehicle detection. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
     void PerformRadarPing();
 
+    /** Interpolates map position along outbound, on-station, and return legs. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     FVector2D GetPositionOnPath(float Progress) const;
 
+    /** True when the vehicle has docked after an active mission leg. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     bool IsMissionComplete(float CurrentGameHours) const;
 
+    /** Builds linear return waypoints from current position to home base. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void GenerateReturnPath();
 
@@ -263,6 +293,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Vehicle|Detection")
     FOnVehicleDetected OnVehicleDetected;
 
+    /** Attempts to detect another vehicle within radar sweep with cooldown. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Detection")
     void TryDetectVehicle(UStrategyVehicle* OtherVehicle);
 private:
@@ -274,25 +305,36 @@ private:
     UPROPERTY(EditAnywhere, Category = "Vehicle|Detection")
     float VehicleDetectionCooldownHours = 2.0f;
 
+    /** Returns effective cruise speed in pixels per game hour. */
     float GetCruiseSpeed() const;
+    /** Accumulates distance flown against the current mission range budget. */
     void ConsumeMissionRange(float Distance);
+    /** True when range traveled exceeds planned round-trip by 5%. */
     bool HasExceededMissionRangeBudget() const;
+    /** Applies mutual combat damage while in the Combat phase. */
     void ProcessCombatTick(float DeltaGameHours);
+    /** Sets EnRoute vs OnStation from normalized path progress. */
     void UpdatePhaseFromPathProgress(float Progress);
+    /** Moves the vehicle along ReturningWaypoints toward home base. */
     void AdvanceReturningMovement(float DeltaGameHours);
+    /** Total pixel length of the returning waypoint path. */
     float GetReturningPathLength() const;
+    /** Interpolates position along the returning path at a given distance. */
     FVector2D GetPositionOnReturningPath(float DistanceAlongPath) const;
+    /** Fires radar pings at PingIntervalHours while in flight. */
     void TickRadarPings(float CurrentGameHours);
+    /** True when a world position lies within the current radar sweep segment. */
     bool IsPositionWithinRadarSweep(const FVector2D& WorldPosition) const;
+    /** True when terrain does not block radar line of sight to a position. */
     bool HasLineOfSightToPosition(const FVector2D& WorldPosition) const;
+    /** Registers site discovery and intel for a site within radar range. */
     void DiscoverSiteInRange(UStrategySiteDefinition* Site, EFactionType VehicleFaction, float CurrentGameHours,
         UBaseManagerSubsystem* BaseManager, UFactionIntelSubsystem* IntelMgr);
+    /** Scans enemy bases and parked vehicles along the radar sweep path. */
     void ScanEnemyBasesAlongSweep(EFactionType VehicleFaction, float CurrentGameHours, UBaseManagerSubsystem* BaseManager,
         UFactionIntelSubsystem* IntelMgr);
 
-    /** Called when this vehicle detects another vehicle.
- *  Decision logic lives in UAIControllerSubsystem (or player UI).
- *  This function can be overridden or extended. */
+    /** Forwards detection to UAIControllerSubsystem for engagement decisions. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Detection")
     virtual void HandleVehicleDetected(UStrategyVehicle* DetectedVehicle);
 };

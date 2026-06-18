@@ -4,6 +4,7 @@
 #include "URadarTerrainSubsystem.h"
 #include "Engine/Engine.h"
 
+// Disables actor tick and adds default central-ridge radar LOS blocker geometry.
 AStrategyGameInitializer::AStrategyGameInitializer()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -16,6 +17,7 @@ AStrategyGameInitializer::AStrategyGameInitializer()
     RadarBlockerZones.Add(CentralRidge);
 }
 
+// Pushes level settings into campaign, AI, terrain, and resource subsystems at play start.
 void AStrategyGameInitializer::BeginPlay()
 {
     Super::BeginPlay();

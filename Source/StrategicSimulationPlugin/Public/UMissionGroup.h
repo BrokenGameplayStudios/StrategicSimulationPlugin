@@ -8,6 +8,7 @@
 class UStrategyVehicle;
 class UStrategyBase;
 
+/** Qualitative result of a completed strategic mission simulation. */
 UENUM(BlueprintType)
 enum class EMissionOutcome : uint8
 {
@@ -17,6 +18,7 @@ enum class EMissionOutcome : uint8
     CatastrophicFailure UMETA(DisplayName = "Catastrophic Failure")
 };
 
+/** Runtime lifecycle state of an active or finished mission group. */
 UENUM(BlueprintType)
 enum class EMissionStatus : uint8
 {
@@ -26,12 +28,14 @@ enum class EMissionStatus : uint8
     Failed
 };
 
+/** Runtime mission instance tracking a fleet, schedule, targets, and post-mission results. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UMissionGroup : public UObject
 {
     GENERATED_BODY()
 
 public:
+    /** Initializes default status and display name for a newly created mission. */
     UMissionGroup();
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission")

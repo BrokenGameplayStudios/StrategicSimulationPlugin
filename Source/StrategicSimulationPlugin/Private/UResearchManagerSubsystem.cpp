@@ -5,6 +5,7 @@
 #include "UStrategyFacility.h"
 #include "UStrategyBase.h"
 
+/** Logs subsystem initialization; research state lives on facility production queues. */
 void UResearchManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -12,6 +13,7 @@ void UResearchManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     UE_LOG(LogTemp, Display, TEXT("UResearchManagerSubsystem initialized"));
 }
 
+/** Finds a free lab slot for Faction and starts ProjectDef; broadcasts OnResearchListChanged on success. */
 UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Faction, UResearchTechDefinition* ProjectDef)
 {
     if (!ProjectDef) return nullptr;
@@ -52,6 +54,7 @@ UActiveResearchProject* UResearchManagerSubsystem::StartResearch(EFactionType Fa
     return nullptr;
 }
 
+/** Builds transient UActiveResearchProject snapshots from all laboratory jobs for Faction. */
 TArray<UActiveResearchProject*> UResearchManagerSubsystem::GetActiveResearch(EFactionType Faction) const
 {
     TArray<UActiveResearchProject*> Result;
@@ -83,6 +86,7 @@ TArray<UActiveResearchProject*> UResearchManagerSubsystem::GetActiveResearch(EFa
     return Result;
 }
 
+/** Returns true when Tech is currently queued in any laboratory for Faction. */
 bool UResearchManagerSubsystem::IsResearchInProgress(EFactionType Faction, UResearchTechDefinition* Tech) const
 {
     if (!Tech) return false;
@@ -107,6 +111,7 @@ bool UResearchManagerSubsystem::IsResearchInProgress(EFactionType Faction, URese
     return false;
 }
 
+/** Returns whether Tech has been completed by Faction (stub: always true until per-faction tracking exists). */
 bool UResearchManagerSubsystem::HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const
 {
     // TODO: Later we can track completed techs per faction in a TArray/TSet.
@@ -114,6 +119,7 @@ bool UResearchManagerSubsystem::HasCompletedResearch(EFactionType Faction, URese
     return true;
 }
 
+/** Clears all research jobs from Human laboratories and notifies both factions. */
 void UResearchManagerSubsystem::ResetResearch()
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -143,6 +149,7 @@ void UResearchManagerSubsystem::ResetResearch()
     UE_LOG(LogTemp, Display, TEXT("[RESET] All research jobs cleared from laboratories"));
 }
 
+/** Starts the next available research for this faction if a lab slot is free. */
 bool UResearchManagerSubsystem::TryResearch(EFactionType Faction)
 {
     // Guard: never start a second research while one is already running

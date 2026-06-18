@@ -10,6 +10,7 @@
 #include "Engine/Engine.h"          // ← Added for GEngine
 #include "Kismet/GameplayStatics.h" // ← Added for safety
 
+/** Returns roster soldiers stationed at this base. */
 TArray<UStrategySoldier*> UStrategyBase::GetStationedSoldiers() const
 {
     TArray<UStrategySoldier*> Soldiers;
@@ -31,6 +32,7 @@ TArray<UStrategySoldier*> UStrategyBase::GetStationedSoldiers() const
     return Soldiers;
 }
 
+/** True when operational Command facility exists. */
 bool UStrategyBase::HasOperationalCommandCenter() const
 {
     for (UStrategyFacility* Fac : Facilities)
@@ -44,6 +46,7 @@ bool UStrategyBase::HasOperationalCommandCenter() const
     return false;
 }
 
+/** True when operational facility of type exists. */
 bool UStrategyBase::HasOperationalFacilityOfType(EFacilityType FacilityType) const
 {
     for (UStrategyFacility* Fac : Facilities)
@@ -57,6 +60,7 @@ bool UStrategyBase::HasOperationalFacilityOfType(EFacilityType FacilityType) con
     return false;
 }
 
+/** Sums production slots from operational facilities. */
 int32 UStrategyBase::GetTotalProductionSlots() const
 {
     int32 Total = 0;
@@ -70,6 +74,7 @@ int32 UStrategyBase::GetTotalProductionSlots() const
     return Total;
 }
 
+/** Sums capacity for operational facilities of type. */
 int32 UStrategyBase::GetTotalCapacityForType(EFacilityType FacilityType) const
 {
     int32 Total = 0;
@@ -83,6 +88,7 @@ int32 UStrategyBase::GetTotalCapacityForType(EFacilityType FacilityType) const
     return Total;
 }
 
+/** Counts operational facilities of type. */
 int32 UStrategyBase::GetTotalBuiltOfType(EFacilityType FacilityType) const
 {
     int32 Count = 0;
@@ -92,6 +98,7 @@ int32 UStrategyBase::GetTotalBuiltOfType(EFacilityType FacilityType) const
     return Count;
 }
 
+/** True if any facility of type exists. */
 bool UStrategyBase::HasFacilityOfType(EFacilityType FacilityType) const
 {
     for (UStrategyFacility* Fac : Facilities)
@@ -102,6 +109,7 @@ bool UStrategyBase::HasFacilityOfType(EFacilityType FacilityType) const
     return false;
 }
 
+/** Counts all facilities of type including under construction. */
 int32 UStrategyBase::GetCountOfType(EFacilityType FacilityType) const
 {
     int32 Count = 0;
@@ -113,7 +121,7 @@ int32 UStrategyBase::GetCountOfType(EFacilityType FacilityType) const
     return Count;
 }
 
-// NEW HELPER — counts ANY facility of this type (operational OR under construction)
+/** True if any facility of type exists (built or in progress). */
 bool UStrategyBase::HasAnyFacilityOfType(EFacilityType FacilityType) const
 {
     for (UStrategyFacility* Fac : Facilities)
@@ -124,11 +132,13 @@ bool UStrategyBase::HasAnyFacilityOfType(EFacilityType FacilityType) const
     return false;
 }
 
+/** True when base has operational Command Center. */
 bool UStrategyBase::IsOperational() const
 {
     return HasOperationalCommandCenter();
 }
 
+/** Adds facility and broadcasts OnFacilitiesChanged. */
 void UStrategyBase::AddFacility(UStrategyFacility* NewFacility)
 {
     if (NewFacility)
@@ -138,6 +148,7 @@ void UStrategyBase::AddFacility(UStrategyFacility* NewFacility)
     }
 }
 
+/** Recalculates base power provided and draw. */
 void UStrategyBase::UpdatePowerFromFacilities()
 {
     PowerProvided = 0;
@@ -156,6 +167,7 @@ void UStrategyBase::UpdatePowerFromFacilities()
         *BaseName.ToString(), GetNetPower(), PowerProvided, PowerDraw);
 }
 
+/** Checks prerequisite facilities exist for a facility type. */
 bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
 {
     UFacilityDefinition* Def = nullptr;
@@ -204,6 +216,7 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
     return true;
 }
 
+/** Stores POW in containment if slots available. */
 void UStrategyBase::AddPOW(UStrategySoldier* Soldier)
 {
     if (!Soldier) return;
@@ -226,6 +239,7 @@ void UStrategyBase::AddPOW(UStrategySoldier* Soldier)
         *Soldier->SoldierName, *BaseName.ToString(), ContainedPOWs.Num(), MaxSlots);
 }
 
+/** Stores KIA body in autopsy if slots available. */
 void UStrategyBase::AddKIABody(UStrategySoldier* Soldier)
 {
     if (!Soldier) return;
@@ -248,6 +262,7 @@ void UStrategyBase::AddKIABody(UStrategySoldier* Soldier)
 }
 
 // Helper implementations
+/** Sums containment production slots. */
 int32 UStrategyBase::GetTotalContainmentSlots() const
 {
     int32 Slots = 0;
@@ -259,6 +274,7 @@ int32 UStrategyBase::GetTotalContainmentSlots() const
     return Slots;
 }
 
+/** Sums autopsy production slots. */
 int32 UStrategyBase::GetTotalAutopsySlots() const
 {
     int32 Slots = 0;
@@ -270,6 +286,7 @@ int32 UStrategyBase::GetTotalAutopsySlots() const
     return Slots;
 }
 
+/** Daily containment hook (bonus in facility). */
 void UStrategyBase::ProcessContainment()
 {
     // Called by Containment facility daily
@@ -277,6 +294,7 @@ void UStrategyBase::ProcessContainment()
     // Bonus logic moved to facility (we just provide the list)
 }
 
+/** Daily autopsy hook (disposal in facility). */
 void UStrategyBase::ProcessAutopsy()
 {
     // Called by Autopsy facility daily
@@ -284,11 +302,13 @@ void UStrategyBase::ProcessAutopsy()
     // Bodies will be disposed after processing
 }
 
+/** Returns copy of contained POW array. */
 TArray<UStrategySoldier*> UStrategyBase::GetContainedPOWs() const
 {
     return ContainedPOWs;
 }
 
+/** Releases POW for resource bonus and destroys object. */
 void UStrategyBase::ReleasePOW(UStrategySoldier* POW)
 {
     if (!POW || !ContainedPOWs.Contains(POW))
@@ -315,6 +335,7 @@ void UStrategyBase::ReleasePOW(UStrategySoldier* POW)
     POW->ConditionalBeginDestroy();
 }
 
+/** Grants research bonus and removes processed KIA body. */
 void UStrategyBase::ProcessKIABody(UStrategySoldier* Body)
 {
     if (!Body || !StoredKIABodies.Contains(Body)) return;
@@ -340,6 +361,7 @@ void UStrategyBase::ProcessKIABody(UStrategySoldier* Body)
     Body->ConditionalBeginDestroy();
 }
 
+/** Sums daily extraction from operational facilities. */
 FResourceStockpile UStrategyBase::GetDailyExtractionFromSite() const
 {
     FResourceStockpile TotalExtraction;
@@ -363,6 +385,7 @@ FResourceStockpile UStrategyBase::GetDailyExtractionFromSite() const
     return TotalExtraction;
 }
 
+/** Returns roster soldiers stationed at this base. */
 int32 UStrategyBase::GetStationedSoldiersCount() const
 {
     int32 Count = 0;
@@ -395,6 +418,7 @@ int32 UStrategyBase::GetStationedSoldiersCount() const
     return Count;
 }
 
+/** Counts soldiers on missions from this base. */
 int32 UStrategyBase::GetSoldiersOnMissionCount() const
 {
     int32 Count = 0;
@@ -432,6 +456,7 @@ int32 UStrategyBase::GetSoldiersOnMissionCount() const
     return Count;
 }
 
+/** Returns first operational hangar or nullptr. */
 UStrategyFacility* UStrategyBase::FindFirstOperationalHangar() const
 {
     for (UStrategyFacility* Facility : Facilities)
@@ -445,6 +470,7 @@ UStrategyFacility* UStrategyBase::FindFirstOperationalHangar() const
     return nullptr;
 }
 
+/** Counts vehicles in operational hangars. */
 int32 UStrategyBase::GetStationedVehiclesCount() const
 {
     int32 Count = 0;
@@ -461,6 +487,7 @@ int32 UStrategyBase::GetStationedVehiclesCount() const
     return Count;
 }
 
+/** Counts vehicles on live missions from this base. */
 int32 UStrategyBase::GetVehiclesOnMissionCount() const
 {
     int32 Count = 0;

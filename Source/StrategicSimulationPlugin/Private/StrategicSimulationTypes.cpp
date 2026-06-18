@@ -1,5 +1,6 @@
 #include "StrategicSimulationTypes.h"
 
+/** Component-wise sum of all resource fields. */
 FResourceStockpile FResourceStockpile::operator+(const FResourceStockpile& Other) const
 {
     FResourceStockpile Result = *this;
@@ -12,6 +13,7 @@ FResourceStockpile FResourceStockpile::operator+(const FResourceStockpile& Other
     return Result;
 }
 
+/** Component-wise difference of all resource fields. */
 FResourceStockpile FResourceStockpile::operator-(const FResourceStockpile& Other) const
 {
     FResourceStockpile Result = *this;
@@ -24,6 +26,7 @@ FResourceStockpile FResourceStockpile::operator-(const FResourceStockpile& Other
     return Result;
 }
 
+/** True when this stockpile has at least as much of every resource type as Other. */
 bool FResourceStockpile::operator>=(const FResourceStockpile& Other) const
 {
     return Money >= Other.Money &&
@@ -34,11 +37,13 @@ bool FResourceStockpile::operator>=(const FResourceStockpile& Other) const
         Chemicals >= Other.Chemicals;
 }
 
+/** Adds Other into this stockpile in place. */
 void FResourceStockpile::Add(const FResourceStockpile& Other)
 {
     *this = *this + Other;
 }
 
+/** Subtracts Other from this stockpile in place. */
 void FResourceStockpile::Subtract(const FResourceStockpile& Other)
 {
     *this = *this - Other;

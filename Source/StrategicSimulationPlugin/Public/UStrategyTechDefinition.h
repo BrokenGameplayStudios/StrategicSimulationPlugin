@@ -8,6 +8,7 @@
 // Forward declaration only — breaks the circular include with UItemDefinition
 class UItemDefinition;
 
+/** Primary data asset for an item-tech node: category, tier, and unlocked craftable items. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategyTechDefinition : public UPrimaryDataAsset
 {

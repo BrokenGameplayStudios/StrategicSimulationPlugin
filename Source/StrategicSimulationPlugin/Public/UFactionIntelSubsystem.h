@@ -42,39 +42,54 @@ class STRATEGICSIMULATIONPLUGIN_API UFactionIntelSubsystem : public UGameInstanc
     GENERATED_BODY()
 
 public:
+    /** Initializes per-faction site intel maps (Human and Enemy). */
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-    /** Capture ground-truth site state for a faction (radar ping, combat-known, on-station). */
+    /**
+     * Records a ground-truth observation of a site for one faction.
+     * Updates location, resources, and base-built state; marks intel as fresh for the current step.
+     * No-op when stale intel is disabled or Faction is not Human/Enemy.
+     */
     UFUNCTION(BlueprintCallable, Category = "Intel")
     void ObserveSite(EFactionType Faction, UStrategySiteDefinition* Site, EDiscoveryReason Reason, float ObservedGameHours);
 
+    /** Returns whether the campaign uses stale intel (last-known vs live site state). */
     UFUNCTION(BlueprintPure, Category = "Intel")
     bool IsStaleIntelEnabled() const;
 
+    /** True when the faction has ever observed this site's location (or stale intel is off). */
     UFUNCTION(BlueprintPure, Category = "Intel")
     bool HasKnownSiteLocation(EFactionType Faction, const UStrategySiteDefinition* Site) const;
 
+    /** Copies the stored intel snapshot for a site, if one exists. */
     UFUNCTION(BlueprintPure, Category = "Intel")
     bool GetSiteIntelSnapshot(EFactionType Faction, const UStrategySiteDefinition* Site, FSiteIntelSnapshot& OutSnapshot) const;
 
+    /** Resources shown to a faction: last-known when stale intel is on, otherwise live site stockpile. */
     UFUNCTION(BlueprintPure, Category = "Intel")
     FResourceStockpile GetDisplayResources(EFactionType ViewerFaction, const UStrategySiteDefinition* Site) const;
 
+    /** Whether the viewer believes a base exists on this site (stale-aware). */
     UFUNCTION(BlueprintPure, Category = "Intel")
     bool GetDisplayHasBase(EFactionType ViewerFaction, const UStrategySiteDefinition* Site) const;
 
+    /** True if this site was observed during the current simulation step (stale intel only). */
     UFUNCTION(BlueprintPure, Category = "Intel")
     bool IsIntelFresh(EFactionType ViewerFaction, const UStrategySiteDefinition* Site) const;
 
-    /** Clears fresh flags at end of each simulation step (intel becomes stale until next observation). */
+    /** Clears bHasFreshIntel on all snapshots at end of each simulation step. */
     void ClearFreshIntelFlags();
 
+    /** Wipes all Human and Enemy intel snapshots (new campaign / reset). */
     void ClearAllIntel();
 
-    /** After site-map load without intel save data — seed snapshots from discovery lists. */
+    /** Seeds intel from discovery lists when loading a site map without saved intel data. */
     void SeedIntelFromDiscoveredSites(class UBaseManagerSubsystem* BaseManager);
 
+    /** Serializes one faction's intel for save; fresh flags are cleared in the output. */
     TArray<FSiteIntelSnapshot> SerializeIntel(EFactionType Faction) const;
+
+    /** Restores saved intel; falls back to discovered sites if the save array is empty. */
     void DeserializeIntel(EFactionType Faction, const TArray<FSiteIntelSnapshot>& SavedIntel,
         class UBaseManagerSubsystem* BaseManager);
 
@@ -85,8 +100,12 @@ private:
     UPROPERTY()
     TMap<FGuid, FSiteIntelSnapshot> EnemyIntelBySiteId;
 
+    /** Returns the mutable intel map for Human or Enemy. */
     TMap<FGuid, FSiteIntelSnapshot>& GetIntelMap(EFactionType Faction);
+
+    /** Returns the read-only intel map for Human or Enemy. */
     const TMap<FGuid, FSiteIntelSnapshot>& GetIntelMap(EFactionType Faction) const;
 
+    /** Fills OutSnapshot with live site location, resources, and base-built state. */
     static bool CaptureGroundTruth(UStrategySiteDefinition* Site, FSiteIntelSnapshot& OutSnapshot);
 };

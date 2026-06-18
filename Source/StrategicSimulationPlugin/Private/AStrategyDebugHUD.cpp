@@ -18,6 +18,7 @@
 
 namespace
 {
+    /** Returns whether console exec debug commands are permitted for this game instance. */
     bool IsDebugExecAllowed(const UGameInstance* GameInstance)
     {
         if (!GameInstance)
@@ -39,17 +40,20 @@ namespace
     }
 }
 
+/** Enables tick for on-screen debug text updates. */
 AStrategyDebugHUD::AStrategyDebugHUD()
 {
     PrimaryActorTick.bCanEverTick = true;
 }
 
+/** Toggles debug HUD visibility on level start. */
 void AStrategyDebugHUD::BeginPlay()
 {
     Super::BeginPlay();
     ToggleDebugHUD();
 }
 
+/** Builds and displays the on-screen faction/resource summary each frame. */
 void AStrategyDebugHUD::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
@@ -141,6 +145,7 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
     GEngine->AddOnScreenDebugMessage(999, 0.0f, FColor::Cyan, DebugText);
 }
 
+/** Builds a comma-separated facility count string for a base (non-zero types only). */
 FString AStrategyDebugHUD::BuildFacilityListText(UStrategyBase* Base)
 {
     if (!Base) return FString();
@@ -168,6 +173,7 @@ FString AStrategyDebugHUD::BuildFacilityListText(UStrategyBase* Base)
     return FacilityList;
 }
 
+/** Appends Command Center facility and force counts to DebugText. */
 void AStrategyDebugHUD::AppendCommandCenterStats(UStrategyBase* Base, FString& DebugText)
 {
     if (!Base) return;
@@ -184,6 +190,7 @@ void AStrategyDebugHUD::AppendCommandCenterStats(UStrategyBase* Base, FString& D
         Base->GetSoldiersOnMissionCount(), Base->GetVehiclesOnMissionCount());
 }
 
+/** Console exec: toggles on-screen faction/resource debug text (gated by campaign debug flag). */
 void AStrategyDebugHUD::ToggleDebugHUD()
 {
     if (!IsDebugExecAllowed(GetGameInstance()))
@@ -196,6 +203,7 @@ void AStrategyDebugHUD::ToggleDebugHUD()
     UE_LOG(LogTemp, Display, TEXT("Debug HUD %s"), bDebugVisible ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+/** Console exec: toggles the canvas strategy map overlay (gated by campaign debug flag). */
 void AStrategyDebugHUD::ToggleStrategyMap()
 {
     if (!IsDebugExecAllowed(GetGameInstance()))
@@ -208,6 +216,7 @@ void AStrategyDebugHUD::ToggleStrategyMap()
     UE_LOG(LogTemp, Display, TEXT("[DEBUG HUD] Strategy Map %s"), bShowStrategyMap ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+/** Console exec: selects a site index for the bottom-of-screen site inspector panel. */
 void AStrategyDebugHUD::ShowSiteInfo(int32 SiteIndex)
 {
     if (!IsDebugExecAllowed(GetGameInstance()))
@@ -229,6 +238,7 @@ void AStrategyDebugHUD::ShowSiteInfo(int32 SiteIndex)
     UE_LOG(LogTemp, Display, TEXT("[Debug HUD] Now inspecting Site #%d"), SiteIndex);
 }
 
+/** Console exec: clears the selected site inspector index. */
 void AStrategyDebugHUD::ClearSiteInfo()
 {
     if (!IsDebugExecAllowed(GetGameInstance()))
@@ -241,7 +251,7 @@ void AStrategyDebugHUD::ClearSiteInfo()
     UE_LOG(LogTemp, Display, TEXT("[Debug HUD] Site inspector cleared"));
 }
 
-// ==================== PASTE THIS FULL FUNCTION OVER THE EXISTING DrawHUD() ====================
+/** Draws bases, missions, vehicles, sites, radar overlays, legend, and site inspector. */
 void AStrategyDebugHUD::DrawHUD()
 {
     Super::DrawHUD();
@@ -458,6 +468,7 @@ void AStrategyDebugHUD::DrawHUD()
     }
 }
 
+/** Draws a yellow highlight box around SelectedSiteIndex on the map. */
 void AStrategyDebugHUD::DrawInspectedSiteHighlight()
 {
     if (!Canvas || SelectedSiteIndex < 0) return;
@@ -480,6 +491,7 @@ void AStrategyDebugHUD::DrawInspectedSiteHighlight()
         FLinearColor::Yellow);
 }
 
+/** Draws a three-segment outlined triangle at ScreenPos. */
 void AStrategyDebugHUD::DrawSiteTriangle(const FVector2D& ScreenPos, float Size, float LineThickness, const FLinearColor& Color)
 {
     if (!Canvas) return;
@@ -493,6 +505,7 @@ void AStrategyDebugHUD::DrawSiteTriangle(const FVector2D& ScreenPos, float Size,
     Canvas->K2_DrawLine(BottomRight, Top, LineThickness, Color);
 }
 
+/** Draws a faction-colored triangle and discovery markers for an active salvage wreck. */
 void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 SiteIndex, float Scale, const UBaseManagerSubsystem* BaseManager)
 {
     if (!Site || !Canvas || Site->SalvageState != ESalvageSiteState::Active)
@@ -527,6 +540,7 @@ void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 Sit
     }
 }
 
+/** Draws gray radar LOS blocker zones from URadarTerrainSubsystem. */
 void AStrategyDebugHUD::DrawRadarBlockerZones()
 {
     if (!Canvas || !bShowStrategyMap)
@@ -570,6 +584,7 @@ void AStrategyDebugHUD::DrawRadarBlockerZones()
     }
 }
 
+/** Iterates AllPotentialSites and draws neutral nodes or salvage wrecks. */
 void AStrategyDebugHUD::DrawAllPotentialSites()
 {
     if (!Canvas || !bShowStrategyMap) return;
@@ -615,6 +630,7 @@ void AStrategyDebugHUD::DrawAllPotentialSites()
     }
 }
 
+/** Draws vehicle position, state label, waypoint paths, and onboard radar circle. */
 void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
 {
     if (!Vehicle || !Canvas) return;
@@ -696,6 +712,7 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
     }
 }
 
+/** Draws a scaled base box, name label, and passive radar ring when applicable. */
 void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
 {
     if (!Base || !Canvas) return;
@@ -739,6 +756,7 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
     }
 }
 
+/** Draws cyan/magenta diamonds at friendly and enemy radar contact entry points. */
 void AStrategyDebugHUD::DrawRadarContactEntryPoints()
 {
     if (!Canvas || !GetGameInstance())
@@ -803,6 +821,7 @@ void AStrategyDebugHUD::DrawRadarContactEntryPoints()
     }
 }
 
+/** Draws mission type label and faint line from origin base to lead vehicle. */
 void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
 {
     if (!Mission || !Mission->OriginBase || !Canvas) return;
@@ -832,6 +851,7 @@ void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)
     }
 }
 
+/** Logical map pixel position → screen position, centered and aspect preserved. */
 FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& LogicalPos) const
 {
     if (!Canvas)
@@ -862,6 +882,7 @@ FVector2D AStrategyDebugHUD::GetScreenPosition(const FVector2D& LogicalPos) cons
     return CanvasCenter + (ScaledPos - LogicalCenter * UniformScale);
 }
 
+/** Returns the current uniform scale factor so icons/lines also scale with the map. */
 float AStrategyDebugHUD::GetCurrentMapScale() const
 {
     if (!Canvas)

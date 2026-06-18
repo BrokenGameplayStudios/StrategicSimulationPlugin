@@ -5,6 +5,7 @@
 #include "StrategicSimulationTypes.h"
 #include "UVehicleDefinition.generated.h"
 
+/** Primary data asset describing a vehicle type: stats, range, hardpoints, and build cost. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UVehicleDefinition : public UPrimaryDataAsset
 {

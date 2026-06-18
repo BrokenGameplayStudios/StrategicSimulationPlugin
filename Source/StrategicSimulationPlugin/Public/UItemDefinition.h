@@ -6,6 +6,7 @@
 #include "UStrategyTechDefinition.h"
 #include "UItemDefinition.generated.h"
 
+/** Primary data asset for equippable and producible items (soldier gear, vehicle hardpoints, consumables). */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UItemDefinition : public UPrimaryDataAsset
 {
@@ -42,9 +43,17 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vehicle Stats")
     int32 MaxAmmo = 0;
 
+    /**
+     * Returns whether this item is categorized as a vehicle weapon hardpoint module.
+     * @return True when Category is VehicleWeapon.
+     */
     UFUNCTION(BlueprintCallable, Category = "Item")
     bool IsVehicleWeapon() const { return Category == EItemCategory::VehicleWeapon; }
 
+    /**
+     * Returns whether this item is categorized as a vehicle defense system module.
+     * @return True when Category is VehicleDefense.
+     */
     UFUNCTION(BlueprintCallable, Category = "Item")
     bool IsVehicleDefense() const { return Category == EItemCategory::VehicleDefense; }
 

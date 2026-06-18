@@ -8,15 +8,17 @@
 #include "UStrategyBase.h"
 #include "USoldierClassDatabase.h"
 #include "UStrategyCampaignSubsystem.h"
-#include "UStrategySoldier.h"          // ← added for safety
-#include "USoldierClassDefinition.h"   // ← added for safety
+#include "UStrategySoldier.h"
+#include "USoldierClassDefinition.h"
 #include "Engine/Engine.h"
 
+/** Registers the subsystem; rosters start empty until recruitment or training completes. */
 void USoldierManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 }
 
+/** Creates a soldier from ClassDef, assigns TargetBase (or first faction base), and broadcasts recruitment. */
 UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction, USoldierClassDefinition* ClassDef, UStrategyBase* TargetBase)
 {
     if (!ClassDef) return nullptr;
@@ -88,6 +90,7 @@ UStrategySoldier* USoldierManagerSubsystem::RecruitSoldier(EFactionType Faction,
     return NewSoldier;
 }
 
+/** Resolves SoldierClassAsset to a class definition and recruits via RecruitSoldier. */
 void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset, EFactionType Faction)
 {
     if (!SoldierClassAsset) return;
@@ -124,6 +127,7 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
     }
 }
 
+/** Removes Soldier from both rosters and notifies listeners for Human and Enemy. */
 void USoldierManagerSubsystem::DismissSoldier(UStrategySoldier* Soldier)
 {
     if (!Soldier) return;
@@ -133,6 +137,7 @@ void USoldierManagerSubsystem::DismissSoldier(UStrategySoldier* Soldier)
     BroadcastSoldierListChanged(EFactionType::Enemy);
 }
 
+/** Counts roster soldiers whose StationedBase equals Base. */
 int32 USoldierManagerSubsystem::GetNumSoldiersStationedAt(UStrategyBase* Base, EFactionType Faction) const
 {
     if (!Base) return 0;
@@ -143,11 +148,13 @@ int32 USoldierManagerSubsystem::GetNumSoldiersStationedAt(UStrategyBase* Base, E
     return Count;
 }
 
+/** Returns the active (non-POW, non-KIA) roster for Faction. */
 const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetRoster(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
 }
 
+/** Logs every soldier in the faction roster via PrintInfo. */
 void USoldierManagerSubsystem::Debug_PrintTeamRoster(EFactionType Faction) const
 {
     UE_LOG(LogTemp, Display, TEXT("=== %s TEAM ROSTER ==="), *UEnum::GetValueAsString(Faction));
@@ -157,6 +164,7 @@ void USoldierManagerSubsystem::Debug_PrintTeamRoster(EFactionType Faction) const
     UE_LOG(LogTemp, Display, TEXT("=== END %s ROSTER ===\n"), *UEnum::GetValueAsString(Faction));
 }
 
+/** Broadcasts OnSoldierListChanged with the current roster for Faction. */
 void USoldierManagerSubsystem::BroadcastSoldierListChanged(EFactionType Faction)
 {
     if (UStrategyEventDispatcher* Disp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
@@ -165,7 +173,7 @@ void USoldierManagerSubsystem::BroadcastSoldierListChanged(EFactionType Faction)
     }
 }
 
-// === NEW FUNCTION: USoldierManagerSubsystem::GetCommander ===
+/** Returns the first roster soldier whose class name contains "Commander", or nullptr. */
 UStrategySoldier* USoldierManagerSubsystem::GetCommander(EFactionType Faction) const
 {
     const TArray<UStrategySoldier*>& Roster = GetRoster(Faction);
@@ -181,18 +189,19 @@ UStrategySoldier* USoldierManagerSubsystem::GetCommander(EFactionType Faction) c
     return nullptr;
 }
 
-// === POW/KIA FUNCTIONS (updated for Phase 3) ===
-
+/** Returns captured enemy soldiers held by Faction. */
 const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetPOWRoster(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? HumanPOWRoster : EnemyPOWRoster;
 }
 
-const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetKIARoster(EFactionType Faction) const   // NEW
+/** Returns KIA bodies awaiting autopsy for Faction. */
+const TArray<UStrategySoldier*>& USoldierManagerSubsystem::GetKIARoster(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? HumanKIARoster : EnemyKIARoster;
 }
 
+/** Moves Soldier from enemy roster to CapturingFaction's POW roster and clears base assignment. */
 void USoldierManagerSubsystem::CaptureAsPOW(EFactionType CapturingFaction, UStrategySoldier* Soldier)
 {
     if (!Soldier) return;
@@ -218,7 +227,8 @@ void USoldierManagerSubsystem::CaptureAsPOW(EFactionType CapturingFaction, UStra
         *UEnum::GetValueAsString(CapturingFaction), *Soldier->SoldierName);
 }
 
-void USoldierManagerSubsystem::MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier)   // UPDATED
+/** Removes Soldier from active roster, adds to KIA roster, and clears mission/base state. */
+void USoldierManagerSubsystem::MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier)
 {
     if (!Soldier) return;
 
@@ -244,12 +254,14 @@ void USoldierManagerSubsystem::MarkAsKIA(EFactionType Faction, UStrategySoldier*
         *UEnum::GetValueAsString(Faction), *Soldier->SoldierName);
 }
 
+/** Placeholder release handler; logs only until full POW release logic is implemented. */
 void USoldierManagerSubsystem::ReleasePOW(UStrategySoldier* POW)
 {
     if (!POW || !POW->bIsPOW) return;
     UE_LOG(LogTemp, Display, TEXT("[POW] POW '%s' released (placeholder)"), *POW->SoldierName);
 }
 
+/** Removes Soldier from roster, tags as MIA at WreckSite, and registers on the site. */
 void USoldierManagerSubsystem::MarkAsMIA(UStrategySoldier* Soldier, UStrategySiteDefinition* WreckSite, EFactionType OwnerFaction)
 {
     if (!Soldier || !WreckSite)
@@ -286,6 +298,7 @@ void USoldierManagerSubsystem::MarkAsMIA(UStrategySoldier* Soldier, UStrategySit
         *UEnum::GetValueAsString(Faction), *Soldier->SoldierName, *WreckSite->SiteName);
 }
 
+/** Rolls crash deaths; survivors become MIA at the wreck site. */
 void USoldierManagerSubsystem::ProcessCrewOnVehicleDestruction(UStrategyVehicle* Vehicle, UStrategySiteDefinition* WreckSite)
 {
     if (!Vehicle || !WreckSite)
@@ -338,6 +351,7 @@ void USoldierManagerSubsystem::ProcessCrewOnVehicleDestruction(UStrategyVehicle*
         *WreckSite->SiteName, WreckSite->KIACrashCount, WreckSite->MIASoldiers.Num());
 }
 
+/** Owning faction salvage: return MIA soldiers to the given base roster. */
 int32 USoldierManagerSubsystem::RescueMIAsFromWreck(EFactionType RescuingFaction, UStrategySiteDefinition* WreckSite, UStrategyBase* ReturnBase)
 {
     if (!WreckSite || !ReturnBase || ReturnBase->OwningFaction != RescuingFaction)
@@ -391,6 +405,7 @@ int32 USoldierManagerSubsystem::RescueMIAsFromWreck(EFactionType RescuingFaction
     return Rescued;
 }
 
+/** Opposing faction salvage (AI dice): MIA may become POW. Player salvage uses contested combat (PR-6b). */
 int32 USoldierManagerSubsystem::ProcessMIAsOnOpposingSalvage(EFactionType SalvagingFaction, UStrategySiteDefinition* WreckSite)
 {
     if (!WreckSite || SalvagingFaction == WreckSite->WreckOwnerFaction)

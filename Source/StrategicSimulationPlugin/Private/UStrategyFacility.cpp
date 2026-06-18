@@ -14,6 +14,7 @@
 #include "UProductionManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 
+/** Repairs parked vehicles and heals stationed soldiers. */
 void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
 {
     if (!FacilityDefinition || !bIsOperational || !InOwningBase)
@@ -85,6 +86,7 @@ void UStrategyFacility::SimulateDailyRepair(UStrategyBase* InOwningBase)
     }
 }
 
+/** Advances production and runs daily repair simulation. */
 void UStrategyFacility::SimulateDaily()
 {
     if (!FacilityDefinition) return;
@@ -116,14 +118,17 @@ void UStrategyFacility::SimulateDaily()
     //     }
 }
 
+/** True when available production slots remain. */
 bool UStrategyFacility::HasFreeProductionSlot() const { return GetAvailableProductionSlots() > 0; }
 
+/** Returns unused production slot count for this facility. */
 int32 UStrategyFacility::GetAvailableProductionSlots() const
 {
     if (!FacilityDefinition) return 0;
     return FacilityDefinition->ProductionSlots - ActiveProductionJobs.Num();
 }
 
+/** Queues a production job if a slot is free. */
 bool UStrategyFacility::StartProduction(EProductionType Type, UObject* TargetAsset, int32 BaseDays)
 {
     if (!HasFreeProductionSlot() || !TargetAsset) return false;
@@ -145,6 +150,7 @@ bool UStrategyFacility::StartProduction(EProductionType Type, UObject* TargetAss
 }
 
 // ====================== 1. AdvanceProductionDay (deferred safe removal) ======================
+/** Ticks jobs and completes finished production. */
 void UStrategyFacility::AdvanceProductionDay()
 {
     if (ActiveProductionJobs.Num() == 0) return;
@@ -179,6 +185,7 @@ void UStrategyFacility::AdvanceProductionDay()
     }
 }
 
+/** Spawns completed unit and removes the job. */
 void UStrategyFacility::CompleteProductionJob(int32 Index)
 {
     if (Index < 0 || Index >= ActiveProductionJobs.Num()) return;
@@ -284,6 +291,7 @@ void UStrategyFacility::CompleteProductionJob(int32 Index)
     }
 }
 
+/** Queues facility self-construction job. */
 bool UStrategyFacility::StartConstruction(UFacilityDefinition* Def)
 {
     if (!Def || !HasFreeProductionSlot()) return false;
@@ -299,6 +307,7 @@ bool UStrategyFacility::StartConstruction(UFacilityDefinition* Def)
     return true;
 }
 
+/** Cancels construction job with optional refund. */
 bool UStrategyFacility::CancelConstruction(int32 JobIndex, bool bFullRefund)
 {
     if (JobIndex < 0 || JobIndex >= ActiveProductionJobs.Num()) return false;
@@ -323,11 +332,13 @@ bool UStrategyFacility::CancelConstruction(int32 JobIndex, bool bFullRefund)
     return true;
 }
 
+/** Alias for AdvanceProductionDay. */
 void UStrategyFacility::AdvanceConstructionDay()
 {
     AdvanceProductionDay();
 }
 
+/** Grants research bonus from held POWs. */
 void UStrategyFacility::ProcessContainmentDaily()
 {
     if (!bIsOperational || !OwningBase || !FacilityDefinition) return;
@@ -349,6 +360,7 @@ void UStrategyFacility::ProcessContainmentDaily()
         *FacilityDefinition->FacilityName.ToString(), *OwningBase->BaseName.ToString(), POWCount, Bonus);
 }
 
+/** Grants research from KIA bodies and clears storage. */
 void UStrategyFacility::ProcessAutopsyDaily()
 {
     if (!bIsOperational || !OwningBase || !FacilityDefinition) return;

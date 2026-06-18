@@ -11,6 +11,7 @@
 #include "UStrategySoldier.h"
 #include "UResearchTechDefinition.h"
 
+/** Disables tick; sets default salvage and radar overlay widget classes. */
 AStrategyTestActor::AStrategyTestActor()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -18,12 +19,14 @@ AStrategyTestActor::AStrategyTestActor()
     RadarContactMapWidgetClass = UStrategyRadarContactMapWidget::StaticClass();
 }
 
+/** Automatically runs RunPhase13Test on level start. */
 void AStrategyTestActor::BeginPlay()
 {
     Super::BeginPlay();
     RunPhase13Test();
 }
 
+/** Spawns WBP_StrategicHUD plus salvage/radar overlays and binds test event handlers. */
 void AStrategyTestActor::RunPhase13Test()
 {
     UE_LOG(LogTemp, Display, TEXT("=== STRATEGICSIMULATIONPLUGIN PHASE 13 TEST START ==="));
@@ -86,19 +89,19 @@ void AStrategyTestActor::RunPhase13Test()
     UE_LOG(LogTemp, Display, TEXT("=== PHASE 13 TEST COMPLETE ==="));
 }
 
-UFUNCTION()
+/** Test handler: logs OnSoldierRecruited events. */
 void AStrategyTestActor::OnSoldierRecruited_Test(EFactionType Faction, UStrategySoldier* Soldier)
 {
     UE_LOG(LogTemp, Display, TEXT("[EVENT] Soldier recruited: %s for %s"), *Soldier->SoldierName, *UEnum::GetValueAsString(Faction));
 }
 
-UFUNCTION()
+/** Test handler: logs OnResearchCompleted events. */
 void AStrategyTestActor::OnResearchCompleted_Test(EFactionType Faction, UResearchTechDefinition* Tech)
 {
     UE_LOG(LogTemp, Display, TEXT("[EVENT] Research completed: %s for %s"), *Tech->ProjectName.ToString(), *UEnum::GetValueAsString(Faction));
 }
 
-UFUNCTION()
+/** Test handler: logs salvage-site OnSiteDiscovered events. */
 void AStrategyTestActor::OnSiteDiscovered_Test(EFactionType Faction, UStrategySiteDefinition* Site, EDiscoveryReason Reason)
 {
     if (!Site || Site->SiteType != EStrategySiteType::SalvageSite)
@@ -112,7 +115,7 @@ void AStrategyTestActor::OnSiteDiscovered_Test(EFactionType Faction, UStrategySi
         *Site->SiteName);
 }
 
-UFUNCTION()
+/** Test handler: logs OnSalvageContestStarted with fleet counts. */
 void AStrategyTestActor::OnSalvageContestStarted_Test(UStrategySiteDefinition* Site,
     FSalvageContestForceSnapshot HumanForceSnapshot, FSalvageContestForceSnapshot EnemyForceSnapshot)
 {

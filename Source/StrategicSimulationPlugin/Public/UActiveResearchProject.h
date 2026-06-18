@@ -6,6 +6,7 @@
 #include "UResearchTechDefinition.h"
 #include "UActiveResearchProject.generated.h"
 
+/** Runtime research job at a base laboratory with remaining days and completion state. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UActiveResearchProject : public UObject
 {

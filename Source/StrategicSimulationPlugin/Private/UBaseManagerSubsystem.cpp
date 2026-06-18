@@ -18,6 +18,7 @@
 
 namespace SiteGenerationHelpers
 {
+    /** Assigns randomized mineable resource pools and site type to a new site. */
     void PopulateMineableResources(UStrategySiteDefinition* Site)
     {
         if (!Site)
@@ -51,6 +52,7 @@ namespace SiteGenerationHelpers
     }
 }
 
+/** Binds to UTimeManagerSubsystem::OnDayPassed and logs initialization. */
 void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Collection.InitializeDependency<UTimeManagerSubsystem>();
@@ -64,9 +66,10 @@ void UBaseManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     UE_LOG(LogTemp, Display, TEXT("UBaseManagerSubsystem initialized — multiple-base systems online"));
 }
 
-// === FULL FUNCTION: UBaseManagerSubsystem::BuildNewBase (COMMANDER FIXED) ===
-// Commander is now spawned using the FIRST class in SoldierClassDatabase (your DA_Sol_Commander).
-// It is placed in the initial Command Center and does NOT use barracks slots.
+/**
+ * Creates a base, links it to an optional site, and spawns an initial Command Center.
+ * First base per faction also recruits the Commander from index 0 of the soldier class database.
+ */
 UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation, UStrategySiteDefinition* Site)
 {
     UStrategyBase* NewBase = NewObject<UStrategyBase>(this);
@@ -222,21 +225,28 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
     return NewBase;
 }
 
+/** Returns the faction's base list (delegates to GetBasesInternal). */
 const TArray<UStrategyBase*>& UBaseManagerSubsystem::GetBases(EFactionType Faction) const
 {
     return GetBasesInternal(Faction);
 }
 
+/** Returns the const internal base array for Human or Enemy. */
 const TArray<UStrategyBase*>& UBaseManagerSubsystem::GetBasesInternal(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? HumanBases : EnemyBases;
 }
 
+/** Returns the mutable internal base array for Human or Enemy. */
 TArray<UStrategyBase*>& UBaseManagerSubsystem::GetMutableBases(EFactionType Faction)
 {
     return (Faction == EFactionType::Human) ? HumanBases : EnemyBases;
 }
 
+/**
+ * Validates prerequisites and resources, deducts cost, and queues facility construction
+ * at the chosen or specified base.
+ */
 UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase)
 {
     if (!FacilityDef)
@@ -360,6 +370,7 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
     return NewFacility;
 }
 
+/** Sums PowerProvided from all operational facilities across faction bases. */
 int32 UBaseManagerSubsystem::GetTotalPowerProvided(EFactionType Faction) const
 {
     int32 Total = 0;
@@ -377,6 +388,7 @@ int32 UBaseManagerSubsystem::GetTotalPowerProvided(EFactionType Faction) const
     return Total;
 }
 
+/** Sums CurrentPowerDraw from all operational facilities across faction bases. */
 int32 UBaseManagerSubsystem::GetTotalPowerDrawn(EFactionType Faction) const
 {
     int32 Total = 0;
@@ -394,11 +406,13 @@ int32 UBaseManagerSubsystem::GetTotalPowerDrawn(EFactionType Faction) const
     return Total;
 }
 
+/** Returns GetTotalPowerProvided minus GetTotalPowerDrawn for the faction. */
 int32 UBaseManagerSubsystem::GetNetPower(EFactionType Faction) const
 {
     return GetTotalPowerProvided(Faction) - GetTotalPowerDrawn(Faction);
 }
 
+/** Sums living-quarters capacity across all faction bases. */
 int32 UBaseManagerSubsystem::GetTotalBarracksCapacity(EFactionType Faction) const
 {
     int32 Total = 0;
@@ -410,6 +424,7 @@ int32 UBaseManagerSubsystem::GetTotalBarracksCapacity(EFactionType Faction) cons
     return Total;
 }
 
+/** True if any faction base contains a facility of the given type. */
 bool UBaseManagerSubsystem::HasFacilityOfType(EFactionType Faction, EFacilityType FacilityType) const
 {
     for (UStrategyBase* Base : GetBasesInternal(Faction))
@@ -420,6 +435,7 @@ bool UBaseManagerSubsystem::HasFacilityOfType(EFactionType Faction, EFacilityTyp
     return false;
 }
 
+/** Counts facilities of the given type across all faction bases. */
 int32 UBaseManagerSubsystem::GetCurrentCountOfType(EFactionType Faction, EFacilityType FacilityType) const
 {
     int32 Count = 0;
@@ -431,6 +447,7 @@ int32 UBaseManagerSubsystem::GetCurrentCountOfType(EFactionType Faction, EFacili
     return Count;
 }
 
+/** Decrements build timers and marks facilities operational when complete. */
 void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
 {
     for (UStrategyBase* Base : GetBasesInternal(Faction))
@@ -472,6 +489,7 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
     }
 }
 
+/** Flattens all facilities from every base into a single transient array. */
 const TArray<UStrategyFacility*>& UBaseManagerSubsystem::GetFacilities(EFactionType Faction) const
 {
     static TArray<UStrategyFacility*> FlatList;
@@ -484,6 +502,7 @@ const TArray<UStrategyFacility*>& UBaseManagerSubsystem::GetFacilities(EFactionT
     return FlatList;
 }
 
+/** Daily tick: construction, repairs, extraction, and salvage expiry for both factions. */
 void UBaseManagerSubsystem::OnDayPassed(int32 NewDay)
 {
     AdvanceFacilityConstruction(EFactionType::Human);
@@ -497,6 +516,7 @@ void UBaseManagerSubsystem::OnDayPassed(int32 NewDay)
     ProcessSalvageSiteExpiry(NewDay);
 }
 
+/** Returns days until salvage expiry, or 0 if the site is not an active wreck. */
 int32 UBaseManagerSubsystem::GetSalvageDaysRemaining(const UStrategySiteDefinition* Site) const
 {
     if (!Site || Site->SiteType != EStrategySiteType::SalvageSite || Site->SalvageState != ESalvageSiteState::Active)
@@ -513,6 +533,7 @@ int32 UBaseManagerSubsystem::GetSalvageDaysRemaining(const UStrategySiteDefiniti
     return FMath::Max(0, Site->SalvageExpiresOnDay - CurrentDay);
 }
 
+/** Removes a salvage site, resolves MIAs, and broadcasts OnSalvageSiteRemoved. */
 void UBaseManagerSubsystem::RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired,
     EFactionType LastSalvagingFaction)
 {
@@ -554,6 +575,7 @@ void UBaseManagerSubsystem::RemoveSalvageSite(UStrategySiteDefinition* Site, boo
     }
 }
 
+/** Collects and removes salvage sites that have passed their expiry day. */
 void UBaseManagerSubsystem::ProcessSalvageSiteExpiry(int32 CurrentSimulationDay)
 {
     TArray<UStrategySiteDefinition*> ExpiredSites;
@@ -582,6 +604,7 @@ void UBaseManagerSubsystem::ProcessSalvageSiteExpiry(int32 CurrentSimulationDay)
     }
 }
 
+/** Serializes every site in AllPotentialSites including discovery flags. */
 TArray<FStrategySiteSaveData> UBaseManagerSubsystem::SerializeAllSites() const
 {
     TArray<FStrategySiteSaveData> Result;
@@ -623,6 +646,7 @@ TArray<FStrategySiteSaveData> UBaseManagerSubsystem::SerializeAllSites() const
     return Result;
 }
 
+/** Rebuilds site objects and faction discovery lists from save data. */
 void UBaseManagerSubsystem::DeserializeAllSites(const TArray<FStrategySiteSaveData>& SavedSites)
 {
     AllPotentialSites.Empty();
@@ -673,6 +697,7 @@ void UBaseManagerSubsystem::DeserializeAllSites(const TArray<FStrategySiteSaveDa
         AllPotentialSites.Num(), DiscoveredSitesHuman.Num(), DiscoveredSitesEnemy.Num());
 }
 
+/** Checks faction base cap and hangar-gated expansion limit. */
 bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const
 {
     const TArray<UStrategyBase*>& Bases = GetBasesInternal(Faction);
@@ -697,6 +722,7 @@ bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const
     return Bases.Num() < MaxAllowedBases;
 }
 
+/** Counts bases that have at least one operational hangar. */
 int32 UBaseManagerSubsystem::GetNumberOfOperationalHangers(EFactionType Faction) const
 {
     int32 Count = 0;
@@ -708,6 +734,7 @@ int32 UBaseManagerSubsystem::GetNumberOfOperationalHangers(EFactionType Faction)
     return Count;
 }
 
+/** Sums hangar Capacity across all operational hangars for the faction. */
 int32 UBaseManagerSubsystem::GetTotalAvailableHangerSlots(EFactionType Faction) const
 {
     int32 TotalSlots = 0;
@@ -721,6 +748,7 @@ int32 UBaseManagerSubsystem::GetTotalAvailableHangerSlots(EFactionType Faction) 
     return TotalSlots;
 }
 
+/** Destroys all base objects and clears HumanBases and EnemyBases. */
 void UBaseManagerSubsystem::ResetAllBases()
 {
     for (UStrategyBase* Base : HumanBases)
@@ -741,6 +769,7 @@ void UBaseManagerSubsystem::ResetAllBases()
     UE_LOG(LogTemp, Display, TEXT("[RESET] All bases cleared for both factions"));
 }
 
+/** Calls SimulateDaily on every facility in every base of the faction. */
 void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
 {
     UE_LOG(LogTemp, Verbose, TEXT("[DAILY SIM] %s — Medical Bays can heal 0 soldiers | Vehicle Repair Shops can repair 0 vehicles (+25 HP)"),
@@ -760,6 +789,7 @@ void UBaseManagerSubsystem::SimulateDailyRepairs(EFactionType Faction)
     }
 }
 
+/** Advances production/construction for all facilities in Human and Enemy bases. */
 void UBaseManagerSubsystem::AdvanceAllConstruction()
 {
     UE_LOG(LogTemp, Verbose, TEXT("[BASE] AdvanceAllConstruction — Processing BOTH factions"));
@@ -787,6 +817,7 @@ void UBaseManagerSubsystem::AdvanceAllConstruction()
     }    
 }
 
+/** Logs per-base and global personnel/vehicle/facility totals to the output log. */
 void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
 {
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
@@ -901,6 +932,7 @@ void UBaseManagerSubsystem::DebugPrintFullBaseState(EFactionType Faction) const
         TotalBarracksCapacity, TotalSoldiers, TotalPOW, TotalKIA);
 }
 
+/** Builds a text report of base state suitable for UI display or export. */
 FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) const
 {
     FString Output = FString::Printf(TEXT("=== BASE STATE FOR %s (%d bases) ===\n"),
@@ -991,6 +1023,7 @@ FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) con
     return Output;
 }
 
+/** Registers a site for a faction, fires discovery events, and updates intel. */
 UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType Faction, UStrategySiteDefinition* Site,
     EDiscoveryReason Reason)
 {
@@ -1042,6 +1075,7 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
     return Site;
 }
 
+/** Legacy nearest-match discovery; prefer AddDiscoveredSite(Faction, Site). */
 UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSiteAtLocation(EFactionType Faction, FVector2D Location, EStrategySiteType Type, float OptionalScore)
 {
     UStrategySiteDefinition* ExistingSite = nullptr;
@@ -1090,6 +1124,7 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSiteAtLocation(EFac
     return AddDiscoveredSite(Faction, ExistingSite);
 }
 
+/** Adds combat-known factions to discovery lists for a salvage wreck. */
 void UBaseManagerSubsystem::RegisterCombatKnownSalvage(UStrategySiteDefinition* Site)
 {
     if (!Site || Site->SiteType != EStrategySiteType::SalvageSite)
@@ -1106,6 +1141,11 @@ void UBaseManagerSubsystem::RegisterCombatKnownSalvage(UStrategySiteDefinition* 
     }
 }
 
+/**
+ * Spawns a timed salvage wreck site from a destroyed vehicle's position and loot.
+ * Sets WreckOwnerFaction, KnownFactions (owner + combat opponent), expiry from campaign settings,
+ * adds to AllPotentialSites, and calls RegisterCombatKnownSalvage.
+ */
 UStrategySiteDefinition* UBaseManagerSubsystem::CreateSalvageSite(FVector2D Location, UStrategyVehicle* DestroyedVehicle)
 {
     UStrategySiteDefinition* Site = NewObject<UStrategySiteDefinition>(this);
@@ -1203,11 +1243,13 @@ UStrategySiteDefinition* UBaseManagerSubsystem::CreateSalvageSite(FVector2D Loca
     return Site;
 }
 
+/** True when SiteType is SalvageSite. */
 bool UBaseManagerSubsystem::IsSalvageSite(const UStrategySiteDefinition* Site) const
 {
     return Site != nullptr && Site->SiteType == EStrategySiteType::SalvageSite;
 }
 
+/** True when the site is in KnownFactions or the faction discovery list. */
 bool UBaseManagerSubsystem::IsSiteKnownToFaction(EFactionType Faction, const UStrategySiteDefinition* Site) const
 {
     if (!Site)
@@ -1225,6 +1267,7 @@ bool UBaseManagerSubsystem::IsSiteKnownToFaction(EFactionType Faction, const USt
     return Discovered.Contains(Site);
 }
 
+/** Returns the closest site within Tolerance of Location, or nullptr. */
 UStrategySiteDefinition* UBaseManagerSubsystem::FindSiteAtLocation(FVector2D Location, float Tolerance) const
 {
     UStrategySiteDefinition* BestMatch = nullptr;
@@ -1248,6 +1291,7 @@ UStrategySiteDefinition* UBaseManagerSubsystem::FindSiteAtLocation(FVector2D Loc
     return BestMatch;
 }
 
+/** Validates campaign flags, intel, resources, mission conflicts, and vehicle range. */
 bool UBaseManagerSubsystem::CanSalvageSite(EFactionType Faction, const UStrategySiteDefinition* Site,
     const UStrategyVehicle* SalvageVehicle) const
 {
@@ -1308,6 +1352,7 @@ bool UBaseManagerSubsystem::CanSalvageSite(EFactionType Faction, const UStrategy
     return true;
 }
 
+/** Procedurally places potential base/resource sites with minimum spacing on the map. */
 void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistanceBetweenSites,
     float LogicalMapWidth, float LogicalMapHeight, float BorderPadding)
 {
@@ -1370,6 +1415,7 @@ void UBaseManagerSubsystem::GenerateInitialSites(int32 NumSites, float MinDistan
         AllPotentialSites.Num(), NumSites, LogicalMapWidth, LogicalMapHeight, BorderPadding);
 }
 
+/** True when the site is a discovered, unused PotentialBase and faction can expand. */
 bool UBaseManagerSubsystem::CanBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* Site) const
 {
     if (!Site) return false;
@@ -1401,6 +1447,7 @@ bool UBaseManagerSubsystem::CanBuildBaseOnSite(EFactionType Faction, UStrategySi
     return true;
 }
 
+/** Builds a base on a validated site and marks the site as used. */
 bool UBaseManagerSubsystem::TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName)
 {
     if (!CanBuildBaseOnSite(Faction, TargetSite)) return false;
@@ -1420,6 +1467,7 @@ bool UBaseManagerSubsystem::TryBuildBaseOnSite(EFactionType Faction, UStrategySi
     return true;
 }
 
+/** Subtracts daily extraction from each base's linked site resource pool. */
 void UBaseManagerSubsystem::ProcessDailyResourceExtraction(EFactionType Faction)
 {
     TArray<UStrategyBase*>& Bases = GetMutableBases(Faction);
@@ -1442,6 +1490,7 @@ void UBaseManagerSubsystem::ProcessDailyResourceExtraction(EFactionType Faction)
     }
 }
 
+/** Places Human and Enemy Command Centers on random sites with minimum separation. */
 void UBaseManagerSubsystem::InitializeStartingBases(int32 MinDistanceBetweenFactions)
 {
     if (AllPotentialSites.Num() == 0)

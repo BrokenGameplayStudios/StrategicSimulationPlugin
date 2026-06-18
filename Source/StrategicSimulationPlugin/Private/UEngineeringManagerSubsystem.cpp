@@ -10,6 +10,7 @@
 #include "UStrategyFacility.h"
 #include "Engine/Engine.h"
 
+/** Logs subsystem initialization; production slots are owned by workshop facilities. */
 void UEngineeringManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -17,6 +18,7 @@ void UEngineeringManagerSubsystem::Initialize(FSubsystemCollectionBase& Collecti
     UE_LOG(LogTemp, Display, TEXT("UEngineeringManagerSubsystem initialized — production slots + queuing enabled"));
 }
 
+/** Spends ItemDef->PurchaseCost and optionally adds the item to TargetSoldier's loadout. */
 bool UEngineeringManagerSubsystem::PurchaseItem(EFactionType Faction, UItemDefinition* ItemDef, UStrategySoldier* TargetSoldier /*= nullptr*/)
 {
     if (!ItemDef) return false;
@@ -48,6 +50,7 @@ bool UEngineeringManagerSubsystem::PurchaseItem(EFactionType Faction, UItemDefin
     return true;
 }
 
+/** Queues ItemDef production in a workshop at TargetBase (or first faction base). */
 UActiveProductionJob* UEngineeringManagerSubsystem::StartProduction(EFactionType Faction, UItemDefinition* ItemDef, int32 Quantity, UStrategyBase* TargetBase)
 {
     if (!ItemDef) return nullptr;
@@ -82,6 +85,7 @@ UActiveProductionJob* UEngineeringManagerSubsystem::StartProduction(EFactionType
     return nullptr;
 }
 
+/** Builds transient UActiveProductionJob snapshots from all workshop jobs for Faction. */
 TArray<UActiveProductionJob*> UEngineeringManagerSubsystem::GetActiveProduction(EFactionType Faction) const
 {
     TArray<UActiveProductionJob*> Result;
@@ -115,11 +119,13 @@ TArray<UActiveProductionJob*> UEngineeringManagerSubsystem::GetActiveProduction(
     return Result;
 }
 
+/** Legacy AI hook; production is now advanced by facility queues (always returns false). */
 bool UEngineeringManagerSubsystem::TryProduce(EFactionType Faction)
 {
     return false; // Now handled by facility queue
 }
 
+/** Destroys cached queue objects and clears Human/Enemy production arrays. */
 void UEngineeringManagerSubsystem::ResetProduction()
 {
     for (UActiveProductionJob* Job : HumanProductionQueue)
@@ -137,6 +143,7 @@ void UEngineeringManagerSubsystem::ResetProduction()
     UE_LOG(LogTemp, Display, TEXT("[RESET] All production jobs cleared for both factions"));
 }
 
+/** Purchases a weapon using full resource costs and equips it to a vehicle. Returns true on success. */
 bool UEngineeringManagerSubsystem::PurchaseAndEquipVehicleWeapon(EFactionType Faction, UStrategyVehicle* TargetVehicle, UItemDefinition* WeaponDef)
 {
     if (!TargetVehicle || !WeaponDef) return false;
@@ -158,6 +165,7 @@ bool UEngineeringManagerSubsystem::PurchaseAndEquipVehicleWeapon(EFactionType Fa
     return false;
 }
 
+/** Buys ammo for a specific equipped weapon on a vehicle and refills it (cheap refill using Metals + Chemicals). */
 bool UEngineeringManagerSubsystem::PurchaseAmmoForVehicle(EFactionType Faction, UStrategyVehicle* TargetVehicle, int32 WeaponIndex)
 {
     if (!TargetVehicle || !TargetVehicle->EquippedWeapons.IsValidIndex(WeaponIndex))

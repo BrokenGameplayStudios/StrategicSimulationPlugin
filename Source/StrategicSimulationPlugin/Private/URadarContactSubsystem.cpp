@@ -11,12 +11,14 @@
 #include "UAIControllerSubsystem.h"
 #include "Engine/Engine.h"
 
+/** Subsystem startup — logs readiness; contact maps start empty. */
 void URadarContactSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     UE_LOG(LogTemp, Display, TEXT("URadarContactSubsystem initialized — base passive radar contacts ready"));
 }
 
+/** Campaign fallback default for base passive radar range (512 px). */
 float URadarContactSubsystem::GetBaseRadarRange()
 {
     return 512.0f;
@@ -24,6 +26,7 @@ float URadarContactSubsystem::GetBaseRadarRange()
 
 namespace RadarContactHelpers
 {
+    /** Estimates px/hour velocity from mission phase, waypoints, or home-base bearing when movement is ambiguous. */
     FVector2D EstimateVehicleVelocity(const UStrategyVehicle* Vehicle)
     {
         if (!Vehicle)
@@ -66,6 +69,11 @@ namespace RadarContactHelpers
     }
 }
 
+/**
+ * Intercept/map marker position for a radar track.
+ * Prefers FirstDetectedPosition (radar entry point) when bHasFirstDetectedPosition is set;
+ * otherwise uses LastPosition for ongoing tracks.
+ */
 FVector2D URadarContactSubsystem::GetContactInterceptPosition(const FRadarContact& Contact)
 {
     if (Contact.bHasFirstDetectedPosition)
@@ -76,21 +84,25 @@ FVector2D URadarContactSubsystem::GetContactInterceptPosition(const FRadarContac
     return Contact.LastPosition;
 }
 
+/** Selects HumanContactsById or EnemyContactsById for read/write access. */
 TMap<FGuid, FRadarContact>& URadarContactSubsystem::GetContactMap(EFactionType Faction)
 {
     return (Faction == EFactionType::Human) ? HumanContactsById : EnemyContactsById;
 }
 
+/** Const variant of GetContactMap for query-only code paths. */
 const TMap<FGuid, FRadarContact>& URadarContactSubsystem::GetContactMap(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? HumanContactsById : EnemyContactsById;
 }
 
+/** Returns the stable vehicle-key to ContactId map for the given detecting faction. */
 TMap<TWeakObjectPtr<UStrategyVehicle>, FGuid>& URadarContactSubsystem::GetVehicleIdMap(EFactionType Faction)
 {
     return (Faction == EFactionType::Human) ? HumanVehicleContactIds : EnemyVehicleContactIds;
 }
 
+/** Resets all contact data, vehicle mappings, interception targets, and ping accumulator. */
 void URadarContactSubsystem::ClearAllContacts()
 {
     HumanContactsById.Empty();
@@ -101,6 +113,7 @@ void URadarContactSubsystem::ClearAllContacts()
     AccumulatedPingHours = 0.0f;
 }
 
+/** Copies all contacts from the faction map into a TArray for Blueprint/query use. */
 TArray<FRadarContact> URadarContactSubsystem::GetContactsForFaction(EFactionType Faction) const
 {
     TArray<FRadarContact> Result;
@@ -111,6 +124,7 @@ TArray<FRadarContact> URadarContactSubsystem::GetContactsForFaction(EFactionType
     return Result;
 }
 
+/** Looks up ContactId in the faction contact map and copies the entry to OutContact. */
 bool URadarContactSubsystem::GetContactById(EFactionType Faction, FGuid ContactId, FRadarContact& OutContact) const
 {
     if (const FRadarContact* Found = GetContactMap(Faction).Find(ContactId))
@@ -121,6 +135,7 @@ bool URadarContactSubsystem::GetContactById(EFactionType Faction, FGuid ContactI
     return false;
 }
 
+/** Scores untargeted contacts by distance and inbound-threat bonus; requires round-trip range from OriginBase. */
 bool URadarContactSubsystem::FindBestContactForInterception(EFactionType Faction, UStrategyBase* OriginBase,
     const UStrategyVehicle* Vehicle, FRadarContact& OutContact) const
 {
@@ -170,21 +185,25 @@ bool URadarContactSubsystem::FindBestContactForInterception(EFactionType Faction
     return false;
 }
 
+/** True when ContactId is in ContactsWithActiveInterception. */
 bool URadarContactSubsystem::IsContactAlreadyTargeted(FGuid ContactId) const
 {
     return ContactsWithActiveInterception.Contains(ContactId);
 }
 
+/** Adds ContactId to ContactsWithActiveInterception to prevent duplicate intercept launches. */
 void URadarContactSubsystem::MarkContactTargeted(FGuid ContactId)
 {
     ContactsWithActiveInterception.Add(ContactId);
 }
 
+/** Removes ContactId from ContactsWithActiveInterception when the intercept mission ends. */
 void URadarContactSubsystem::UnmarkContactTargeted(FGuid ContactId)
 {
     ContactsWithActiveInterception.Remove(ContactId);
 }
 
+/** Matches TrackedVehicleName to an active enemy fleet vehicle within 96 px of LastPosition. */
 UStrategyVehicle* URadarContactSubsystem::ResolveTrackedVehicle(const FRadarContact& Contact,
     EFactionType DetectingFaction) const
 {
@@ -235,6 +254,7 @@ UStrategyVehicle* URadarContactSubsystem::ResolveTrackedVehicle(const FRadarCont
     return nullptr;
 }
 
+/** Returns offensive target base name, or the nearest friendly base name as a fallback label. */
 FString URadarContactSubsystem::InferThreatenedBaseName(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
     UBaseManagerSubsystem* BaseMgr)
 {
@@ -273,6 +293,7 @@ FString URadarContactSubsystem::InferThreatenedBaseName(const UStrategyVehicle* 
     return NearestBase ? NearestBase->BaseName.ToString() : FString();
 }
 
+/** True for offensive missions toward friendly bases, interception missions, or close approach to friendly bases. */
 bool URadarContactSubsystem::IsInboundThreatVehicle(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
     UBaseManagerSubsystem* BaseMgr)
 {
@@ -314,6 +335,7 @@ bool URadarContactSubsystem::IsInboundThreatVehicle(const UStrategyVehicle* Enem
     return NearestFriendlyDist < GetBaseRadarRange() * 1.25f;
 }
 
+/** Accumulates DeltaGameHours and runs ProcessBaseRadarPings each time the ping interval is reached. */
 void URadarContactSubsystem::TickBaseRadar(float CurrentGameHours, float DeltaGameHours)
 {
     if (DeltaGameHours <= 0.0f)
@@ -337,6 +359,7 @@ void URadarContactSubsystem::TickBaseRadar(float CurrentGameHours, float DeltaGa
     }
 }
 
+/** Prunes contacts past RadarContactExpiryHours, broadcasts expiry, and cleans vehicle/intercept bookkeeping. */
 void URadarContactSubsystem::ExpireStaleContacts(float CurrentGameHours)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -392,6 +415,7 @@ void URadarContactSubsystem::ExpireStaleContacts(float CurrentGameHours)
     PruneFaction(EFactionType::Enemy);
 }
 
+/** Discovers sites in range (or refreshes intel for known sites) with optional terrain LOS blocking. */
 void URadarContactSubsystem::ProcessBaseSites(UStrategyBase* Base, EFactionType Faction, float Range,
     float CurrentGameHours, UBaseManagerSubsystem* BaseMgr, UFactionIntelSubsystem* IntelMgr,
     URadarTerrainSubsystem* TerrainMgr)
@@ -432,6 +456,7 @@ void URadarContactSubsystem::ProcessBaseSites(UStrategyBase* Base, EFactionType 
     }
 }
 
+/** Creates or updates a per-vehicle contact, locking FirstDetectedPosition on first sighting and estimating velocity. */
 FRadarContact URadarContactSubsystem::UpsertVehicleContact(EFactionType DetectingFaction, UStrategyBase* DetectingBase,
     UStrategyVehicle* EnemyVehicle, float CurrentGameHours, bool bIsInboundThreat)
 {
@@ -554,6 +579,10 @@ FRadarContact URadarContactSubsystem::UpsertVehicleContact(EFactionType Detectin
     return Contact;
 }
 
+/**
+ * Appends to DeferredReactiveIntercepts when an inbound threat is pinged mid-cycle.
+ * Dedupes by faction+ContactId and skips already-targeted contacts.
+ */
 void URadarContactSubsystem::QueueReactiveInterception(EFactionType Faction, UStrategyBase* Base, FGuid ContactId)
 {
     if (!Base || !ContactId.IsValid() || ContactsWithActiveInterception.Contains(ContactId))
@@ -576,6 +605,10 @@ void URadarContactSubsystem::QueueReactiveInterception(EFactionType Faction, USt
     DeferredReactiveIntercepts.Add(Entry);
 }
 
+/**
+ * Drains the deferred reactive intercept queue after all bases have pinged.
+ * Re-validates each entry (base alive, contact still inbound) before TryReactiveInterception.
+ */
 void URadarContactSubsystem::FlushDeferredReactiveInterceptions(UMissionManagerSubsystem* MissionMgr)
 {
     if (!MissionMgr || DeferredReactiveIntercepts.Num() == 0)
@@ -610,6 +643,7 @@ void URadarContactSubsystem::FlushDeferredReactiveInterceptions(UMissionManagerS
     }
 }
 
+/** Launches the first successful LaunchInterceptionAtContact from idle combat vehicles at Base. */
 void URadarContactSubsystem::TryReactiveInterception(EFactionType Faction, UStrategyBase* Base,
     const FRadarContact& Contact, UMissionManagerSubsystem* MissionMgr)
 {
@@ -662,6 +696,7 @@ void URadarContactSubsystem::TryReactiveInterception(EFactionType Faction, UStra
     }
 }
 
+/** Tracks enemy vehicles in radar range; queues deferred reactive intercepts for inbound threat contacts. */
 void URadarContactSubsystem::ProcessBaseVehicles(UStrategyBase* Base, EFactionType Faction, float Range,
     float CurrentGameHours, UMissionManagerSubsystem* MissionMgr)
 {
@@ -722,6 +757,7 @@ void URadarContactSubsystem::ProcessBaseVehicles(UStrategyBase* Base, EFactionTy
     }
 }
 
+/** Full ping pass for both factions: sites, vehicles, flush deferred intercepts, expire stale contacts. */
 void URadarContactSubsystem::ProcessBaseRadarPings(float CurrentGameHours)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();

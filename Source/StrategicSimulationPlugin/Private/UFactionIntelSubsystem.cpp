@@ -3,12 +3,14 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "Engine/Engine.h"
 
+/** Subsystem startup — logs readiness; intel maps start empty. */
 void UFactionIntelSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     UE_LOG(LogTemp, Display, TEXT("UFactionIntelSubsystem initialized — per-faction site intel ready"));
 }
 
+/** Reads bStaleIntelEnabled from the campaign subsystem (defaults to true if missing). */
 bool UFactionIntelSubsystem::IsStaleIntelEnabled() const
 {
     if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
@@ -18,16 +20,19 @@ bool UFactionIntelSubsystem::IsStaleIntelEnabled() const
     return true;
 }
 
+/** Selects HumanIntelBySiteId or EnemyIntelBySiteId for read/write access. */
 TMap<FGuid, FSiteIntelSnapshot>& UFactionIntelSubsystem::GetIntelMap(EFactionType Faction)
 {
     return (Faction == EFactionType::Human) ? HumanIntelBySiteId : EnemyIntelBySiteId;
 }
 
+/** Const variant of GetIntelMap for query-only code paths. */
 const TMap<FGuid, FSiteIntelSnapshot>& UFactionIntelSubsystem::GetIntelMap(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? HumanIntelBySiteId : EnemyIntelBySiteId;
 }
 
+/** Snapshots SiteId, location, CurrentResources, and whether a base has been built on a PotentialBase site. */
 bool UFactionIntelSubsystem::CaptureGroundTruth(UStrategySiteDefinition* Site, FSiteIntelSnapshot& OutSnapshot)
 {
     if (!Site)
@@ -43,6 +48,7 @@ bool UFactionIntelSubsystem::CaptureGroundTruth(UStrategySiteDefinition* Site, F
     return true;
 }
 
+/** Writes or replaces the faction's snapshot for Site with fresh observation metadata. */
 void UFactionIntelSubsystem::ObserveSite(EFactionType Faction, UStrategySiteDefinition* Site, EDiscoveryReason Reason,
     float ObservedGameHours)
 {
@@ -78,6 +84,7 @@ void UFactionIntelSubsystem::ObserveSite(EFactionType Faction, UStrategySiteDefi
         Snapshot.bLastKnownHasBase ? TEXT("yes") : TEXT("no"));
 }
 
+/** Checks intel map for bLocationKnown; returns true for all sites when stale intel is disabled. */
 bool UFactionIntelSubsystem::HasKnownSiteLocation(EFactionType Faction, const UStrategySiteDefinition* Site) const
 {
     if (!Site)
@@ -94,6 +101,7 @@ bool UFactionIntelSubsystem::HasKnownSiteLocation(EFactionType Faction, const US
     return Snapshot && Snapshot->bLocationKnown;
 }
 
+/** Looks up Site->SiteId in the faction intel map and copies the entry to OutSnapshot. */
 bool UFactionIntelSubsystem::GetSiteIntelSnapshot(EFactionType Faction, const UStrategySiteDefinition* Site,
     FSiteIntelSnapshot& OutSnapshot) const
 {
@@ -111,6 +119,7 @@ bool UFactionIntelSubsystem::GetSiteIntelSnapshot(EFactionType Faction, const US
     return false;
 }
 
+/** UI/save-facing resource view: last-known stockpile per viewer faction under stale intel rules. */
 FResourceStockpile UFactionIntelSubsystem::GetDisplayResources(EFactionType ViewerFaction,
     const UStrategySiteDefinition* Site) const
 {
@@ -132,6 +141,7 @@ FResourceStockpile UFactionIntelSubsystem::GetDisplayResources(EFactionType View
     return Site->CurrentResources;
 }
 
+/** UI-facing base-built flag: last-known bLastKnownHasBase or live site state. */
 bool UFactionIntelSubsystem::GetDisplayHasBase(EFactionType ViewerFaction, const UStrategySiteDefinition* Site) const
 {
     if (!Site)
@@ -152,6 +162,7 @@ bool UFactionIntelSubsystem::GetDisplayHasBase(EFactionType ViewerFaction, const
     return Site->bHasBeenUsed && Site->SiteType == EStrategySiteType::PotentialBase;
 }
 
+/** True when the site was observed this step; always true if stale intel is off or no snapshot exists. */
 bool UFactionIntelSubsystem::IsIntelFresh(EFactionType ViewerFaction, const UStrategySiteDefinition* Site) const
 {
     if (!Site || !IsStaleIntelEnabled())
@@ -167,6 +178,7 @@ bool UFactionIntelSubsystem::IsIntelFresh(EFactionType ViewerFaction, const UStr
     return false;
 }
 
+/** End-of-step hook: every snapshot's bHasFreshIntel is set false until the next ObserveSite. */
 void UFactionIntelSubsystem::ClearFreshIntelFlags()
 {
     if (!IsStaleIntelEnabled())
@@ -185,12 +197,14 @@ void UFactionIntelSubsystem::ClearFreshIntelFlags()
     }
 }
 
+/** Empties both faction intel maps (campaign restart / debug). */
 void UFactionIntelSubsystem::ClearAllIntel()
 {
     HumanIntelBySiteId.Empty();
     EnemyIntelBySiteId.Empty();
 }
 
+/** Builds non-fresh snapshots from DiscoveredSitesHuman/Enemy so UI has last-known data after load. */
 void UFactionIntelSubsystem::SeedIntelFromDiscoveredSites(UBaseManagerSubsystem* BaseManager)
 {
     if (!BaseManager || !IsStaleIntelEnabled())
@@ -227,6 +241,7 @@ void UFactionIntelSubsystem::SeedIntelFromDiscoveredSites(UBaseManagerSubsystem*
         HumanIntelBySiteId.Num(), EnemyIntelBySiteId.Num());
 }
 
+/** Exports all snapshots for one faction; bHasFreshIntel is forced false for persistence. */
 TArray<FSiteIntelSnapshot> UFactionIntelSubsystem::SerializeIntel(EFactionType Faction) const
 {
     TArray<FSiteIntelSnapshot> Result;
@@ -242,6 +257,7 @@ TArray<FSiteIntelSnapshot> UFactionIntelSubsystem::SerializeIntel(EFactionType F
     return Result;
 }
 
+/** Imports saved snapshots; if empty, seeds from the faction's discovered-site list via BaseManager. */
 void UFactionIntelSubsystem::DeserializeIntel(EFactionType Faction, const TArray<FSiteIntelSnapshot>& SavedIntel,
     UBaseManagerSubsystem* BaseManager)
 {

@@ -1,0 +1,47 @@
+# Changelog
+
+User-facing changes to the Strategic Simulation Plugin. For setup and usage, see the [Documentation Wiki](docs/README.md).
+
+## [1.0.0] — 2026-06-18
+
+### Simulation core
+- Dual-faction strategic layer with daily AI (build, recruit, research, equip, missions)
+- Logical 2D map with generated sites, two starting Command Centers, and mineable site resources
+- Live vehicle movement with range budgeting and phased pathing (outbound → on-station → return)
+- Pause, time scale, and `OnSimulationClockStateChanged` for UI time controls
+- Strategic clock pause during contested salvage
+
+### Missions & combat
+- Mission types: Recon, Offensive, Salvage, Defensive, Interception
+- Staggered daily mission launches across the 24-hour game day
+- Armed vehicular combat for Gunship/Heavy vehicles
+- Offensive base-attack missions after configurable start day (default: day 5)
+- AI reactive interception and border patrol toward radar entry points
+- En-route inbound threat engagement for combat vehicles in transit
+
+### Salvage
+- Wreck sites when vehicles are destroyed; combat participants know location immediately
+- Salvage missions for Transport/Support/Scout vehicles
+- Fog-aware salvage map widget with stale intel tooltips
+- Contested salvage hook (pause clock, resolve via `ResolveSalvageContest`)
+- Site-map save/load for QA (not a full Continue Game)
+
+### Radar & intel
+- Vehicle radar discovery of sites and enemy vehicles
+- Command Center passive radar with contact registry and click-to-intercept map widget
+- First-detection entry points for intercept and patrol targeting
+- Stale site intel snapshots per faction
+- Radar line-of-sight blocker zones (mountains)
+- Optional player alert when enemy radar detects friendly vehicles
+
+### UI & tooling
+- `UStrategyEventDispatcher` Blueprint events for roster, production, sites, radar, salvage
+- Test harness (`AStrategyTestActor`) and sample HUD widgets
+- Debug strategic map HUD with bases, vehicles, paths, and radar overlays
+
+### Known limitations
+- Base attack arrival is log-only (no strategic base damage yet)
+- Research unlock gating is a stub
+- Mission resolution does not apply soldier casualties
+- Ammo is treated as infinite when `MaxAmmo == 0`
+- No tactical map load for player PvE fights yet

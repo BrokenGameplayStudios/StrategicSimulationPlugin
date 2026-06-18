@@ -13,6 +13,7 @@
 #include "UStrategyEventDispatcher.h"
 #include "StrategicSiteDefinition.h"
 
+// Wires subsystem dependencies and binds OnDayPassed to campaign, mission, and AI subsystems.
 void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -70,6 +71,7 @@ void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection
     UE_LOG(LogTemp, Display, TEXT("UStrategyCampaignSubsystem initialized — All managers + AI forced active"));
 }
 
+// Runs daily repairs for both factions and logs facility capacity summary.
 void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
 {
     // === Real in-game date header ===
@@ -132,6 +134,7 @@ void UStrategyCampaignSubsystem::OnDayPassed(int32 NewDay)
     // AI daily orders are handled by UAIControllerSubsystem::OnDayPassed (single binding).
 }
 
+// Clears resources, bases, research, intel, radar contacts, and exploration for New Game.
 void UStrategyCampaignSubsystem::ResetSimulation()
 {
     UE_LOG(LogTemp, Display, TEXT("[RESET] Resetting entire simulation..."));
@@ -180,6 +183,7 @@ void UStrategyCampaignSubsystem::ResetSimulation()
     UE_LOG(LogTemp, Display, TEXT("[RESET] Simulation has been fully cleared."));
 }
 
+// Generates strategic sites, places starting bases, triggers day-1 tick, and dumps database debug info.
 void UStrategyCampaignSubsystem::StartSimulation()
 {
     GetTimeManager()->SetTimeScale(1.0f);
@@ -375,18 +379,21 @@ void UStrategyCampaignSubsystem::StartSimulation()
     UE_LOG(LogTemp, Display, TEXT("=== DATA ASSET INITIALIZATION DEBUG COMPLETE ==="));
 }
 
+// Sets time scale to zero via the time manager.
 void UStrategyCampaignSubsystem::StopSimulation()
 {
     GetTimeManager()->SetTimeScale(0.0f);
     UE_LOG(LogTemp, Display, TEXT("SIMULATION STOPPED"));
 }
 
+// Returns a simple "Day N" label from the time manager calendar day.
 FString UStrategyCampaignSubsystem::GetFormattedDate() const
 {
     int32 Day = GetTimeManager()->GetCurrentDay();
     return FString::Printf(TEXT("Day %d"), Day);
 }
 
+// Forwards to AI subsystem debug planner.
 void UStrategyCampaignSubsystem::Debug_RunAI()
 {
     if (UAIControllerSubsystem* AI = GetAIController())
@@ -399,12 +406,14 @@ void UStrategyCampaignSubsystem::Debug_RunAI()
     }
 }
 
+// Placeholder research completion check (always true when Tech is valid).
 bool UStrategyCampaignSubsystem::HasCompletedResearch(EFactionType Faction, UResearchTechDefinition* Tech) const
 {
     if (!Tech) return false;
     return true; // placeholder
 }
 
+// Walks facility research chains to determine whether an item is unlocked for a faction.
 bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefinition* ItemDef) const
 {
     if (!ItemDef) return false;
@@ -458,30 +467,42 @@ bool UStrategyCampaignSubsystem::IsItemUnlocked(EFactionType Faction, UItemDefin
     return false;
 }
 
+// Returns the game-instance resource manager subsystem.
 UResourceManagerSubsystem* UStrategyCampaignSubsystem::GetResourceManager() const { return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>(); }
+// Returns the game-instance soldier manager subsystem.
 USoldierManagerSubsystem* UStrategyCampaignSubsystem::GetSoldierManager() const { return GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>(); }
+// Returns the game-instance research manager subsystem.
 UResearchManagerSubsystem* UStrategyCampaignSubsystem::GetResearchManager() const { return GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>(); }
+// Returns the game-instance engineering manager subsystem.
 UEngineeringManagerSubsystem* UStrategyCampaignSubsystem::GetEngineeringManager() const { return GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>(); }
+// Returns the game-instance base manager subsystem.
 UBaseManagerSubsystem* UStrategyCampaignSubsystem::GetBaseManager() const { return GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>(); }
+// Returns the game-instance time manager subsystem.
 UTimeManagerSubsystem* UStrategyCampaignSubsystem::GetTimeManager() const { return GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>(); }
+// Returns the game-instance AI controller subsystem.
 UAIControllerSubsystem* UStrategyCampaignSubsystem::GetAIController() const { return GetGameInstance()->GetSubsystem<UAIControllerSubsystem>(); }
+// Returns the game-instance mission manager subsystem.
 UMissionManagerSubsystem* UStrategyCampaignSubsystem::GetMissionManager() const { return GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>(); }
 
+// Returns the faction intel subsystem when game instance is valid.
 UFactionIntelSubsystem* UStrategyCampaignSubsystem::GetFactionIntelManager() const
 {
     return GetGameInstance() ? GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>() : nullptr;
 }
 
+// Returns the radar terrain subsystem when game instance is valid.
 URadarTerrainSubsystem* UStrategyCampaignSubsystem::GetRadarTerrainManager() const
 {
     return GetGameInstance() ? GetGameInstance()->GetSubsystem<URadarTerrainSubsystem>() : nullptr;
 }
 
+// Returns the radar contact subsystem when game instance is valid.
 URadarContactSubsystem* UStrategyCampaignSubsystem::GetRadarContactManager() const
 {
     return GetGameInstance() ? GetGameInstance()->GetSubsystem<URadarContactSubsystem>() : nullptr;
 }
 
+// Serializes campaign day, resources, sites, and intel into a numbered save slot.
 void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)
 {
     if (SlotIndex < 1) SlotIndex = 1;
@@ -532,6 +553,7 @@ void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)
     }
 }
 
+// Deserializes sites, intel, calendar, and resources from a numbered save slot.
 void UStrategyCampaignSubsystem::LoadCampaign(int32 SlotIndex)
 {
     if (SlotIndex < 1) SlotIndex = 1;
@@ -613,6 +635,7 @@ void UStrategyCampaignSubsystem::LoadCampaign(int32 SlotIndex)
     }
 }
 
+// Delegates strategic pause to the time manager during contested salvage.
 void UStrategyCampaignSubsystem::PauseStrategicClock()
 {
     if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
@@ -621,6 +644,7 @@ void UStrategyCampaignSubsystem::PauseStrategicClock()
     }
 }
 
+// Clears strategic pause on the time manager after contest resolution.
 void UStrategyCampaignSubsystem::ResumeStrategicClock()
 {
     if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
@@ -629,6 +653,7 @@ void UStrategyCampaignSubsystem::ResumeStrategicClock()
     }
 }
 
+// Stores contested wreck site, missions, and force snapshots for salvage contest UI.
 void UStrategyCampaignSubsystem::ActivateSalvageContest(UStrategySiteDefinition* Site, UMissionGroup* HumanMission,
     UMissionGroup* EnemyMission, const FSalvageContestForceSnapshot& HumanSnapshot,
     const FSalvageContestForceSnapshot& EnemySnapshot)
@@ -641,6 +666,7 @@ void UStrategyCampaignSubsystem::ActivateSalvageContest(UStrategySiteDefinition*
     ContestedEnemySnapshot = EnemySnapshot;
 }
 
+// Resets all transient salvage contest fields without aborting missions.
 void UStrategyCampaignSubsystem::ClearSalvageContestState()
 {
     bSalvageContestActive = false;
@@ -651,6 +677,7 @@ void UStrategyCampaignSubsystem::ClearSalvageContestState()
     ContestedEnemySnapshot = FSalvageContestForceSnapshot();
 }
 
+// Applies contest outcome, aborts affected salvage missions, clears state, and resumes the clock.
 void UStrategyCampaignSubsystem::ResolveSalvageContest(ESalvageContestOutcome Outcome)
 {
     if (!bSalvageContestActive)
@@ -717,6 +744,7 @@ void UStrategyCampaignSubsystem::ResolveSalvageContest(ESalvageContestOutcome Ou
     ResumeStrategicClock();
 }
 
+// Loads save metadata from slots 1–10 for the save selection UI.
 TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() const
 {
     TArray<UStrategySaveGame*> Saves;
@@ -730,7 +758,7 @@ TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() cons
     return Saves;
 }
 
-// === CLEAN VICTORY-SIDE DEBUG (POW + KIA on win) ===
+// Updates victor-side POW capture and KIA chances with clamped debug values.
 void UStrategyCampaignSubsystem::SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory)
 {
     POWCaptureChanceOnVictory = FMath::Clamp(NewPOWCaptureChance, 0.0f, 1.0f);
@@ -740,13 +768,14 @@ void UStrategyCampaignSubsystem::SetVictoryChances(float NewPOWCaptureChance, fl
         POWCaptureChanceOnVictory * 100.0f, KIAChanceOnVictory * 100.0f);
 }
 
-// === CLEAN DEFEAT-SIDE KIA DEBUG ===
+// Updates defender KIA chance on defeat with a clamped debug value.
 void UStrategyCampaignSubsystem::SetDefeatKIAChance(float NewEnemyKIAChanceOnDefeat)
 {
     EnemyKIAChanceOnDefeat = FMath::Clamp(NewEnemyKIAChanceOnDefeat, 0.0f, 1.0f);
     UE_LOG(LogTemp, Display, TEXT("[KIA] Defeat KIA chance updated → %.0f%%"), EnemyKIAChanceOnDefeat * 100.0f);
 }
 
+// Orphan debug helper (not a UStrategyCampaignSubsystem member) — logs forced autopsy request.
 UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
 void ForceAutopsy(EFactionType Faction)
 {

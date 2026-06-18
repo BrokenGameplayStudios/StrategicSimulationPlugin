@@ -11,12 +11,17 @@ class UStrategyBase;
 class UStrategyFacility;
 class UMissionGroup;   // ← Forward declaration (prevents compile errors)
 
+/**
+ * Runtime soldier with class stats, loadout bonuses, health/status,
+ * and station/mission/POW/MIA tracking for strategic simulation.
+ */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategySoldier : public UObject
 {
     GENERATED_BODY()
 
 public:
+    /** Default-constructs health, status, and POW/KIA flags. */
     UStrategySoldier();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Soldier")
@@ -72,18 +77,23 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Loadout")
     TArray<TSoftObjectPtr<UItemDefinition>> CurrentLoadout;
 
+    /** Reduces health and updates wounded/dead status. */
     UFUNCTION(BlueprintCallable, Category = "Soldier|Damage")
     void ApplyDamage(int32 DamageAmount);
 
+    /** True when the soldier is wounded but not dead. */
     UFUNCTION(BlueprintCallable, Category = "Soldier|Healing")
     bool NeedsHealing() const;
 
+    /** Restores health up to maximum and refreshes status. */
     UFUNCTION(BlueprintCallable, Category = "Soldier|Healing")
     void Heal(int32 Amount);
 
+    /** Derives ESoldierStatus and recovery days from CurrentStats.Health. */
     UFUNCTION(BlueprintCallable, Category = "Soldier|Healing")
     void UpdateStatusFromHealth();
 
+    /** Logs soldier name, class, health, and status flags to the output log. */
     UFUNCTION(BlueprintCallable, Category = "Debug")
     void PrintInfo() const;
 
@@ -91,9 +101,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Soldier|Stats")
     FSoldierStats GetEffectiveStats() const;
 
+    /** Effective Aim after class base and loadout item bonuses. */
     UFUNCTION(BlueprintCallable, Category = "Soldier|Stats")
     int32 GetEffectiveAim() const;
 
+    /** Effective Defense (primarily armor bonuses from loadout). */
     UFUNCTION(BlueprintCallable, Category = "Soldier|Stats")
-    int32 GetEffectiveDefense() const;  // Armor bonus primarily
+    int32 GetEffectiveDefense() const;
 };

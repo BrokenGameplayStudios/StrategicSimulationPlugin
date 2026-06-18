@@ -18,6 +18,7 @@
 #include "StrategicSimulationTypes.h"
 #include "Engine/Engine.h"
 
+/** Binds OnDayPassed and logs AI simulation configuration. */
 void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Collection.InitializeDependency<UTimeManagerSubsystem>();
@@ -35,11 +36,13 @@ void UAIControllerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
         bSimulateEnemyAI ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+/** Clears per-faction day guards for campaign restart. */
 void UAIControllerSubsystem::ResetDailyProcessingState()
 {
     LastProcessedDayPerFaction.Empty();
 }
 
+/** Advances construction and runs AI for enabled factions. */
 void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("🔥 [AI TICK] === DAY %d START — Checking simulation flags ==="), NewDay);
@@ -76,6 +79,7 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("[AI TICK] === DAY %d COMPLETE ==="), NewDay);
 }
 
+/** Player-callable wrapper around RunAIForFaction. */
 void UAIControllerSubsystem::PerformDailyBuildOrder(EFactionType Faction)
 {
     UE_LOG(LogTemp, Display, TEXT("[PLAYER-CALLABLE] Performing daily build order for %s"), *UEnum::GetValueAsString(Faction));
@@ -85,8 +89,7 @@ void UAIControllerSubsystem::PerformDailyBuildOrder(EFactionType Faction)
     }
 }
 
-// RUN AI FOR FACTION
-// Does routine for AI
+/** Full daily AI: build, recruit, equip, missions, and expansion. */
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[AI] >>> ENTERING RunAIForFaction for %s (Day %d)"),
@@ -412,9 +415,7 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UE_LOG(LogTemp, Display, TEXT("[AI] %s AI — End of day %d (actions completed)"), *UEnum::GetValueAsString(Faction), CurrentDay);
 }
 
-// === FULL FUNCTION: UAIControllerSubsystem::TryRecruit (CAPACITY FIXED - FINAL) ===
-// Now checks capacity AFTER every soldier is queued. 
-// Never exceeds barracks capacity, even during large waves.
+/** Wave-recruits soldiers up to barracks capacity and budget. */
 bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -552,9 +553,7 @@ bool UAIControllerSubsystem::TryRecruit(EFactionType Faction)
     return RecruitedThisDay > 0;
 }
 
-// === FULL FUNCTION: UAIControllerSubsystem::TryBuyAndEquip (FINAL - CRASH PROOF) ===
-// Works with your new Commander class (MaxLoadoutSize is respected).
-// Re-sorts after every purchase + daily cap = no more runaway loops or crashes.
+/** Purchases priority gear for least-equipped soldiers. */
 bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -647,9 +646,7 @@ bool UAIControllerSubsystem::TryBuyAndEquip(EFactionType Faction)
     return bBoughtAnything;
 }
 
-// === FULL FUNCTION: UAIControllerSubsystem::TryBuildVehicle (WAVE VERSION) ===
-// Same wave logic as TryRecruit. Hangars now act as their own controllers —
-// multiple vehicles can be started in one day if multiple slots exist.
+/** Wave-queues vehicle production in hangar slots. */
 bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase* TargetBase)
 {
     if (!TargetBase)
@@ -723,6 +720,7 @@ bool UAIControllerSubsystem::TryBuildVehicle(EFactionType Faction, UStrategyBase
 }
 
 
+/** Validates and starts facility construction at a base. */
 bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityType FacilityTypeToBuild, UStrategyBase* TargetBase)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -820,6 +818,7 @@ bool UAIControllerSubsystem::TryBuildFacility(EFactionType Faction, EFacilityTyp
     return false;
 }
 
+/** Starts next priority research if lab is idle. */
 bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -901,39 +900,46 @@ bool UAIControllerSubsystem::TryResearch(EFactionType Faction)
     return false;
 }
 
+/** Sets global AI enabled flag. */
 void UAIControllerSubsystem::SetAIEnabled(bool bEnable)
 {
     bAIEnabled = bEnable;
     UE_LOG(LogTemp, Display, TEXT("AI Controller %s for both factions"), bAIEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+/** Returns global AI enabled state. */
 bool UAIControllerSubsystem::IsAIEnabled() const
 {
     return bAIEnabled;
 }
 
+/** Toggles Human faction AI simulation. */
 void UAIControllerSubsystem::SetSimulateHumanAI(bool bEnable)
 {
     bSimulateHumanAI = bEnable;
     UE_LOG(LogTemp, Display, TEXT("Human AI simulation %s"), bEnable ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+/** Toggles Enemy faction AI simulation. */
 void UAIControllerSubsystem::SetSimulateEnemyAI(bool bEnable)
 {
     bSimulateEnemyAI = bEnable;
     UE_LOG(LogTemp, Display, TEXT("Enemy AI simulation %s"), bEnable ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
+/** Returns Human AI simulation flag. */
 bool UAIControllerSubsystem::IsSimulatingHumanAI() const
 {
     return bSimulateHumanAI;
 }
 
+/** Returns Enemy AI simulation flag. */
 bool UAIControllerSubsystem::IsSimulatingEnemyAI() const
 {
     return bSimulateEnemyAI;
 }
 
+/** Manually runs AI for both enabled factions. */
 void UAIControllerSubsystem::Debug_RunAI()
 {
     UE_LOG(LogTemp, Display, TEXT("[AI DEBUG] Manual AI run requested for BOTH factions (if enabled)"));
@@ -951,6 +957,7 @@ void UAIControllerSubsystem::Debug_RunAI()
     }
 }
 
+/** Picks base with fewest parked vehicles for distribution. */
 UStrategyBase* UAIControllerSubsystem::GetBaseWithFewestVehicles(EFactionType Faction) const
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -983,6 +990,7 @@ UStrategyBase* UAIControllerSubsystem::GetBaseWithFewestVehicles(EFactionType Fa
     return BestBase;
 }
 
+/** Finds first valid discovered unused expansion site. */
 UStrategySiteDefinition* UAIControllerSubsystem::FindExpansionSiteForAI(EFactionType Faction) const
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -1003,16 +1011,19 @@ UStrategySiteDefinition* UAIControllerSubsystem::FindExpansionSiteForAI(EFaction
     return nullptr;
 }
 
+/** True for Scout, Transport, and Support types. */
 bool UAIControllerSubsystem::IsReconVehicleType(EVehicleType Type)
 {
     return Type == EVehicleType::Scout || Type == EVehicleType::Transport || Type == EVehicleType::Support;
 }
 
+/** True for Gunship and Heavy types. */
 bool UAIControllerSubsystem::IsCombatVehicleType(EVehicleType Type)
 {
     return Type == EVehicleType::Gunship || Type == EVehicleType::Heavy;
 }
 
+/** Counts parked and on-mission vehicles of given types. */
 int32 UAIControllerSubsystem::CountFactionVehiclesOfTypes(EFactionType Faction, const TArray<EVehicleType>& Types) const
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -1079,6 +1090,7 @@ int32 UAIControllerSubsystem::CountFactionVehiclesOfTypes(EFactionType Faction, 
     return Count;
 }
 
+/** Chooses affordable vehicle def based on fleet mix. */
 UVehicleDefinition* UAIControllerSubsystem::SelectVehicleDefinitionToBuild(EFactionType Faction) const
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -1168,6 +1180,7 @@ UVehicleDefinition* UAIControllerSubsystem::SelectVehicleDefinitionToBuild(EFact
     return Chosen;
 }
 
+/** Selects mission type for an idle AI vehicle. */
 EMissionType UAIControllerSubsystem::PickAIMissionTypeForVehicle(UStrategyVehicle* Vehicle, int32 CurrentDay) const
 {
     if (!Vehicle || !Vehicle->VehicleDefinition)
@@ -1225,6 +1238,7 @@ EMissionType UAIControllerSubsystem::PickAIMissionTypeForVehicle(UStrategyVehicl
     return EMissionType::Recon;
 }
 
+/** Decides if detecting vehicle should attack detected enemy. */
 bool UAIControllerSubsystem::ShouldEngageVehicle(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle) const
 {
     if (!DetectingVehicle || !DetectedVehicle || DetectedVehicle->IsDestroyed())
@@ -1277,12 +1291,14 @@ bool UAIControllerSubsystem::ShouldEngageVehicle(UStrategyVehicle* DetectingVehi
     return false;
 }
 
+/** Delegates inbound threat check to radar contact subsystem. */
 bool UAIControllerSubsystem::IsEnemyInboundToFaction(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction) const
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     return URadarContactSubsystem::IsInboundThreatVehicle(EnemyVehicle, FriendlyFaction, BaseMgr);
 }
 
+/** True when en-route intercept should take priority over normal mission pathing. */
 bool UAIControllerSubsystem::ShouldPrioritizeEnRouteIntercept(UStrategyVehicle* DetectingVehicle,
     UStrategyVehicle* DetectedVehicle) const
 {
@@ -1323,6 +1339,7 @@ bool UAIControllerSubsystem::ShouldPrioritizeEnRouteIntercept(UStrategyVehicle* 
     return false;
 }
 
+/** Logs detection and triggers engagement behaviors. */
 void UAIControllerSubsystem::HandleVehicleDetection(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle)
 {
     if (!DetectingVehicle || !DetectedVehicle) return;

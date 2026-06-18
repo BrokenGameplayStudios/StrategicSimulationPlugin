@@ -5,6 +5,7 @@
 #include "StrategicSimulationTypes.h"
 #include "StrategyResourceDefinition.generated.h"
 
+/** Primary data asset defining a displayable resource type, value, and icon. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategyResourceDefinition : public UPrimaryDataAsset
 {

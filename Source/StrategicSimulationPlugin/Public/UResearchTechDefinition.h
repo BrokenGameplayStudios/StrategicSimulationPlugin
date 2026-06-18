@@ -10,6 +10,7 @@ class UStrategyTechDefinition;
 class UFacilityDefinition;
 class UResearchTechDefinition;
 
+/** Primary data asset for a research project: cost, duration, and downstream unlocks. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UResearchTechDefinition : public UPrimaryDataAsset
 {

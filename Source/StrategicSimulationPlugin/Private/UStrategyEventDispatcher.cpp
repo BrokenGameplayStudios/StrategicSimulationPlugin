@@ -1,6 +1,7 @@
 #include "UStrategyEventDispatcher.h"
 #include "Engine/Engine.h"
 
+/** Logs that the event dispatcher is ready for UI subscriptions. */
 void UStrategyEventDispatcher::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);

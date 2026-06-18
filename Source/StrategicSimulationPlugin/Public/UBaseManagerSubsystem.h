@@ -14,53 +14,72 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFacilityListChanged, EFactionType, Faction);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBaseListChanged, EFactionType, Faction);
 
+/**
+ * Game-instance subsystem that owns faction bases, facilities, strategic sites,
+ * salvage wrecks, and daily construction/repair/extraction simulation.
+ */
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API UBaseManagerSubsystem : public UGameInstanceSubsystem
 {
     GENERATED_BODY()
 
 public:
+    /** Binds to the time manager and initializes base/site systems. */
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
+    /** Creates a new base at the given map location, optionally linked to a site. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     UStrategyBase* BuildNewBase(EFactionType Faction, FText BaseName, FVector2D MapLocation, UStrategySiteDefinition* Site = nullptr);
 
+    /** Returns all bases owned by the given faction. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     const TArray<UStrategyBase*>& GetBases(EFactionType Faction) const;
 
+    /** True when the faction may found another base (hangar and cap limits). */
     UFUNCTION(BlueprintCallable, Category = "Base")
     bool CanBuildNewBase(EFactionType Faction) const;
 
+    /** Counts bases that have an operational hangar facility. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetNumberOfOperationalHangers(EFactionType Faction) const;
 
+    /** Starts construction of a facility at the target base (or auto-selected base). */
     UFUNCTION(BlueprintCallable, Category = "Base")
     UStrategyFacility* BuildFacility(EFactionType Faction, UFacilityDefinition* FacilityDef, UStrategyBase* TargetBase = nullptr);
 
+    /** Sum of power provided by all operational facilities across faction bases. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalPowerProvided(EFactionType Faction) const;
 
+    /** Sum of power drawn by all operational facilities across faction bases. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalPowerDrawn(EFactionType Faction) const;
 
+    /** Net power (provided minus drawn) for the faction. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetNetPower(EFactionType Faction) const;
 
+    /** Total living-quarters capacity (soldier berths) across all faction bases. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalBarracksCapacity(EFactionType Faction) const;
 
+    /** True if any faction base has a facility of the given type. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     bool HasFacilityOfType(EFactionType Faction, EFacilityType FacilityType) const;
 
+    /** Total count of facilities of the given type across faction bases. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetCurrentCountOfType(EFactionType Faction, EFacilityType FacilityType) const;
 
+    /** Advances build progress for all in-progress facilities of a faction. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     void AdvanceFacilityConstruction(EFactionType Faction);
 
+    /** Flat list of all facilities across all bases for a faction. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     const TArray<UStrategyFacility*>& GetFacilities(EFactionType Faction) const;
 
+    /** Total hangar vehicle capacity across all operational hangars. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     int32 GetTotalAvailableHangerSlots(EFactionType Faction) const;
 
@@ -89,7 +108,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Expansion", meta = (DeprecatedFunction, DeprecationMessage = "Use AddDiscoveredSite(Faction, Site)."))
     UStrategySiteDefinition* AddDiscoveredSiteAtLocation(EFactionType Faction, FVector2D Location, EStrategySiteType Type = EStrategySiteType::PotentialBase, float OptionalScore = 0.0f);
 
-    /** Spawns a salvage site at a destroyed vehicle wreck. */
+    /**
+     * Creates an active SalvageSite wreck at Location from a destroyed vehicle.
+     * Seeds resources from build cost, sets expiry, registers combat-known factions, and broadcasts creation.
+     */
     UFUNCTION(BlueprintCallable, Category = "Expansion|Salvage")
     UStrategySiteDefinition* CreateSalvageSite(FVector2D Location, class UStrategyVehicle* DestroyedVehicle);
 
@@ -97,31 +119,40 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Expansion|Salvage")
     void RegisterCombatKnownSalvage(UStrategySiteDefinition* Site);
 
+    /** True when the site is an active salvage wreck site. */
     UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
     bool IsSalvageSite(const UStrategySiteDefinition* Site) const;
 
+    /** True when the faction may dispatch salvage to this wreck (range, intel, caps). */
     UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
     bool CanSalvageSite(EFactionType Faction, const UStrategySiteDefinition* Site,
         const class UStrategyVehicle* SalvageVehicle = nullptr) const;
 
+    /** True when the site appears in the faction's discovery or combat-known lists. */
     UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
     bool IsSiteKnownToFaction(EFactionType Faction, const UStrategySiteDefinition* Site) const;
 
+    /** Days until an active salvage wreck expires (0 if not applicable). */
     UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
     int32 GetSalvageDaysRemaining(const UStrategySiteDefinition* Site) const;
 
+    /** Removes a salvage site from the map and resolves any MIA soldiers at the wreck. */
     UFUNCTION(BlueprintCallable, Category = "Expansion|Salvage")
     void RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired = false,
         EFactionType LastSalvagingFaction = EFactionType::Neutral);
 
+    /** Finds the nearest site within tolerance of a map location. */
     UFUNCTION(BlueprintPure, Category = "Expansion")
     UStrategySiteDefinition* FindSiteAtLocation(FVector2D Location, float Tolerance = 128.f) const;
 
+    /** Expires salvage wrecks whose expiry day has been reached. */
     void ProcessSalvageSiteExpiry(int32 CurrentSimulationDay);
 
+    /** Serializes all potential and salvage sites for save/load. */
     UFUNCTION(BlueprintCallable, Category = "Expansion|Save")
     TArray<FStrategySiteSaveData> SerializeAllSites() const;
 
+    /** Restores site lists and discovery state from saved data. */
     UFUNCTION(BlueprintCallable, Category = "Expansion|Save")
     void DeserializeAllSites(const TArray<FStrategySiteSaveData>& SavedSites);
 
@@ -136,13 +167,15 @@ public:
     /** Processes daily resource extraction from sites for all bases of a faction */
     void ProcessDailyResourceExtraction(EFactionType Faction);
 
+    /** Destroys and clears all bases for both factions. */
     UFUNCTION(BlueprintCallable, Category = "Base")
     void ResetAllBases();
 
+    /** Runs daily facility simulation (production, repair) for all bases of a faction. */
     UFUNCTION(BlueprintCallable, Category = "Repair")
     void SimulateDailyRepairs(EFactionType Faction);
 
-    // === NEW: Queue integration ===
+    /** Advances production/construction queues for all facilities in both factions. */
     UFUNCTION(BlueprintCallable, Category = "Construction")
     void AdvanceAllConstruction();
 
@@ -152,9 +185,11 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnBaseListChanged OnBaseListChanged;
 
+    /** Logs a detailed snapshot of base, facility, and personnel state to the output log. */
     UFUNCTION(BlueprintCallable, Category = "Debug|UI")
     void DebugPrintFullBaseState(EFactionType Faction) const;
-        
+
+    /** Builds the same base-state report as a FString for UI or tooling. */
     FString GetBaseStateDebugString(EFactionType Faction) const;
 
     /** Places the initial Command Centers for both factions on random sites with distance separation */
@@ -168,9 +203,12 @@ private:
     UPROPERTY(VisibleAnywhere, Transient, Category = "Bases")
     TArray<UStrategyBase*> EnemyBases;
 
+    /** Daily tick: construction, repairs, extraction, and salvage expiry. */
     UFUNCTION()
     void OnDayPassed(int32 NewDay);
 
+    /** Returns the mutable base array for a faction. */
     TArray<UStrategyBase*>& GetMutableBases(EFactionType Faction);
+    /** Returns the const base array for a faction. */
     const TArray<UStrategyBase*>& GetBasesInternal(EFactionType Faction) const;
 };

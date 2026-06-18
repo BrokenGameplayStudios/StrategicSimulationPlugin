@@ -10,6 +10,7 @@
 
 namespace ExplorationHelpers
 {
+    /** Maps a direction vector from a base to one of NumSpokes evenly spaced compass indices. */
     int32 BearingToSpokeIndex(const FVector2D& DirectionFromBase)
     {
         if (DirectionFromBase.IsNearlyZero())
@@ -23,6 +24,7 @@ namespace ExplorationHelpers
         return SpokeIndex % UExplorationSubsystem::NumSpokes;
     }
 
+    /** True when Contact is inbound and either detected by this base or its entry point is within radar range. */
     bool IsContactRelevantToBase(const FRadarContact& Contact, const UStrategyBase* Base, float RadarRange)
     {
         if (!Base || !Contact.bIsInboundThreat)
@@ -40,12 +42,14 @@ namespace ExplorationHelpers
     }
 }
 
+/** Subsystem startup — logs readiness; exploration and survey state start empty. */
 void UExplorationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     UE_LOG(LogTemp, Display, TEXT("UExplorationSubsystem initialized — spoke patrol exploration ready"));
 }
 
+/** Clears ExplorationByBase and both factions' surveyed-site ID sets. */
 void UExplorationSubsystem::ClearAllExplorationState()
 {
     ExplorationByBase.Empty();
@@ -53,16 +57,19 @@ void UExplorationSubsystem::ClearAllExplorationState()
     SurveyedSiteIdsEnemy.Empty();
 }
 
+/** Returns SurveyedSiteIdsHuman or SurveyedSiteIdsEnemy. */
 const TSet<FGuid>& UExplorationSubsystem::GetSurveyedSet(EFactionType Faction) const
 {
     return (Faction == EFactionType::Human) ? SurveyedSiteIdsHuman : SurveyedSiteIdsEnemy;
 }
 
+/** Mutable variant of GetSurveyedSet for MarkSiteSurveyed. */
 TSet<FGuid>& UExplorationSubsystem::GetSurveyedSetMutable(EFactionType Faction)
 {
     return (Faction == EFactionType::Human) ? SurveyedSiteIdsHuman : SurveyedSiteIdsEnemy;
 }
 
+/** Finds or adds per-base exploration state and ensures SpokeRingDepths has NumSpokes entries. */
 FBaseExplorationState& UExplorationSubsystem::GetOrCreateState(UStrategyBase* Base)
 {
     FBaseExplorationState& State = ExplorationByBase.FindOrAdd(Base);
@@ -73,6 +80,7 @@ FBaseExplorationState& UExplorationSubsystem::GetOrCreateState(UStrategyBase* Ba
     return State;
 }
 
+/** Derives clamp bounds from campaign LogicalMapWidth/Height and MapBorderPadding. */
 bool UExplorationSubsystem::ComputeMapBounds(const UObject* WorldContext, float& MinX, float& MinY, float& MaxX, float& MaxY)
 {
     float MapWidth = 1920.0f;
@@ -99,6 +107,7 @@ bool UExplorationSubsystem::ComputeMapBounds(const UObject* WorldContext, float&
     return MaxX > MinX && MaxY > MinY;
 }
 
+/** Clamps InOutPoint to the map interior; returns true if either axis was adjusted. */
 bool UExplorationSubsystem::ClampToMap(FVector2D& InOutPoint, float MinX, float MinY, float MaxX, float MaxY)
 {
     const FVector2D Before = InOutPoint;
@@ -107,6 +116,7 @@ bool UExplorationSubsystem::ClampToMap(FVector2D& InOutPoint, float MinX, float 
     return !InOutPoint.Equals(Before, 1.0f);
 }
 
+/** Picks nearest in-range discovered site not yet in the faction surveyed set. */
 bool UExplorationSubsystem::FindSurveyTarget(UStrategyVehicle* Vehicle, UStrategySiteDefinition*& OutSite) const
 {
     OutSite = nullptr;
@@ -165,6 +175,7 @@ bool UExplorationSubsystem::FindSurveyTarget(UStrategyVehicle* Vehicle, UStrateg
     return false;
 }
 
+/** Advances spoke-and-wheel patrol; prefers hot spokes after inbound contacts until HotSpokeUntilGameHours. */
 bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget)
 {
     OutTarget = FVector2D::ZeroVector;
@@ -243,6 +254,10 @@ bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, USt
     return true;
 }
 
+/**
+ * Border-guard patrol toward the best inbound contact's radar entry lane.
+ * Uses GetContactInterceptPosition for the entry point and offsets along threat velocity for ambush positioning.
+ */
 bool UExplorationSubsystem::PickInboundEntryPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
     FVector2D& OutTarget) const
 {
@@ -334,6 +349,7 @@ bool UExplorationSubsystem::PickInboundEntryPatrolTarget(UStrategyBase* OriginBa
     return true;
 }
 
+/** Delegates to PickInboundEntryPatrolTarget, then centroid-of-inbound-entry fallback patrol bearing. */
 bool UExplorationSubsystem::PickThreatBearingPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
     FVector2D& OutTarget) const
 {
@@ -404,6 +420,7 @@ bool UExplorationSubsystem::PickThreatBearingPatrolTarget(UStrategyBase* OriginB
     return true;
 }
 
+/** Scans faction contacts for any inbound track relevant to OriginBase via IsContactRelevantToBase. */
 bool UExplorationSubsystem::HasInboundThreatsNearBase(const UStrategyBase* OriginBase) const
 {
     if (!OriginBase)
@@ -430,6 +447,7 @@ bool UExplorationSubsystem::HasInboundThreatsNearBase(const UStrategyBase* Origi
     return false;
 }
 
+/** Marks the spoke toward GetContactInterceptPosition(Contact) as hot for HotSpokeDurationHours. */
 void UExplorationSubsystem::NotifyInboundThreatContact(UStrategyBase* DetectingBase, const FRadarContact& Contact,
     float CurrentGameHours)
 {
@@ -453,6 +471,7 @@ void UExplorationSubsystem::NotifyInboundThreatContact(UStrategyBase* DetectingB
         Entry.X, Entry.Y);
 }
 
+/** Increments ring depth for the current spoke and advances NextSpokeIndex after scheduling recon patrol. */
 void UExplorationSubsystem::NotifyReconPatrolScheduled(UStrategyBase* OriginBase, const FVector2D& PatrolTarget)
 {
     if (!OriginBase)
@@ -471,6 +490,7 @@ void UExplorationSubsystem::NotifyReconPatrolScheduled(UStrategyBase* OriginBase
     (void)PatrolTarget;
 }
 
+/** Adds Site->SiteId to the faction surveyed set so FindSurveyTarget skips it. */
 void UExplorationSubsystem::MarkSiteSurveyed(EFactionType Faction, const UStrategySiteDefinition* Site)
 {
     if (!Site || !Site->SiteId.IsValid())

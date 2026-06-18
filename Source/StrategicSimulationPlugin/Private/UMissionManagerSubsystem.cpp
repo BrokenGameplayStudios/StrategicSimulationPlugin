@@ -19,12 +19,14 @@
 #include "UExplorationSubsystem.h"
 #include "Engine/Engine.h"
 
+/** Initializes the mission manager subsystem. */
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     UE_LOG(LogTemp, Display, TEXT("UMissionManagerSubsystem initialized — vehicle missions ready"));
 }
 
+/** Clears missions, intel, contacts, and vehicle state before site-map load. */
 void UMissionManagerSubsystem::ClearRuntimeMissionStateForSiteMapLoad()
 {
     if (UFactionIntelSubsystem* IntelMgr = GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>())
@@ -116,6 +118,7 @@ void UMissionManagerSubsystem::ClearRuntimeMissionStateForSiteMapLoad()
     }
 }
 
+/** Cancels stale deferred missions and runs daily mission simulation. */
 void UMissionManagerSubsystem::OnDayPassed(int32 NewDay)
 {
     UE_LOG(LogTemp, Display, TEXT("[MISSION] Day %d — SimulateOneDay() called (ActiveMissions: %d)"), NewDay, ActiveMissions.Num());
@@ -123,6 +126,7 @@ void UMissionManagerSubsystem::OnDayPassed(int32 NewDay)
     SimulateOneDay();
 }
 
+/** Ticks non-live mission duration and resolves completed missions. */
 void UMissionManagerSubsystem::SimulateOneDay()
 {
     TArray<UMissionGroup*> ToRemove;
@@ -149,6 +153,7 @@ void UMissionManagerSubsystem::SimulateOneDay()
     }
 }
 
+/** Returns elapsed simulation hours from the time manager. */
 float UMissionManagerSubsystem::GetCurrentGameHours() const
 {
     UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>();
@@ -160,6 +165,7 @@ float UMissionManagerSubsystem::GetCurrentGameHours() const
     return TimeMgr->GetElapsedSimulationHours();
 }
 
+/** Reads logical map width, height, and border padding from campaign. */
 void UMissionManagerSubsystem::GetMapBounds(float& OutWidth, float& OutHeight, float& OutPadding) const
 {
     OutWidth = 1920.0f;
@@ -177,6 +183,7 @@ void UMissionManagerSubsystem::GetMapBounds(float& OutWidth, float& OutHeight, f
     }
 }
 
+/** True when location is inside padded map bounds. */
 bool UMissionManagerSubsystem::IsValidMapLocation(const FVector2D& Location, float MinX, float MinY, float MaxX, float MaxY)
 {
     if (Location.IsNearlyZero(10.f))
@@ -187,6 +194,7 @@ bool UMissionManagerSubsystem::IsValidMapLocation(const FVector2D& Location, flo
     return Location.X >= MinX && Location.X <= MaxX && Location.Y >= MinY && Location.Y <= MaxY;
 }
 
+/** Delegates to base manager to find nearest site within tolerance. */
 UStrategySiteDefinition* UMissionManagerSubsystem::FindSiteAtLocation(const FVector2D& Location, float Tolerance) const
 {
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
@@ -216,6 +224,7 @@ UStrategySiteDefinition* UMissionManagerSubsystem::FindSiteAtLocation(const FVec
     return BestMatch;
 }
 
+/** True when an active mission waypoint targets this site. */
 bool UMissionManagerSubsystem::IsSiteTargetedByActiveMissions(const UStrategySiteDefinition* Site, const UMissionGroup* IgnoreMission) const
 {
     if (!Site)
@@ -228,6 +237,7 @@ bool UMissionManagerSubsystem::IsSiteTargetedByActiveMissions(const UStrategySit
     return ReservedSites.Contains(const_cast<UStrategySiteDefinition*>(Site));
 }
 
+/** Builds set of sites targeted by active mission waypoints. */
 void UMissionManagerSubsystem::CollectSitesTargetedByActiveMissions(TSet<UStrategySiteDefinition*>& OutSites, const UMissionGroup* IgnoreMission) const
 {
     for (const UMissionGroup* Mission : ActiveMissions)
@@ -252,6 +262,7 @@ void UMissionManagerSubsystem::CollectSitesTargetedByActiveMissions(TSet<UStrate
     }
 }
 
+/** Picks a random in-bounds patrol point within range budget. */
 FVector2D UMissionManagerSubsystem::PickPatrolPointWithinRange(const FVector2D& Origin, float MaxRoundTripRange, float MinX, float MinY, float MaxX, float MaxY) const
 {
     const float MaxOutbound = FMath::Max(50.f, MaxRoundTripRange * 0.45f);
@@ -275,6 +286,7 @@ FVector2D UMissionManagerSubsystem::PickPatrolPointWithinRange(const FVector2D& 
     return Origin;
 }
 
+/** True when TryPickMissionTarget finds an enemy base in range. */
 bool UMissionManagerSubsystem::HasOffensiveTargetInRange(UStrategyVehicle* Vehicle) const
 {
     FVector2D DummyTarget;
@@ -282,6 +294,7 @@ bool UMissionManagerSubsystem::HasOffensiveTargetInRange(UStrategyVehicle* Vehic
     return TryPickMissionTarget(Vehicle, EMissionType::Offensive, DummyTarget, DummyReserved, nullptr);
 }
 
+/** True when radar has an interceptable contact for the vehicle. */
 bool UMissionManagerSubsystem::HasInterceptionTargetFromContacts(UStrategyVehicle* Vehicle) const
 {
     if (!Vehicle || !Vehicle->HomeBase)
@@ -300,6 +313,7 @@ bool UMissionManagerSubsystem::HasInterceptionTargetFromContacts(UStrategyVehicl
         Vehicle, Contact);
 }
 
+/** Starts an immediate interception mission at a radar contact from the given base and vehicle. */
 bool UMissionManagerSubsystem::LaunchInterceptionAtContact(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
     FGuid ContactId)
 {
@@ -360,6 +374,7 @@ bool UMissionManagerSubsystem::LaunchInterceptionAtContact(UStrategyBase* Origin
     return true;
 }
 
+/** True when any idle combat vehicle can reach the contact. */
 bool UMissionManagerSubsystem::CanFactionInterceptContact(EFactionType Faction, FGuid ContactId) const
 {
     if (!ContactId.IsValid())
@@ -399,6 +414,7 @@ bool UMissionManagerSubsystem::CanFactionInterceptContact(EFactionType Faction, 
                 continue;
             }
 
+/** True for Gunship and Heavy types. */
             if (!UAIControllerSubsystem::IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType))
             {
                 continue;
@@ -416,6 +432,7 @@ bool UMissionManagerSubsystem::CanFactionInterceptContact(EFactionType Faction, 
     return false;
 }
 
+/** Auto-selects nearest capable vehicle and launches interception at a contact. */
 bool UMissionManagerSubsystem::TryLaunchInterceptionAtContactAuto(EFactionType Faction, FGuid ContactId,
     UStrategyBase*& OutOriginBase, UStrategyVehicle*& OutVehicle)
 {
@@ -458,6 +475,7 @@ bool UMissionManagerSubsystem::TryLaunchInterceptionAtContactAuto(EFactionType F
                 continue;
             }
 
+/** True for Gunship and Heavy types. */
             if (!UAIControllerSubsystem::IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType))
             {
                 continue;
@@ -501,6 +519,7 @@ bool UMissionManagerSubsystem::TryLaunchInterceptionAtContactAuto(EFactionType F
     return true;
 }
 
+/** Heuristic score: resource value (bonus for enemy wrecks) divided by distance from Origin. */
 float UMissionManagerSubsystem::ComputeSalvageTargetScore(EFactionType Faction, const UStrategySiteDefinition* Site,
     const FVector2D& Origin) const
 {
@@ -519,6 +538,7 @@ float UMissionManagerSubsystem::ComputeSalvageTargetScore(EFactionType Faction, 
     return ResourceValue / FMath::Max(Dist, 1.0f);
 }
 
+/** Counts non-completed Salvage missions for a faction (active + in-progress). */
 int32 UMissionManagerSubsystem::CountActiveSalvageMissions(EFactionType Faction) const
 {
     int32 Count = 0;
@@ -536,6 +556,7 @@ int32 UMissionManagerSubsystem::CountActiveSalvageMissions(EFactionType Faction)
     return Count;
 }
 
+/** Removes RecentCombatSalvageWrecks entries older than SalvageCombatMemoryDays. */
 void UMissionManagerSubsystem::PruneOldCombatSalvageRecords(int32 CurrentDay)
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -547,6 +568,7 @@ void UMissionManagerSubsystem::PruneOldCombatSalvageRecords(int32 CurrentDay)
     });
 }
 
+/** Appends a combat-wreck record after pruning stale entries (used for post-win salvage AI decline). */
 void UMissionManagerSubsystem::RecordCombatSalvageWreck(UStrategySiteDefinition* Site, EFactionType WinnerFaction,
     int32 CurrentDay)
 {
@@ -564,6 +586,7 @@ void UMissionManagerSubsystem::RecordCombatSalvageWreck(UStrategySiteDefinition*
     RecentCombatSalvageWrecks.Add(Record);
 }
 
+/** Checks RecentCombatSalvageWrecks for a matching SiteId, WinnerFaction, and memory window. */
 bool UMissionManagerSubsystem::DidFactionWinCombatAtSite(EFactionType Faction, const UStrategySiteDefinition* Site,
     int32 CurrentDay) const
 {
@@ -588,6 +611,7 @@ bool UMissionManagerSubsystem::DidFactionWinCombatAtSite(EFactionType Faction, c
     return false;
 }
 
+/** Iterates AllPotentialSites for highest CanSalvageSite score meeting MinSalvageScoreThreshold. */
 bool UMissionManagerSubsystem::FindBestSalvageTargetForVehicle(UStrategyVehicle* Vehicle,
     TSet<UStrategySiteDefinition*>& InOutReservedSites, UStrategySiteDefinition*& OutSite, float& OutScore) const
 {
@@ -646,6 +670,7 @@ bool UMissionManagerSubsystem::FindBestSalvageTargetForVehicle(UStrategyVehicle*
     return OutSite != nullptr && OutScore >= MinScore;
 }
 
+/** AI gate: salvage-capable vehicle, caps, score thresholds, loser rules, and post-combat decline chance. */
 bool UMissionManagerSubsystem::EvaluateAISalvageScheduling(UStrategyVehicle* Vehicle,
     UStrategySiteDefinition*& OutBestSite, float& OutBestScore) const
 {
@@ -717,6 +742,7 @@ bool UMissionManagerSubsystem::EvaluateAISalvageScheduling(UStrategyVehicle* Veh
     return true;
 }
 
+/** Daily verbose log of known active wrecks, scores, and eligibility for AI tuning (PR-7). */
 void UMissionManagerSubsystem::LogSalvageOpportunitiesForFaction(EFactionType Faction, int32 CurrentDay) const
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -800,6 +826,7 @@ void UMissionManagerSubsystem::LogSalvageOpportunitiesForFaction(EFactionType Fa
     }
 }
 
+/** Thin wrapper: returns true when EvaluateAISalvageScheduling finds a viable wreck for Vehicle. */
 bool UMissionManagerSubsystem::HasSalvageTargetInRange(UStrategyVehicle* Vehicle) const
 {
     if (!Vehicle || !Vehicle->VehicleDefinition
@@ -821,6 +848,7 @@ bool UMissionManagerSubsystem::HasSalvageTargetInRange(UStrategyVehicle* Vehicle
     return EvaluateAISalvageScheduling(Vehicle, BestSite, BestScore);
 }
 
+/** Picks a mission waypoint target based on type, range, intel, and site reservations. */
 bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType, FVector2D& OutTarget,
     TSet<UStrategySiteDefinition*>& InOutReservedSites, UStrategyBase** OutTargetBase) const
 {
@@ -1070,6 +1098,7 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
     return false;
 }
 
+/** Assigns targets and begins live movement for mission fleet. */
 bool UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mission, EMissionType MissionType)
 {
     if (!Mission)
@@ -1240,6 +1269,7 @@ bool UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
     return true;
 }
 
+/** Computes staggered launch hour across the 24h day. */
 float UMissionManagerSubsystem::ComputeEvenlySpacedLaunchHour(int32 SlotIndex, int32 TotalSlots) const
 {
     const float CurrentHours = GetCurrentGameHours();
@@ -1256,6 +1286,7 @@ float UMissionManagerSubsystem::ComputeEvenlySpacedLaunchHour(int32 SlotIndex, i
     return SlotHour;
 }
 
+/** True if vehicle is on any in-progress mission. */
 bool UMissionManagerSubsystem::IsVehicleCommittedToAnyMission(UStrategyVehicle* Vehicle, const UMissionGroup* IgnoreMission) const
 {
     if (!Vehicle)
@@ -1284,6 +1315,7 @@ bool UMissionManagerSubsystem::IsVehicleCommittedToAnyMission(UStrategyVehicle* 
     return Vehicle->CurrentMission != nullptr;
 }
 
+/** Removes deferred missions from prior days that never launched. */
 void UMissionManagerSubsystem::CancelStaleDeferredMissions(int32 CurrentSimulationDay)
 {
     TArray<UMissionGroup*> ToCancel;
@@ -1319,6 +1351,7 @@ void UMissionManagerSubsystem::CancelStaleDeferredMissions(int32 CurrentSimulati
     }
 }
 
+/** True when vehicle is docked and assigned to this mission. */
 bool UMissionManagerSubsystem::IsVehicleReadyForMissionLaunch(UStrategyVehicle* Vehicle, const UMissionGroup* Mission) const
 {
     if (!Vehicle || !Mission || Vehicle->IsDestroyed())
@@ -1355,6 +1388,7 @@ bool UMissionManagerSubsystem::IsVehicleReadyForMissionLaunch(UStrategyVehicle* 
     return true;
 }
 
+/** Returns mission-ready parked vehicles at a base. */
 TArray<UStrategyVehicle*> UMissionManagerSubsystem::GatherIdleVehiclesAtBase(UStrategyBase* Base) const
 {
     TArray<UStrategyVehicle*> IdleVehicles;
@@ -1402,6 +1436,7 @@ TArray<UStrategyVehicle*> UMissionManagerSubsystem::GatherIdleVehiclesAtBase(USt
     return IdleVehicles;
 }
 
+/** Unparks vehicles and sets home hangar before launch. */
 void UMissionManagerSubsystem::PrepareVehiclesForDeparture(UMissionGroup* Mission)
 {
     if (!Mission || !Mission->OriginBase)
@@ -1435,6 +1470,7 @@ void UMissionManagerSubsystem::PrepareVehiclesForDeparture(UMissionGroup* Missio
     }
 }
 
+/** Activates deferred missions whose launch hour has arrived. */
 void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
 {
     TArray<UMissionGroup*> ToCancel;
@@ -1513,6 +1549,7 @@ void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
     }
 }
 
+/** Schedules the same mission type for all idle vehicles at a base. */
 int32 UMissionManagerSubsystem::ScheduleVehicleMissionsForBase(UStrategyBase* Base, EFactionType Faction, EMissionType MissionType)
 {
     const TArray<UStrategyVehicle*> IdleVehicles = GatherIdleVehiclesAtBase(Base);
@@ -1521,6 +1558,7 @@ int32 UMissionManagerSubsystem::ScheduleVehicleMissionsForBase(UStrategyBase* Ba
     return ScheduleVehicleMissionsForBase(Base, Faction, MissionTypes);
 }
 
+/** Schedules per-vehicle mission types for all idle vehicles at a base. */
 int32 UMissionManagerSubsystem::ScheduleVehicleMissionsForBase(UStrategyBase* Base, EFactionType Faction, const TArray<EMissionType>& PerVehicleMissionTypes)
 {
     if (!Base)
@@ -1578,6 +1616,7 @@ int32 UMissionManagerSubsystem::ScheduleVehicleMissionsForBase(UStrategyBase* Ba
     return ScheduledCount;
 }
 
+/** Logs placeholder when offensive mission reaches enemy base. */
 void UMissionManagerSubsystem::HandleBaseAttackArrival(UStrategyVehicle* Vehicle, UMissionGroup* Mission)
 {
     if (!Vehicle || !Mission || Mission->bBaseAttackArrivalLogged || Mission->MissionType != EMissionType::Offensive)
@@ -1599,6 +1638,7 @@ void UMissionManagerSubsystem::HandleBaseAttackArrival(UStrategyVehicle* Vehicle
         *AttackerName, *OriginName, *TargetName);
 }
 
+/** Creates mission, assigns crew, and launches or defers movement. */
 UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase, TArray<UStrategyVehicle*> Vehicles, int32 DurationDays, const TArray<UStrategySoldier*>& SoldiersToAssign, EMissionType MissionType, EFactionType AttackingFaction, float ScheduledLaunchGameHours)
 {
     if (!OriginBase || Vehicles.Num() == 0) return nullptr;
@@ -1732,6 +1772,7 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     return NewMission;
 }
 
+/** Resolves wreck site from explicit mission target, lead ActiveSalvageSite, or waypoint/position lookup. */
 UStrategySiteDefinition* UMissionManagerSubsystem::GetSalvageTargetSite(const UMissionGroup* Mission) const
 {
     if (!Mission || Mission->MissionType != EMissionType::Salvage)
@@ -1763,6 +1804,7 @@ UStrategySiteDefinition* UMissionManagerSubsystem::GetSalvageTargetSite(const UM
     return nullptr;
 }
 
+/** Collects faction, origin base, fleet vehicles, and unique passengers for contest presentation. */
 FSalvageContestForceSnapshot UMissionManagerSubsystem::BuildSalvageContestSnapshot(const UMissionGroup* Mission) const
 {
     FSalvageContestForceSnapshot Snapshot;
@@ -1797,6 +1839,7 @@ FSalvageContestForceSnapshot UMissionManagerSubsystem::BuildSalvageContestSnapsh
     return Snapshot;
 }
 
+/** Activates campaign salvage contest, pauses clock, and broadcasts contest start with force snapshots. */
 void UMissionManagerSubsystem::BeginSalvageContest(UStrategySiteDefinition* Site, UMissionGroup* HumanMission,
     UMissionGroup* EnemyMission)
 {
@@ -1826,6 +1869,7 @@ void UMissionManagerSubsystem::BeginSalvageContest(UStrategySiteDefinition* Site
         *Site->SiteName);
 }
 
+/** Clears ActiveSalvageSite on fleet vehicles and optionally sets Returning behavior (contest loser / abort). */
 void UMissionManagerSubsystem::AbortSalvageMission(UMissionGroup* Mission, bool bReturnVehiclesHome)
 {
     if (!Mission || Mission->MissionType != EMissionType::Salvage)
@@ -1852,6 +1896,7 @@ void UMissionManagerSubsystem::AbortSalvageMission(UMissionGroup* Mission, bool 
         *UEnum::GetValueAsString(Mission->AttackingFaction), Mission->VehiclesInFleet.Num());
 }
 
+/** Pairs Human/Enemy salvage missions on the same wreck SiteId and starts the first contested salvage found. */
 void UMissionManagerSubsystem::DetectSalvageContests()
 {
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
@@ -1906,6 +1951,7 @@ void UMissionManagerSubsystem::DetectSalvageContests()
     }
 }
 
+/** Ticks live movement, launches, radar, and mission completion. */
 void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
 {
     if (DeltaGameHours <= 0.0f)
@@ -1975,6 +2021,7 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
     }
 }
 
+/** On vehicle destruction: creates salvage wreck via BaseManager when enabled, records combat winner, processes crew. */
 void UMissionManagerSubsystem::HandleVehicleDestroyed(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy)
 {
     if (!Vehicle || !Vehicle->IsDestroyed() || Vehicle->bWreckSalvageProcessed)
@@ -2049,6 +2096,7 @@ void UMissionManagerSubsystem::HandleVehicleDestroyed(UStrategyVehicle* Vehicle,
         Vehicle->CurrentPosition.X, Vehicle->CurrentPosition.Y);
 }
 
+/** Launches mission with optional vehicle subset override. */
 UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType, const TArray<UStrategyVehicle*>& VehiclesOverride)
 {
     if (!OriginBase) return nullptr;
@@ -2076,6 +2124,7 @@ UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* Or
     return StartMission(OriginBase, VehiclesToLaunch, DurationDays, {}, MissionType, OriginBase->OwningFaction);
 }
 
+/** Docks survivors, grants rewards, and completes the mission. */
 void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 {
     if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0)
@@ -2201,6 +2250,7 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
     OnMissionCompleted.Broadcast(Mission);
 }
 
+/** Estimates fleet combat rating from soldiers and vehicles. */
 float UMissionManagerSubsystem::CalculateFleetEffectiveness(const UMissionGroup* Mission) const
 {
     if (!Mission || Mission->VehiclesInFleet.Num() == 0) return 50.0f;
@@ -2236,5 +2286,7 @@ float UMissionManagerSubsystem::CalculateFleetEffectiveness(const UMissionGroup*
     return FMath::Clamp(AvgAim * 0.6f + AvgDefense * 0.4f + TotalVehicleOffense * 0.4f + TotalVehicleDefense * 0.3f + 30.0f, 10.0f, 95.0f);
 }
 
+/** Returns game instance resource manager subsystem. */
 UResourceManagerSubsystem* UMissionManagerSubsystem::GetResourceManager() const { return GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>(); }
+/** Returns game instance soldier manager subsystem. */
 USoldierManagerSubsystem* UMissionManagerSubsystem::GetSoldierManager() const { return GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>(); }

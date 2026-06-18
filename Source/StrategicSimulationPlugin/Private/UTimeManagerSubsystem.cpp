@@ -4,6 +4,7 @@
 #include "UMissionManagerSubsystem.h"
 #include "Engine/Engine.h"
 
+// Seeds default campaign date, starts paused, and registers the ~60 Hz real-time tick timer.
 void UTimeManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -18,17 +19,20 @@ void UTimeManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     GetWorld()->GetTimerManager().SetTimer(RealTimeTimer, this, &UTimeManagerSubsystem::RealTimeTick, 0.016f, true);
 }
 
+// Clears the real-time tick timer before subsystem teardown.
 void UTimeManagerSubsystem::Deinitialize()
 {
     GetWorld()->GetTimerManager().ClearTimer(RealTimeTimer);
     Super::Deinitialize();
 }
 
+// Converts zero-based elapsed days to the 1-based day number used by AI scheduling.
 int32 UTimeManagerSubsystem::GetSimulationDayNumber() const
 {
     return GetTotalSimulationDays() + 1;
 }
 
+// Computes hours between SimulationStartDate and the current in-game date.
 float UTimeManagerSubsystem::GetElapsedSimulationHours() const
 {
     if (SimulationStartDate.GetTicks() == 0)
@@ -40,6 +44,7 @@ float UTimeManagerSubsystem::GetElapsedSimulationHours() const
     return static_cast<float>(Elapsed.GetTotalSeconds()) / 3600.0f;
 }
 
+// Advances calendar time, ticks live vehicles, and broadcasts OnDayPassed when a day boundary is crossed.
 void UTimeManagerSubsystem::ProcessSimulationStep(float StepSeconds)
 {
     if (StepSeconds <= 0.0f)
@@ -67,6 +72,7 @@ void UTimeManagerSubsystem::ProcessSimulationStep(float StepSeconds)
     }
 }
 
+// Converts real-time delta into scaled simulation steps, capped per frame for stability.
 void UTimeManagerSubsystem::RealTimeTick()
 {
     if (bIsPaused || bStrategicClockPaused || TimeScale <= 0.0f) return;
@@ -84,11 +90,13 @@ void UTimeManagerSubsystem::RealTimeTick()
     }
 }
 
+// True when time scale is positive and user pause is off (strategic pause not considered).
 bool UTimeManagerSubsystem::IsSimulating() const
 {
     return GetTimeScale() > 0.0f && !IsPaused();
 }
 
+// Whole days elapsed since SimulationStartDate based on calendar span.
 int32 UTimeManagerSubsystem::GetTotalSimulationDays() const
 {
     if (SimulationStartDate.GetTicks() == 0)
@@ -98,11 +106,13 @@ int32 UTimeManagerSubsystem::GetTotalSimulationDays() const
     return Elapsed.GetDays();
 }
 
+// Pushes current clock state to OnSimulationClockStateChanged listeners.
 void UTimeManagerSubsystem::BroadcastClockStateChanged()
 {
     OnSimulationClockStateChanged.Broadcast(TimeScale, bIsPaused, bStrategicClockPaused);
 }
 
+// Unpauses and sets 1x scale; fires OnSimulationStarted and clock-state delegate.
 void UTimeManagerSubsystem::StartSimulation()
 {
     SetTimeScale(1.0f);
@@ -113,6 +123,7 @@ void UTimeManagerSubsystem::StartSimulation()
     BroadcastClockStateChanged();
 }
 
+// Resets current and start dates; rebroadcasts day index for AI without starting the clock.
 void UTimeManagerSubsystem::SetStartingDate(FDateTime NewStartDate)
 {
     CurrentGameDate = NewStartDate;
@@ -125,6 +136,7 @@ void UTimeManagerSubsystem::SetStartingDate(FDateTime NewStartDate)
     OnSimulationStarted.Broadcast();
 }
 
+// Enables user pause and notifies clock-state listeners.
 void UTimeManagerSubsystem::StopSimulation()
 {
     bIsPaused = true;
@@ -132,6 +144,7 @@ void UTimeManagerSubsystem::StopSimulation()
     BroadcastClockStateChanged();
 }
 
+// Jumps calendar by whole days and emits OnDayPassed for each newly entered simulation day.
 void UTimeManagerSubsystem::AdvanceDays(int32 NumDays)
 {
     if (NumDays <= 0) return;
@@ -148,6 +161,7 @@ void UTimeManagerSubsystem::AdvanceDays(int32 NumDays)
     UE_LOG(LogTemp, Display, TEXT("Advanced %d days — Simulation day: %d"), NumDays, GetSimulationDayNumber());
 }
 
+// Clamps and applies a new time-scale multiplier; warns on extreme values.
 void UTimeManagerSubsystem::SetTimeScale(float NewScale)
 {
     TimeScale = FMath::Max(0.0f, NewScale);
@@ -161,6 +175,7 @@ void UTimeManagerSubsystem::SetTimeScale(float NewScale)
     BroadcastClockStateChanged();
 }
 
+// Flips user pause and broadcasts the new clock state.
 void UTimeManagerSubsystem::TogglePause()
 {
     bIsPaused = !bIsPaused;
@@ -168,6 +183,7 @@ void UTimeManagerSubsystem::TogglePause()
     BroadcastClockStateChanged();
 }
 
+// Sets salvage-contest strategic pause without affecting user pause toggle.
 void UTimeManagerSubsystem::SetStrategicClockPaused(bool bPaused)
 {
     if (bStrategicClockPaused == bPaused)
@@ -180,16 +196,19 @@ void UTimeManagerSubsystem::SetStrategicClockPaused(bool bPaused)
     BroadcastClockStateChanged();
 }
 
+// Calendar day-of-month from CurrentGameDate.
 int32 UTimeManagerSubsystem::GetCurrentDay() const
 {
     return CurrentGameDate.GetDay();
 }
 
+// Snapshot of the advanced in-game date.
 FDateTime UTimeManagerSubsystem::GetCurrentGameDate() const
 {
     return CurrentGameDate;
 }
 
+// Maps CurrentGameDate weekday enum to display text.
 FText UTimeManagerSubsystem::GetCurrentDayOfWeekName() const
 {
     switch (CurrentGameDate.GetDayOfWeek())
@@ -205,6 +224,7 @@ FText UTimeManagerSubsystem::GetCurrentDayOfWeekName() const
     }
 }
 
+// Builds uppercase month name + day + year for HUD display.
 FString UTimeManagerSubsystem::GetFormattedDateString() const
 {
     // Returns nice readable date like "MARCH 3, 2027"

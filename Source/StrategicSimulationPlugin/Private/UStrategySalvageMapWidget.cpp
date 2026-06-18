@@ -9,17 +9,20 @@
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
 
+/** Disables Blueprint tick; subclasses use NativeTick for map refresh. */
 UStrategySalvageMapWidget::UStrategySalvageMapWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
     bHasScriptImplementedTick = false;
 }
 
+/** Returns true when campaign flags enable the player salvage map layer. */
 bool UStrategySalvageMapWidget::IsSalvageLayerEnabled() const
 {
     return UStrategicSimulationDisplayHelpers::IsPlayerSalvageMapLayerEnabled(GetCampaign());
 }
 
+/** Binds site events, sets hit-test-invisible visibility, and refreshes markers. */
 void UStrategySalvageMapWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -28,12 +31,14 @@ void UStrategySalvageMapWidget::NativeConstruct()
     RefreshSalvageMarkers();
 }
 
+/** Unbinds site events before destruction. */
 void UStrategySalvageMapWidget::NativeDestruct()
 {
     UnbindSiteEvents();
     Super::NativeDestruct();
 }
 
+/** Prunes toasts, refreshes markers on resize, and updates hover tooltip. */
 void UStrategySalvageMapWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
@@ -53,6 +58,7 @@ void UStrategySalvageMapWidget::NativeTick(const FGeometry& MyGeometry, float In
     UpdateHoveredTooltip(MyGeometry);
 }
 
+/** Draws wreck triangles, hover tooltip, and the active discovery toast. */
 int32 UStrategySalvageMapWidget::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
     const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements, int32 LayerId,
     const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
@@ -96,6 +102,7 @@ int32 UStrategySalvageMapWidget::NativePaint(const FPaintArgs& Args, const FGeom
     return MaxLayer;
 }
 
+/** Rebuilds CachedMarkers from visible salvage sites and invalidates paint. */
 void UStrategySalvageMapWidget::RefreshSalvageMarkers()
 {
     const FVector2D WidgetSize = GetCachedGeometry().GetLocalSize();
@@ -104,6 +111,7 @@ void UStrategySalvageMapWidget::RefreshSalvageMarkers()
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+/** Subscribes to salvage-related UStrategyEventDispatcher delegates. */
 void UStrategySalvageMapWidget::BindSiteEvents()
 {
     if (UStrategyEventDispatcher* EventDisp = GetEventDispatcher())
@@ -114,6 +122,7 @@ void UStrategySalvageMapWidget::BindSiteEvents()
     }
 }
 
+/** Removes salvage-related UStrategyEventDispatcher delegate bindings. */
 void UStrategySalvageMapWidget::UnbindSiteEvents()
 {
     if (UStrategyEventDispatcher* EventDisp = GetEventDispatcher())
@@ -124,6 +133,7 @@ void UStrategySalvageMapWidget::UnbindSiteEvents()
     }
 }
 
+/** Event handler: queues a toast and refreshes markers when a salvage site is discovered. */
 void UStrategySalvageMapWidget::OnSiteDiscovered(EFactionType Faction, UStrategySiteDefinition* Site, EDiscoveryReason Reason)
 {
     if (!Site || Site->SiteType != EStrategySiteType::SalvageSite)
@@ -135,6 +145,7 @@ void UStrategySalvageMapWidget::OnSiteDiscovered(EFactionType Faction, UStrategy
     RefreshSalvageMarkers();
 }
 
+/** Event handler: refreshes markers when a new wreck site is created. */
 void UStrategySalvageMapWidget::OnSalvageSiteCreated(EFactionType WreckOwnerFaction,
     const TArray<EFactionType>& KnownFactions, UStrategySiteDefinition* Site)
 {
@@ -144,6 +155,7 @@ void UStrategySalvageMapWidget::OnSalvageSiteCreated(EFactionType WreckOwnerFact
     RefreshSalvageMarkers();
 }
 
+/** Event handler: refreshes markers when a wreck is removed from the map. */
 void UStrategySalvageMapWidget::OnSalvageSiteRemoved(FGuid SiteId, EFactionType LastSalvagingFaction)
 {
     (void)SiteId;
@@ -151,6 +163,7 @@ void UStrategySalvageMapWidget::OnSalvageSiteRemoved(FGuid SiteId, EFactionType 
     RefreshSalvageMarkers();
 }
 
+/** Adds a timed discovery toast when ViewerFaction learns of a new wreck. */
 void UStrategySalvageMapWidget::QueueDiscoveryToast(EFactionType Faction, UStrategySiteDefinition* Site, EDiscoveryReason Reason)
 {
     if (Faction != ViewerFaction || !IsSalvageLayerEnabled() || !Site)
@@ -176,6 +189,7 @@ void UStrategySalvageMapWidget::QueueDiscoveryToast(EFactionType Faction, UStrat
     UE_LOG(LogTemp, Display, TEXT("[SALVAGE MAP] %s"), *ToastText.ToString());
 }
 
+/** Sets HoveredTooltip from the marker nearest the cursor within HoverRadius. */
 void UStrategySalvageMapWidget::UpdateHoveredTooltip(const FGeometry& MyGeometry)
 {
     HoveredTooltip = FText::GetEmpty();
@@ -199,6 +213,7 @@ void UStrategySalvageMapWidget::UpdateHoveredTooltip(const FGeometry& MyGeometry
     }
 }
 
+/** Removes expired toasts and invalidates paint when the queue shrinks. */
 void UStrategySalvageMapWidget::PruneExpiredToasts(double Now)
 {
     const int32 Before = PendingToasts.Num();
@@ -213,6 +228,7 @@ void UStrategySalvageMapWidget::PruneExpiredToasts(double Now)
     }
 }
 
+/** Draws an outlined triangle marker at Center using Slate line elements. */
 void UStrategySalvageMapWidget::DrawSalvageTriangle(const FGeometry& AllottedGeometry,
     FSlateWindowElementList& OutDrawElements, int32& LayerId, const FVector2D& Center, float Size,
     float LineThickness, const FLinearColor& Color) const
@@ -238,6 +254,7 @@ void UStrategySalvageMapWidget::DrawSalvageTriangle(const FGeometry& AllottedGeo
         LineThickness);
 }
 
+/** Draws a small tooltip panel anchored near the cursor. */
 void UStrategySalvageMapWidget::DrawTooltipPanel(const FGeometry& AllottedGeometry,
     FSlateWindowElementList& OutDrawElements, int32& LayerId, const FVector2D& Anchor, const FText& Text) const
 {
@@ -267,6 +284,7 @@ void UStrategySalvageMapWidget::DrawTooltipPanel(const FGeometry& AllottedGeomet
         FLinearColor::White);
 }
 
+/** Draws the topmost active discovery toast centered near the widget top. */
 void UStrategySalvageMapWidget::DrawToastPanel(const FGeometry& AllottedGeometry,
     FSlateWindowElementList& OutDrawElements, int32& LayerId, const FText& Text) const
 {
@@ -298,6 +316,7 @@ void UStrategySalvageMapWidget::DrawToastPanel(const FGeometry& AllottedGeometry
         FLinearColor(0.9f, 0.95f, 1.0f, 1.0f));
 }
 
+/** Returns UBaseManagerSubsystem from the widget's game instance. */
 UBaseManagerSubsystem* UStrategySalvageMapWidget::GetBaseManager() const
 {
     if (UGameInstance* GI = GetGameInstance())
@@ -307,6 +326,7 @@ UBaseManagerSubsystem* UStrategySalvageMapWidget::GetBaseManager() const
     return nullptr;
 }
 
+/** Returns UStrategyCampaignSubsystem from the widget's game instance. */
 UStrategyCampaignSubsystem* UStrategySalvageMapWidget::GetCampaign() const
 {
     if (UGameInstance* GI = GetGameInstance())
@@ -316,6 +336,7 @@ UStrategyCampaignSubsystem* UStrategySalvageMapWidget::GetCampaign() const
     return nullptr;
 }
 
+/** Returns UStrategyEventDispatcher from the widget's game instance. */
 UStrategyEventDispatcher* UStrategySalvageMapWidget::GetEventDispatcher() const
 {
     if (UGameInstance* GI = GetGameInstance())

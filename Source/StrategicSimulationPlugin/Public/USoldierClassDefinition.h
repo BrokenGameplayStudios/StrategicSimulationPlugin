@@ -6,6 +6,7 @@
 #include "UItemDefinition.h"
 #include "USoldierClassDefinition.generated.h"
 
+/** Primary data asset defining a soldier archetype: stats, training cost, and loadout rules. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API USoldierClassDefinition : public UPrimaryDataAsset
 {

@@ -11,17 +11,20 @@
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
 
+/** Disables Blueprint tick; subclasses use NativeTick for contact refresh. */
 UStrategyRadarContactMapWidget::UStrategyRadarContactMapWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
     bHasScriptImplementedTick = false;
 }
 
+/** Returns true when campaign flags enable the player radar contact layer. */
 bool UStrategyRadarContactMapWidget::IsRadarContactLayerEnabled() const
 {
     return UStrategicSimulationDisplayHelpers::IsPlayerRadarContactLayerEnabled(GetCampaign());
 }
 
+/** Binds radar events, sets visible input mode, and refreshes contact markers. */
 void UStrategyRadarContactMapWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -30,12 +33,14 @@ void UStrategyRadarContactMapWidget::NativeConstruct()
     RefreshRadarContactMarkers();
 }
 
+/** Unbinds radar events before destruction. */
 void UStrategyRadarContactMapWidget::NativeDestruct()
 {
     UnbindRadarEvents();
     Super::NativeDestruct();
 }
 
+/** Prunes toasts, refreshes markers on resize, and updates hover tooltip. */
 void UStrategyRadarContactMapWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
@@ -55,6 +60,7 @@ void UStrategyRadarContactMapWidget::NativeTick(const FGeometry& MyGeometry, flo
     UpdateHoveredTooltip(MyGeometry);
 }
 
+/** Draws contact diamonds, hover tooltip, and the active alert toast. */
 int32 UStrategyRadarContactMapWidget::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
     const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements, int32 LayerId,
     const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
@@ -98,6 +104,7 @@ int32 UStrategyRadarContactMapWidget::NativePaint(const FPaintArgs& Args, const 
     return MaxLayer;
 }
 
+/** Handles left-click on a contact marker to launch auto-interception. */
 FReply UStrategyRadarContactMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && IsRadarContactLayerEnabled())
@@ -112,6 +119,7 @@ FReply UStrategyRadarContactMapWidget::NativeOnMouseButtonDown(const FGeometry& 
     return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
+/** Rebuilds CachedMarkers from faction radar contacts and invalidates paint. */
 void UStrategyRadarContactMapWidget::RefreshRadarContactMarkers()
 {
     const FVector2D WidgetSize = GetCachedGeometry().GetLocalSize();
@@ -120,6 +128,7 @@ void UStrategyRadarContactMapWidget::RefreshRadarContactMarkers()
     Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+/** Resolves a marker at LocalWidgetPosition and delegates to TryInterceptContactById. */
 bool UStrategyRadarContactMapWidget::TryInterceptContactAtWidgetPosition(FVector2D LocalWidgetPosition)
 {
     const FRadarContactMapMarker* Marker = FindMarkerAtPosition(LocalWidgetPosition);
@@ -131,6 +140,7 @@ bool UStrategyRadarContactMapWidget::TryInterceptContactAtWidgetPosition(FVector
     return TryInterceptContactById(Marker->ContactId);
 }
 
+/** Launches auto-interception via UMissionManagerSubsystem and shows a confirmation toast. */
 bool UStrategyRadarContactMapWidget::TryInterceptContactById(FGuid ContactId)
 {
     UMissionManagerSubsystem* MissionMgr = GetMissionManager();
@@ -162,6 +172,7 @@ bool UStrategyRadarContactMapWidget::TryInterceptContactById(FGuid ContactId)
     return true;
 }
 
+/** Subscribes to radar-related UStrategyEventDispatcher delegates. */
 void UStrategyRadarContactMapWidget::BindRadarEvents()
 {
     if (UStrategyEventDispatcher* EventDisp = GetEventDispatcher())
@@ -172,6 +183,7 @@ void UStrategyRadarContactMapWidget::BindRadarEvents()
     }
 }
 
+/** Removes radar-related UStrategyEventDispatcher delegate bindings. */
 void UStrategyRadarContactMapWidget::UnbindRadarEvents()
 {
     if (UStrategyEventDispatcher* EventDisp = GetEventDispatcher())
@@ -182,6 +194,7 @@ void UStrategyRadarContactMapWidget::UnbindRadarEvents()
     }
 }
 
+/** Event handler: queues toast for new contacts and refreshes markers on update. */
 void UStrategyRadarContactMapWidget::OnRadarContactUpdated(EFactionType Faction, FRadarContact Contact)
 {
     if (Faction != ViewerFaction || !IsRadarContactLayerEnabled() || !Contact.ContactId.IsValid())
@@ -200,6 +213,7 @@ void UStrategyRadarContactMapWidget::OnRadarContactUpdated(EFactionType Faction,
     RefreshRadarContactMarkers();
 }
 
+/** Event handler: forgets expired contact IDs and refreshes markers. */
 void UStrategyRadarContactMapWidget::OnRadarContactExpired(EFactionType Faction, FRadarContact Contact)
 {
     if (Faction != ViewerFaction)
@@ -211,6 +225,7 @@ void UStrategyRadarContactMapWidget::OnRadarContactExpired(EFactionType Faction,
     RefreshRadarContactMarkers();
 }
 
+/** Event handler: shows an opposing-faction inbound threat alert toast to the player. */
 void UStrategyRadarContactMapWidget::OnOpposingFactionRadarAlert(FRadarContact Contact, FText AlertMessage)
 {
     if (ViewerFaction != EFactionType::Human || AlertMessage.IsEmpty())
@@ -225,6 +240,7 @@ void UStrategyRadarContactMapWidget::OnOpposingFactionRadarAlert(FRadarContact C
     UE_LOG(LogTemp, Display, TEXT("[RADAR MAP] %s"), *AlertMessage.ToString());
 }
 
+/** Adds a timed discovery toast for a newly seen radar contact. */
 void UStrategyRadarContactMapWidget::QueueContactToast(const FRadarContact& Contact)
 {
     const FText ToastText = UStrategicSimulationDisplayHelpers::FormatRadarContactDiscoveryToast(Contact);
@@ -240,6 +256,7 @@ void UStrategyRadarContactMapWidget::QueueContactToast(const FRadarContact& Cont
     UE_LOG(LogTemp, Display, TEXT("[RADAR MAP] %s"), *ToastText.ToString());
 }
 
+/** Sets HoveredTooltip from the contact marker nearest the cursor within HoverRadius. */
 void UStrategyRadarContactMapWidget::UpdateHoveredTooltip(const FGeometry& MyGeometry)
 {
     HoveredTooltip = FText::GetEmpty();
@@ -257,6 +274,7 @@ void UStrategyRadarContactMapWidget::UpdateHoveredTooltip(const FGeometry& MyGeo
     }
 }
 
+/** Returns the first marker within HoverRadius of LocalPosition, or nullptr. */
 const FRadarContactMapMarker* UStrategyRadarContactMapWidget::FindMarkerAtPosition(const FVector2D& LocalPosition) const
 {
     const float HitRadiusSq = HoverRadius * HoverRadius;
@@ -272,6 +290,7 @@ const FRadarContactMapMarker* UStrategyRadarContactMapWidget::FindMarkerAtPositi
     return nullptr;
 }
 
+/** Removes expired toasts and invalidates paint when the queue shrinks. */
 void UStrategyRadarContactMapWidget::PruneExpiredToasts(double Now)
 {
     const int32 Before = PendingToasts.Num();
@@ -286,6 +305,7 @@ void UStrategyRadarContactMapWidget::PruneExpiredToasts(double Now)
     }
 }
 
+/** Draws an outlined diamond marker at Center using Slate line elements. */
 void UStrategyRadarContactMapWidget::DrawContactDiamond(const FGeometry& AllottedGeometry,
     FSlateWindowElementList& OutDrawElements, int32& LayerId, const FVector2D& Center, float Size,
     float LineThickness, const FLinearColor& Color) const
@@ -313,6 +333,7 @@ void UStrategyRadarContactMapWidget::DrawContactDiamond(const FGeometry& Allotte
         LineThickness);
 }
 
+/** Draws a small tooltip panel anchored near the cursor. */
 void UStrategyRadarContactMapWidget::DrawTooltipPanel(const FGeometry& AllottedGeometry,
     FSlateWindowElementList& OutDrawElements, int32& LayerId, const FVector2D& Anchor, const FText& Text) const
 {
@@ -342,6 +363,7 @@ void UStrategyRadarContactMapWidget::DrawTooltipPanel(const FGeometry& AllottedG
         FLinearColor::White);
 }
 
+/** Draws the topmost active alert toast centered below the widget top. */
 void UStrategyRadarContactMapWidget::DrawToastPanel(const FGeometry& AllottedGeometry,
     FSlateWindowElementList& OutDrawElements, int32& LayerId, const FText& Text) const
 {
@@ -373,6 +395,7 @@ void UStrategyRadarContactMapWidget::DrawToastPanel(const FGeometry& AllottedGeo
         FLinearColor(1.0f, 0.9f, 0.75f, 1.0f));
 }
 
+/** Returns UMissionManagerSubsystem from the widget's game instance. */
 UMissionManagerSubsystem* UStrategyRadarContactMapWidget::GetMissionManager() const
 {
     if (UGameInstance* GI = GetGameInstance())
@@ -382,6 +405,7 @@ UMissionManagerSubsystem* UStrategyRadarContactMapWidget::GetMissionManager() co
     return nullptr;
 }
 
+/** Returns UStrategyCampaignSubsystem from the widget's game instance. */
 UStrategyCampaignSubsystem* UStrategyRadarContactMapWidget::GetCampaign() const
 {
     if (UGameInstance* GI = GetGameInstance())
@@ -391,6 +415,7 @@ UStrategyCampaignSubsystem* UStrategyRadarContactMapWidget::GetCampaign() const
     return nullptr;
 }
 
+/** Returns UStrategyEventDispatcher from the widget's game instance. */
 UStrategyEventDispatcher* UStrategyRadarContactMapWidget::GetEventDispatcher() const
 {
     if (UGameInstance* GI = GetGameInstance())

@@ -2,18 +2,21 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "Engine/Engine.h"
 
+/** Subsystem startup — logs readiness; blocker zones start empty. */
 void URadarTerrainSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     UE_LOG(LogTemp, Display, TEXT("URadarTerrainSubsystem initialized — radar LOS blocker zones ready"));
 }
 
+/** Replaces BlockerZones and logs the loaded count for map setup diagnostics. */
 void URadarTerrainSubsystem::SetBlockerZones(const TArray<FRadarBlockerZone>& InZones)
 {
     BlockerZones = InZones;
     UE_LOG(LogTemp, Display, TEXT("[RADAR LOS] Loaded %d blocker zone(s)"), BlockerZones.Num());
 }
 
+/** Reads bRadarLOSEnabled from campaign settings (defaults to true if missing). */
 bool URadarTerrainSubsystem::IsRadarLOSEnabled() const
 {
     if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
@@ -23,6 +26,7 @@ bool URadarTerrainSubsystem::IsRadarLOSEnabled() const
     return true;
 }
 
+/** Tests closest-point-on-segment distance against circle radius for radar blocker zones. */
 bool URadarTerrainSubsystem::SegmentIntersectsCircle(FVector2D From, FVector2D To, FVector2D Center, float Radius)
 {
     if (Radius <= KINDA_SMALL_NUMBER)
@@ -42,6 +46,7 @@ bool URadarTerrainSubsystem::SegmentIntersectsCircle(FVector2D From, FVector2D T
     return FVector2D::Distance(Closest, Center) <= Radius;
 }
 
+/** Liang-Barsky style segment clipping against an axis-aligned rectangle blocker. */
 bool URadarTerrainSubsystem::SegmentIntersectsRect(FVector2D From, FVector2D To, FVector2D Center, FVector2D HalfExtent)
 {
     const FVector2D Min = Center - HalfExtent;
@@ -114,6 +119,7 @@ bool URadarTerrainSubsystem::SegmentIntersectsRect(FVector2D From, FVector2D To,
     return TEnter <= TExit;
 }
 
+/** Returns false when any enabled blocker zone intersects the segment From–To. */
 bool URadarTerrainSubsystem::HasRadarLineOfSight(FVector2D From, FVector2D To) const
 {
     if (!IsRadarLOSEnabled() || BlockerZones.Num() == 0)

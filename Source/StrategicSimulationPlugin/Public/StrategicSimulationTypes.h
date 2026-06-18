@@ -7,7 +7,7 @@
 /** Shared tolerance (px) for site discovery nearest-match, waypoint resolution, and mission dedup. */
 constexpr float SiteMatchTolerance = 128.f;
 
-// Faction symmetry
+/** Campaign factions used for ownership, diplomacy, and symmetric AI behavior. */
 UENUM(BlueprintType)
 enum class EFactionType : uint8
 {
@@ -16,7 +16,7 @@ enum class EFactionType : uint8
     Neutral		UMETA(DisplayName = "Neutral")
 };
 
-// Resources (now more granular while keeping old fields for compatibility)
+/** Legacy high-level resource categories; granular stockpile fields remain for compatibility. */
 UENUM(BlueprintType)
 enum class EResourceType : uint8
 {
@@ -26,6 +26,7 @@ enum class EResourceType : uint8
     ResearchPoints	UMETA(DisplayName = "Research Points")
 };
 
+/** Aggregated resource counts for bases, sites, costs, and mission rewards. */
 USTRUCT(BlueprintType)
 struct FResourceStockpile
 {
@@ -49,12 +50,22 @@ struct FResourceStockpile
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
     int32 ResearchPoints = 0;
 
-    // Helper operators (makes code much cleaner later)
+    /** Returns a new stockpile with each field summed with Other. */
     FResourceStockpile operator+(const FResourceStockpile& Other) const;
+
+    /** Returns a new stockpile with Other subtracted field-wise from this stockpile. */
     FResourceStockpile operator-(const FResourceStockpile& Other) const;
+
+    /** Returns true when every field in this stockpile is greater than or equal to Other. */
     bool operator>=(const FResourceStockpile& Other) const;
+
+    /** Adds Other to this stockpile in place. */
     void Add(const FResourceStockpile& Other);
+
+    /** Subtracts Other from this stockpile in place. */
     void Subtract(const FResourceStockpile& Other);
+
+    /** Returns true when all material fields (excluding ResearchPoints) are zero or negative. */
     bool IsEmpty() const
     {
         return Money <= 0 && Metals <= 0 && Biologicals <= 0 &&
@@ -62,7 +73,7 @@ struct FResourceStockpile
     }
 };
 
-// === CLEAN: Unified Item Category (used by soldiers, vehicles, research, production) ===
+/** Unified item category for soldiers, vehicles, research trees, and production filtering. */
 UENUM(BlueprintType)
 enum class EItemCategory : uint8
 {
@@ -91,7 +102,7 @@ enum class EItemCategory : uint8
     Utility                 UMETA(DisplayName = "Utility")
 };
 
-// Tech tiers
+/** Technology progression tier used by research and item unlock chains. */
 UENUM(BlueprintType)
 enum class ETechTier : uint8
 {
@@ -102,7 +113,7 @@ enum class ETechTier : uint8
     Tier4
 };
 
-// Facility types
+/** Base facility archetype; drives build rules, production, and prerequisites. */
 UENUM(BlueprintType)
 enum class EFacilityType : uint8
 {
@@ -121,6 +132,7 @@ enum class EFacilityType : uint8
     Special            UMETA(DisplayName = "Special")
 };
 
+/** Vehicle role classification for definitions, AI, and mission assignment. */
 UENUM(BlueprintType)
 enum class EVehicleType : uint8
 {
@@ -131,7 +143,7 @@ enum class EVehicleType : uint8
     Heavy
 };
 
-// === NEW: Vehicle Damage System ===
+/** Damage band for vehicles; affects repair cost, availability, and salvage eligibility. */
 UENUM(BlueprintType)
 enum class EVehicleDamageState : uint8
 {
@@ -141,7 +153,7 @@ enum class EVehicleDamageState : uint8
     Destroyed       UMETA(DisplayName = "Destroyed")
 };
 
-// === NEW: Soldier Medical System ===
+/** Medical status for soldiers during and after missions. */
 UENUM(BlueprintType)
 enum class ESoldierStatus : uint8
 {
@@ -151,7 +163,7 @@ enum class ESoldierStatus : uint8
     Dead            UMETA(DisplayName = "Dead")
 };
 
-// Soldier base stats (used by soldier classes and runtime soldiers)
+/** Base combat and mobility attributes for soldier classes and runtime soldiers. */
 USTRUCT(BlueprintType)
 struct FSoldierStats
 {
@@ -225,6 +237,7 @@ struct FRadarContact
     FString TrackedVehicleName;
 };
 
+/** Terrain zone that blocks radar line-of-sight between bases and contacts. */
 USTRUCT(BlueprintType)
 struct FRadarBlockerZone
 {
@@ -248,7 +261,7 @@ struct FRadarBlockerZone
     FString Label;
 };
 
-// === NEW: Mission Types ===
+/** Strategic mission archetype; drives simulation flow and outcome handling. */
 UENUM(BlueprintType)
 enum class EMissionType : uint8
 {
@@ -274,6 +287,7 @@ class UStrategyVehicle;
 class UStrategySoldier;
 class UStrategyBase;
 
+/** Snapshot of one faction's forces participating in a contested salvage resolution. */
 USTRUCT(BlueprintType)
 struct FSalvageContestForceSnapshot
 {
@@ -296,7 +310,7 @@ struct FSalvageContestForceSnapshot
     int32 EstimatedSalvageCapacity = 0;
 };
 
-// Vehicle stats (used by UVehicleDefinition and UStrategyVehicle)
+/** Runtime and data-asset vehicle attributes shared by definitions and live vehicles. */
 USTRUCT(BlueprintType)
 struct FVehicleStats
 {
@@ -318,6 +332,7 @@ struct FVehicleStats
     int32 ProductionDays = 20;
 };
 
+/** Tactical AI behavior for vehicles when reacting to threats and mission orders. */
 UENUM(BlueprintType)
 enum class EVehicleBehavior : uint8
 {

@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
+// UStrategySaveGame — data-only save object; persistence logic lives in UStrategyCampaignSubsystem.
 
 #include "UStrategySaveGame.h"
-

@@ -8,6 +8,7 @@
 // Forward declaration only
 class UResearchTechDefinition;
 
+/** Primary data asset describing a buildable base facility, costs, production, and unlocks. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UFacilityDefinition : public UPrimaryDataAsset
 {

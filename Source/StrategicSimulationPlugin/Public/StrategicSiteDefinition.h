@@ -5,6 +5,7 @@
 #include "StrategicSimulationTypes.h"
 #include "StrategicSiteDefinition.generated.h"
 
+/** Kind of strategic map site (base candidate, resource node, wreck, or POI). */
 UENUM(BlueprintType)
 enum class EStrategySiteType : uint8
 {
@@ -14,6 +15,7 @@ enum class EStrategySiteType : uint8
     PointOfInterest
 };
 
+/** Lifecycle state for a vehicle wreck salvage site on the strategic map. */
 UENUM(BlueprintType)
 enum class ESalvageSiteState : uint8
 {
@@ -22,6 +24,7 @@ enum class ESalvageSiteState : uint8
     Removed
 };
 
+/** How a site became known to a faction (radar sweep vs combat engagement). */
 UENUM(BlueprintType)
 enum class EDiscoveryReason : uint8
 {
@@ -32,6 +35,7 @@ enum class EDiscoveryReason : uint8
 class UVehicleDefinition;
 class UStrategySoldier;
 
+/** Data asset describing a strategic map site: location, resources, and salvage wreck metadata. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategySiteDefinition : public UDataAsset
 {

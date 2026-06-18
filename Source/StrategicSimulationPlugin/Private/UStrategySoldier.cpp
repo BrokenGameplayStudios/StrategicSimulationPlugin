@@ -2,6 +2,7 @@
 #include "UStrategyFacility.h"
 #include "UFacilityDefinition.h"
 
+/** Default-constructs soldier health and status flags. */
 UStrategySoldier::UStrategySoldier()
 {
     CurrentStats.Health = 10;
@@ -13,6 +14,7 @@ UStrategySoldier::UStrategySoldier()
     DaysUntilRecovered = 0;
 }
 
+/** Reduces health and updates status. */
 void UStrategySoldier::ApplyDamage(int32 DamageAmount)
 {
     if (DamageAmount <= 0) return;
@@ -24,11 +26,13 @@ void UStrategySoldier::ApplyDamage(int32 DamageAmount)
         *SoldierName, DamageAmount, CurrentStats.Health, *UEnum::GetValueAsString(Status));
 }
 
+/** True when wounded but not dead. */
 bool UStrategySoldier::NeedsHealing() const
 {
     return Status != ESoldierStatus::Healthy && Status != ESoldierStatus::Dead;
 }
 
+/** Restores health and updates status. */
 void UStrategySoldier::Heal(int32 Amount)
 {
     if (Amount <= 0 || Status == ESoldierStatus::Dead) return;
@@ -40,6 +44,7 @@ void UStrategySoldier::Heal(int32 Amount)
         *SoldierName, Amount, CurrentStats.Health, *UEnum::GetValueAsString(Status));
 }
 
+/** Derives status and recovery days from health. */
 void UStrategySoldier::UpdateStatusFromHealth()
 {
     if (CurrentStats.Health <= 0)
@@ -68,6 +73,7 @@ void UStrategySoldier::UpdateStatusFromHealth()
     }
 }
 
+/** Logs soldier debug info to output. */
 void UStrategySoldier::PrintInfo() const
 {
     UE_LOG(LogTemp, Display, TEXT("[SOLDIER] %s | Class: %s | Health: %d | Status: %s | Wounded: %s | POW: %s | KIA: %s | Days to recover: %d"),
@@ -81,6 +87,7 @@ void UStrategySoldier::PrintInfo() const
         DaysUntilRecovered);
 }
 
+/** Combines base stats with loadout item bonuses. */
 FSoldierStats UStrategySoldier::GetEffectiveStats() const
 {
     FSoldierStats Effective = CurrentStats;  // base from class
@@ -100,5 +107,7 @@ FSoldierStats UStrategySoldier::GetEffectiveStats() const
     return Effective;
 }
 
+/** Returns effective Aim from GetEffectiveStats. */
 int32 UStrategySoldier::GetEffectiveAim() const { return GetEffectiveStats().Aim; }
+/** Returns effective Defense from GetEffectiveStats. */
 int32 UStrategySoldier::GetEffectiveDefense() const { return GetEffectiveStats().Defense; }

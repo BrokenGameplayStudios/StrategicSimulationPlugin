@@ -10,19 +10,27 @@
 #include "StrategicSimulationTypes.h"
 #include "AStrategyGameInitializer.generated.h"
 
+/**
+ * Level-placed actor that pushes editor-tuned campaign settings into UStrategyCampaignSubsystem on BeginPlay.
+ * Owns map generation, AI, salvage, radar, database, and starting-resource defaults for a strategy map level.
+ */
 UCLASS()
 class STRATEGICSIMULATIONPLUGIN_API AStrategyGameInitializer : public AActor
 {
     GENERATED_BODY()
 
 public:
+    /** Disables tick; seeds default central-ridge radar blocker in constructor. */
     AStrategyGameInitializer();
 
+    /** Copies all initializer properties into campaign subsystems, loads databases, and applies starting resources. */
     virtual void BeginPlay() override;
 
+    /** When true, the human faction runs daily AI scheduling (player faction can still be human-controlled). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Simulation")
     bool bStartWithHumanAI = true;
 
+    /** When true, enemy faction AI schedules missions, expansion, and salvage each day. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Simulation")
     bool bStartWithEnemyAI = true;
 
@@ -51,6 +59,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "800.0", ClampMax = "3840.0"))
     float LogicalMapWidth = 1920.0f;
 
+    /** Logical map height in pixels; together with width defines site spawn bounds. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Map Generation", meta = (ClampMin = "600.0", ClampMax = "2160.0"))
     float LogicalMapHeight = 1080.0f;
 
@@ -134,36 +143,45 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel", meta = (ClampMin = "64.0", ClampMax = "2000.0"))
     float BaseRadarRangePixels = 512.0f;
 
+    /** Hours between passive radar sweeps from operational Command Centers. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel", meta = (ClampMin = "0.25", ClampMax = "24.0"))
     float BaseRadarPingIntervalHours = 1.0f;
 
+    /** When true, friendly vehicles in transit may engage inbound threats detected by radar. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel")
     bool bEngageInboundThreatsWhileInTransit = true;
 
     // === Starting Resources (editable in editor) ===
+    /** Human faction stockpile applied to UResourceManagerSubsystem at level start. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;
 
+    /** Enemy faction stockpile applied to UResourceManagerSubsystem at level start. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile EnemyStartingStockpile;
 
     // === DATABASES ===
+    /** Infantry/equipment item database copied to campaign on BeginPlay. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UItemDatabase> ItemDatabaseAsset;
 
+    /** Facility definition database copied to campaign on BeginPlay. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UFacilityDatabase> FacilityDatabaseAsset;
 
+    /** Soldier class database copied to campaign on BeginPlay. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<USoldierClassDatabase> SoldierClassDatabaseAsset;
 
+    /** Research tech tree database copied to campaign on BeginPlay. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UResearchDatabase> ResearchDatabaseAsset;
 
-    // NEW: Vehicle Database
+    /** Vehicle hull database copied to campaign on BeginPlay. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UVehicleDatabase> VehicleDatabaseAsset;
 
+    /** Vehicle weapons/defense/ammo item database copied to campaign on BeginPlay. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Databases")
     TSoftObjectPtr<UItemDatabase> VehicleItemDatabaseAsset;
 };

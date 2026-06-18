@@ -6,6 +6,7 @@
 #include "UStrategyBase.h"
 #include "UActiveProductionJob.generated.h"
 
+/** Runtime workshop production or queued job for crafting items at a base. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UActiveProductionJob : public UObject
 {

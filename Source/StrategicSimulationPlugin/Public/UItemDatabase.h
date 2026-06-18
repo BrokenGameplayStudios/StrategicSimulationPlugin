@@ -5,13 +5,14 @@
 #include "UItemDefinition.h"
 #include "UItemDatabase.generated.h"
 
+/** Registry of item definitions available for AI purchase and production selection. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UItemDatabase : public UPrimaryDataAsset
 {
     GENERATED_BODY()
 
 public:
-    // Add all items you want the AI to be able to buy here
+    /** Soft references to all items the AI is allowed to buy or queue for production. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Items")
     TArray<TSoftObjectPtr<UItemDefinition>> BuyableItems;
 };
