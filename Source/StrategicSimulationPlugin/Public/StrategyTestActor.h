@@ -35,4 +35,9 @@ private:
 
     UFUNCTION()
     void OnSiteDiscovered_Test(EFactionType Faction, class UStrategySiteDefinition* Site, EDiscoveryReason Reason);
+
+    UFUNCTION()
+    void OnSalvageContestStarted_Test(class UStrategySiteDefinition* Site,
+        struct FSalvageContestForceSnapshot HumanForceSnapshot,
+        struct FSalvageContestForceSnapshot EnemyForceSnapshot);
 };

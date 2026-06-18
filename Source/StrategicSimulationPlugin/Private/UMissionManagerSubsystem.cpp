@@ -11,6 +11,8 @@
 #include "StrategicSiteDefinition.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategicSimulationDisplayHelpers.h"
+#include "UStrategyCampaignSubsystem.h"
+#include "UStrategyEventDispatcher.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -1172,11 +1174,195 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     return NewMission;
 }
 
+UStrategySiteDefinition* UMissionManagerSubsystem::GetSalvageTargetSite(const UMissionGroup* Mission) const
+{
+    if (!Mission || Mission->MissionType != EMissionType::Salvage)
+    {
+        return nullptr;
+    }
+
+    if (Mission->TargetSalvageSite)
+    {
+        return Mission->TargetSalvageSite;
+    }
+
+    if (Mission->VehiclesInFleet.Num() > 0 && Mission->VehiclesInFleet[0])
+    {
+        const UStrategyVehicle* Lead = Mission->VehiclesInFleet[0];
+        if (Lead->ActiveSalvageSite)
+        {
+            return Lead->ActiveSalvageSite;
+        }
+
+        if (Lead->CurrentWaypoints.Num() >= 2)
+        {
+            return FindSiteAtLocation(Lead->CurrentWaypoints[1]);
+        }
+
+        return FindSiteAtLocation(Lead->CurrentPosition);
+    }
+
+    return nullptr;
+}
+
+FSalvageContestForceSnapshot UMissionManagerSubsystem::BuildSalvageContestSnapshot(const UMissionGroup* Mission) const
+{
+    FSalvageContestForceSnapshot Snapshot;
+    if (!Mission)
+    {
+        return Snapshot;
+    }
+
+    Snapshot.Faction = Mission->AttackingFaction;
+    Snapshot.OriginBase = Mission->OriginBase;
+    Snapshot.Vehicles = Mission->VehiclesInFleet;
+
+    TSet<UStrategySoldier*> UniqueSoldiers;
+    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+    {
+        if (!Vehicle)
+        {
+            continue;
+        }
+
+        for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+        {
+            if (Soldier)
+            {
+                UniqueSoldiers.Add(Soldier);
+            }
+        }
+    }
+
+    Snapshot.Soldiers = UniqueSoldiers.Array();
+    Snapshot.EstimatedSalvageCapacity = 0;
+    return Snapshot;
+}
+
+void UMissionManagerSubsystem::BeginSalvageContest(UStrategySiteDefinition* Site, UMissionGroup* HumanMission,
+    UMissionGroup* EnemyMission)
+{
+    if (!Site || !HumanMission || !EnemyMission)
+    {
+        return;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (!Campaign || Campaign->IsSalvageContestActive())
+    {
+        return;
+    }
+
+    const FSalvageContestForceSnapshot HumanSnapshot = BuildSalvageContestSnapshot(HumanMission);
+    const FSalvageContestForceSnapshot EnemySnapshot = BuildSalvageContestSnapshot(EnemyMission);
+
+    Campaign->ActivateSalvageContest(Site, HumanMission, EnemyMission, HumanSnapshot, EnemySnapshot);
+    Campaign->PauseStrategicClock();
+
+    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
+        EventDisp->OnSalvageContestStarted.Broadcast(Site, HumanSnapshot, EnemySnapshot);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[SALVAGE CONTEST] Contest started at '%s' — Human vs Enemy salvage fleets (clock paused)"),
+        *Site->SiteName);
+}
+
+void UMissionManagerSubsystem::AbortSalvageMission(UMissionGroup* Mission, bool bReturnVehiclesHome)
+{
+    if (!Mission || Mission->MissionType != EMissionType::Salvage)
+    {
+        return;
+    }
+
+    for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+    {
+        if (!Vehicle || Vehicle->IsDestroyed())
+        {
+            continue;
+        }
+
+        Vehicle->ActiveSalvageSite = nullptr;
+
+        if (bReturnVehiclesHome && Vehicle->GetMissionPhase() != EVehicleMissionPhase::Docked)
+        {
+            Vehicle->SetBehavior(EVehicleBehavior::Returning);
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[SALVAGE CONTEST] Salvage mission aborted for %s (%d vehicle(s))"),
+        *UEnum::GetValueAsString(Mission->AttackingFaction), Mission->VehiclesInFleet.Num());
+}
+
+void UMissionManagerSubsystem::DetectSalvageContests()
+{
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (!Campaign || !Campaign->bSalvageMissionsEnabled || !Campaign->bSalvageSitesEnabled || Campaign->IsSalvageContestActive())
+    {
+        return;
+    }
+
+    TMap<FGuid, UMissionGroup*> HumanMissionBySite;
+    TMap<FGuid, UMissionGroup*> EnemyMissionBySite;
+
+    for (UMissionGroup* Mission : ActiveMissions)
+    {
+        if (!Mission || Mission->MissionType != EMissionType::Salvage || !Mission->bMovementActivated)
+        {
+            continue;
+        }
+
+        UStrategySiteDefinition* Site = GetSalvageTargetSite(Mission);
+        if (!Site || Site->SalvageState != ESalvageSiteState::Active)
+        {
+            continue;
+        }
+
+        const FGuid SiteKey = Site->SiteId;
+        if (Mission->AttackingFaction == EFactionType::Human)
+        {
+            HumanMissionBySite.Add(SiteKey, Mission);
+        }
+        else if (Mission->AttackingFaction == EFactionType::Enemy)
+        {
+            EnemyMissionBySite.Add(SiteKey, Mission);
+        }
+    }
+
+    for (const TPair<FGuid, UMissionGroup*>& HumanPair : HumanMissionBySite)
+    {
+        UMissionGroup* const* EnemyMission = EnemyMissionBySite.Find(HumanPair.Key);
+        if (!EnemyMission || !*EnemyMission)
+        {
+            continue;
+        }
+
+        UStrategySiteDefinition* Site = GetSalvageTargetSite(HumanPair.Value);
+        if (!Site)
+        {
+            Site = GetSalvageTargetSite(*EnemyMission);
+        }
+
+        BeginSalvageContest(Site, HumanPair.Value, *EnemyMission);
+        return;
+    }
+}
+
 void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
 {
     if (DeltaGameHours <= 0.0f)
     {
         return;
+    }
+
+    DetectSalvageContests();
+
+    if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+    {
+        if (Campaign->IsSalvageContestActive())
+        {
+            return;
+        }
     }
 
     float CurrentHours = GetCurrentGameHours();

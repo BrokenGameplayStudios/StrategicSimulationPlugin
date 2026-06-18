@@ -69,7 +69,7 @@ void UTimeManagerSubsystem::ProcessSimulationStep(float StepSeconds)
 
 void UTimeManagerSubsystem::RealTimeTick()
 {
-    if (bIsPaused || TimeScale <= 0.0f) return;
+    if (bIsPaused || bStrategicClockPaused || TimeScale <= 0.0f) return;
 
     float RemainingSeconds = 0.016f * TimeScale;
     constexpr int32 MaxStepsPerRealTick = 32;
@@ -156,6 +156,17 @@ void UTimeManagerSubsystem::TogglePause()
 {
     bIsPaused = !bIsPaused;
     UE_LOG(LogTemp, Display, TEXT("Pause toggled — Now %s"), bIsPaused ? TEXT("PAUSED") : TEXT("RUNNING"));
+}
+
+void UTimeManagerSubsystem::SetStrategicClockPaused(bool bPaused)
+{
+    if (bStrategicClockPaused == bPaused)
+    {
+        return;
+    }
+
+    bStrategicClockPaused = bPaused;
+    UE_LOG(LogTemp, Display, TEXT("[TIME] Strategic clock %s"), bPaused ? TEXT("PAUSED (salvage contest)") : TEXT("RESUMED"));
 }
 
 int32 UTimeManagerSubsystem::GetCurrentDay() const

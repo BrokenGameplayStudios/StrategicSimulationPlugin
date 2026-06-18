@@ -197,6 +197,18 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Campaign")
     void StopSimulation();
 
+    UFUNCTION(BlueprintCallable, Category = "Campaign|Salvage Contest")
+    void PauseStrategicClock();
+
+    UFUNCTION(BlueprintCallable, Category = "Campaign|Salvage Contest")
+    void ResumeStrategicClock();
+
+    UFUNCTION(BlueprintPure, Category = "Campaign|Salvage Contest")
+    bool IsSalvageContestActive() const { return bSalvageContestActive; }
+
+    UFUNCTION(BlueprintCallable, Category = "Campaign|Salvage Contest")
+    void ResolveSalvageContest(ESalvageContestOutcome Outcome);
+
     UFUNCTION(BlueprintCallable, Category = "Campaign")
     FString GetFormattedDate() const;
 
@@ -227,6 +239,30 @@ public:
 
     /** Tracks already announced unlocks to prevent daily spam */
     TSet<FString> AnnouncedUnlocks;
+
+    UPROPERTY(Transient)
+    bool bSalvageContestActive = false;
+
+    UPROPERTY(Transient)
+    TObjectPtr<class UStrategySiteDefinition> ContestedSalvageSite = nullptr;
+
+    UPROPERTY(Transient)
+    TObjectPtr<class UMissionGroup> ContestedHumanSalvageMission = nullptr;
+
+    UPROPERTY(Transient)
+    TObjectPtr<class UMissionGroup> ContestedEnemySalvageMission = nullptr;
+
+    UPROPERTY(Transient)
+    FSalvageContestForceSnapshot ContestedHumanSnapshot;
+
+    UPROPERTY(Transient)
+    FSalvageContestForceSnapshot ContestedEnemySnapshot;
+
+    void ClearSalvageContestState();
+
+    void ActivateSalvageContest(class UStrategySiteDefinition* Site, class UMissionGroup* HumanMission,
+        class UMissionGroup* EnemyMission, const FSalvageContestForceSnapshot& HumanSnapshot,
+        const FSalvageContestForceSnapshot& EnemySnapshot);
 
 private:
     UFUNCTION()

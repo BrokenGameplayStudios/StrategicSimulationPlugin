@@ -6,6 +6,8 @@
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
+#include "UStrategyEventDispatcher.h"
+#include "StrategicSiteDefinition.h"
 
 void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -554,6 +556,110 @@ void UStrategyCampaignSubsystem::LoadCampaign(int32 SlotIndex)
     {
         UE_LOG(LogTemp, Display, TEXT("[SAVE] Site map loaded (%d sites, 0 missions)."), SiteCount);
     }
+}
+
+void UStrategyCampaignSubsystem::PauseStrategicClock()
+{
+    if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
+    {
+        TimeMgr->SetStrategicClockPaused(true);
+    }
+}
+
+void UStrategyCampaignSubsystem::ResumeStrategicClock()
+{
+    if (UTimeManagerSubsystem* TimeMgr = GetTimeManager())
+    {
+        TimeMgr->SetStrategicClockPaused(false);
+    }
+}
+
+void UStrategyCampaignSubsystem::ActivateSalvageContest(UStrategySiteDefinition* Site, UMissionGroup* HumanMission,
+    UMissionGroup* EnemyMission, const FSalvageContestForceSnapshot& HumanSnapshot,
+    const FSalvageContestForceSnapshot& EnemySnapshot)
+{
+    bSalvageContestActive = true;
+    ContestedSalvageSite = Site;
+    ContestedHumanSalvageMission = HumanMission;
+    ContestedEnemySalvageMission = EnemyMission;
+    ContestedHumanSnapshot = HumanSnapshot;
+    ContestedEnemySnapshot = EnemySnapshot;
+}
+
+void UStrategyCampaignSubsystem::ClearSalvageContestState()
+{
+    bSalvageContestActive = false;
+    ContestedSalvageSite = nullptr;
+    ContestedHumanSalvageMission = nullptr;
+    ContestedEnemySalvageMission = nullptr;
+    ContestedHumanSnapshot = FSalvageContestForceSnapshot();
+    ContestedEnemySnapshot = FSalvageContestForceSnapshot();
+}
+
+void UStrategyCampaignSubsystem::ResolveSalvageContest(ESalvageContestOutcome Outcome)
+{
+    if (!bSalvageContestActive)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[SALVAGE CONTEST] ResolveSalvageContest called with no active contest"));
+        return;
+    }
+
+    UMissionManagerSubsystem* MissionMgr = GetMissionManager();
+    if (!MissionMgr)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[SALVAGE CONTEST] Mission manager missing — cannot resolve contest"));
+        return;
+    }
+
+    const FString SiteName = ContestedSalvageSite ? ContestedSalvageSite->SiteName : TEXT("Unknown");
+
+    switch (Outcome)
+    {
+    case ESalvageContestOutcome::FactionAWins:
+        if (ContestedEnemySalvageMission)
+        {
+            MissionMgr->AbortSalvageMission(ContestedEnemySalvageMission, true);
+        }
+        UE_LOG(LogTemp, Display, TEXT("[SALVAGE CONTEST] Human wins at '%s' — Enemy salvage aborted"), *SiteName);
+        break;
+    case ESalvageContestOutcome::FactionBWins:
+        if (ContestedHumanSalvageMission)
+        {
+            MissionMgr->AbortSalvageMission(ContestedHumanSalvageMission, true);
+        }
+        UE_LOG(LogTemp, Display, TEXT("[SALVAGE CONTEST] Enemy wins at '%s' — Human salvage aborted"), *SiteName);
+        break;
+    case ESalvageContestOutcome::FactionAAborts:
+        if (ContestedHumanSalvageMission)
+        {
+            MissionMgr->AbortSalvageMission(ContestedHumanSalvageMission, true);
+        }
+        UE_LOG(LogTemp, Display, TEXT("[SALVAGE CONTEST] Human withdrew from '%s' — wreck unchanged"), *SiteName);
+        break;
+    case ESalvageContestOutcome::FactionBAborts:
+        if (ContestedEnemySalvageMission)
+        {
+            MissionMgr->AbortSalvageMission(ContestedEnemySalvageMission, true);
+        }
+        UE_LOG(LogTemp, Display, TEXT("[SALVAGE CONTEST] Enemy withdrew from '%s' — wreck unchanged"), *SiteName);
+        break;
+    case ESalvageContestOutcome::MutualRetreat:
+        if (ContestedHumanSalvageMission)
+        {
+            MissionMgr->AbortSalvageMission(ContestedHumanSalvageMission, true);
+        }
+        if (ContestedEnemySalvageMission)
+        {
+            MissionMgr->AbortSalvageMission(ContestedEnemySalvageMission, true);
+        }
+        UE_LOG(LogTemp, Display, TEXT("[SALVAGE CONTEST] Mutual retreat at '%s' — wreck unchanged"), *SiteName);
+        break;
+    default:
+        break;
+    }
+
+    ClearSalvageContestState();
+    ResumeStrategicClock();
 }
 
 TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() const

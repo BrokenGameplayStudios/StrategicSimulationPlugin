@@ -79,6 +79,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Time")
     bool IsPaused() const { return bIsPaused; }
 
+    /** Pauses simulation advancement without toggling user pause (contested salvage hook). */
+    UFUNCTION(BlueprintCallable, Category = "Time|Strategic Pause")
+    void SetStrategicClockPaused(bool bPaused);
+
+    UFUNCTION(BlueprintPure, Category = "Time|Strategic Pause")
+    bool IsStrategicClockPaused() const { return bStrategicClockPaused; }
+
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnDayPassed OnDayPassed;
 
@@ -88,6 +95,7 @@ private:
 
     float TimeScale = 1.0f;
     bool bIsPaused = true;
+    bool bStrategicClockPaused = false;
 
     FTimerHandle RealTimeTimer;
 

@@ -512,7 +512,20 @@ Blueprint helpers: `BuildSalvageMapMarkers`, `GetVisibleSalvageSitesForFaction`,
 
 Flow: schedule → fly to wreck → hourly `ProcessSalvageExtractionTick` → faction resources increase / wreck decreases → depletion calls `RemoveSalvageSite`. Resources are credited during extraction ticks (not again at mission resolve).
 
-### 2.13 Build dependencies
+### 2.13 Contested salvage (PR-6b)
+
+When Human and Enemy both have active `Salvage` missions at the same `SiteId`, the mission manager fires `OnSalvageContestStarted`, pauses the strategic clock (`PauseStrategicClock`), and waits for the tactical layer to call `ResolveSalvageContest(Outcome)`.
+
+| Outcome | Effect |
+|---------|--------|
+| `FactionAWins` (Human) | Enemy mission aborted, Human continues extraction |
+| `FactionBWins` (Enemy) | Human mission aborted, Enemy continues |
+| `FactionAAborts` / `FactionBAborts` | Withdrawing faction returns home; wreck unchanged |
+| `MutualRetreat` | Both factions return; wreck unchanged |
+
+Payload: `FSalvageContestForceSnapshot` per faction (vehicles, soldiers, origin base). Clock resumes after `ResolveSalvageContest`.
+
+### 2.14 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 
@@ -533,6 +546,7 @@ Plugin dependency in `.uplugin`: **CommonUI** (must be enabled in host project).
 | Save / load site map (QA) | `SaveCampaign` / `LoadCampaign` (schema >= 2) |
 | New playable game | `StartSimulation` |
 | Force AI tick | `Debug_RunAI` on Campaign or AI subsystem |
+| Resolve contested salvage | `UStrategyCampaignSubsystem::ResolveSalvageContest` (after `OnSalvageContestStarted`) |
 | Get managers | `GetResourceManager`, `GetBaseManager`, `GetMissionManager`, etc. on Campaign |
 
 ---

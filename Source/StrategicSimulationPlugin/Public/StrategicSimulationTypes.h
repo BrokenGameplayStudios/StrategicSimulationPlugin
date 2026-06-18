@@ -184,6 +184,43 @@ enum class EMissionType : uint8
     Salvage           UMETA(DisplayName = "Salvage")     // Recover resources from vehicle wrecks
 };
 
+/** Faction A = Human, Faction B = Enemy in contested salvage resolution. */
+UENUM(BlueprintType)
+enum class ESalvageContestOutcome : uint8
+{
+    FactionAWins    UMETA(DisplayName = "Human Wins"),
+    FactionBWins    UMETA(DisplayName = "Enemy Wins"),
+    FactionAAborts  UMETA(DisplayName = "Human Aborts"),
+    FactionBAborts  UMETA(DisplayName = "Enemy Aborts"),
+    MutualRetreat   UMETA(DisplayName = "Mutual Retreat")
+};
+
+class UStrategyVehicle;
+class UStrategySoldier;
+class UStrategyBase;
+
+USTRUCT(BlueprintType)
+struct FSalvageContestForceSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "Salvage Contest")
+    EFactionType Faction = EFactionType::Neutral;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Salvage Contest")
+    TObjectPtr<UStrategyBase> OriginBase = nullptr;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Salvage Contest")
+    TArray<TObjectPtr<UStrategyVehicle>> Vehicles;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Salvage Contest")
+    TArray<TObjectPtr<UStrategySoldier>> Soldiers;
+
+    /** Placeholder for future cargo-hold tuning. */
+    UPROPERTY(BlueprintReadOnly, Category = "Salvage Contest")
+    int32 EstimatedSalvageCapacity = 0;
+};
+
 // Vehicle stats (used by UVehicleDefinition and UStrategyVehicle)
 USTRUCT(BlueprintType)
 struct FVehicleStats

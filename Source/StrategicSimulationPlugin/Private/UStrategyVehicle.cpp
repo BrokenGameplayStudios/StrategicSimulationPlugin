@@ -650,6 +650,14 @@ bool UStrategyVehicle::ProcessSalvageExtractionTick(float DeltaGameHours)
         ActiveSalvageSite = Site;
     }
 
+    if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+    {
+        if (Campaign->IsSalvageContestActive())
+        {
+            return true;
+        }
+    }
+
     const EFactionType SalvagingFaction = HomeBase->OwningFaction;
     if (!Site || !BaseMgr->CanSalvageSite(SalvagingFaction, Site, this))
     {

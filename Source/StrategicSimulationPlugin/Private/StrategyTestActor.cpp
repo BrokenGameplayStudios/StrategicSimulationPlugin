@@ -64,6 +64,7 @@ void AStrategyTestActor::RunPhase13Test()
         EventDisp->OnSoldierRecruited.AddDynamic(this, &AStrategyTestActor::OnSoldierRecruited_Test);
         EventDisp->OnResearchCompleted.AddDynamic(this, &AStrategyTestActor::OnResearchCompleted_Test);
         EventDisp->OnSiteDiscovered.AddDynamic(this, &AStrategyTestActor::OnSiteDiscovered_Test);
+        EventDisp->OnSalvageContestStarted.AddDynamic(this, &AStrategyTestActor::OnSalvageContestStarted_Test);
     }
 
     UE_LOG(LogTemp, Display, TEXT("Event dispatcher is live — use the button in the HUD to test"));
@@ -98,4 +99,13 @@ void AStrategyTestActor::OnSiteDiscovered_Test(EFactionType Faction, UStrategySi
         *UEnum::GetValueAsString(Faction),
         *StaticEnum<EDiscoveryReason>()->GetNameStringByValue(static_cast<int64>(Reason)),
         *Site->SiteName);
+}
+
+UFUNCTION()
+void AStrategyTestActor::OnSalvageContestStarted_Test(UStrategySiteDefinition* Site,
+    FSalvageContestForceSnapshot HumanForceSnapshot, FSalvageContestForceSnapshot EnemyForceSnapshot)
+{
+    const FString SiteName = Site ? Site->SiteName : TEXT("Unknown");
+    UE_LOG(LogTemp, Display, TEXT("[EVENT] Salvage contest at '%s' — Human %d vehicle(s), Enemy %d vehicle(s) (clock paused)"),
+        *SiteName, HumanForceSnapshot.Vehicles.Num(), EnemyForceSnapshot.Vehicles.Num());
 }

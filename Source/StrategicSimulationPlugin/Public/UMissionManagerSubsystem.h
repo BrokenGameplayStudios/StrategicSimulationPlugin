@@ -94,7 +94,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Save")
     void ClearRuntimeMissionStateForSiteMapLoad();
 
+    /** Forces a salvage mission fleet to withdraw (contest loser / abort outcome). */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Salvage Contest")
+    void AbortSalvageMission(UMissionGroup* Mission, bool bReturnVehiclesHome = true);
+
+    void BeginSalvageContest(UStrategySiteDefinition* Site, UMissionGroup* HumanMission, UMissionGroup* EnemyMission);
+
 private:
+    UStrategySiteDefinition* GetSalvageTargetSite(const UMissionGroup* Mission) const;
+    FSalvageContestForceSnapshot BuildSalvageContestSnapshot(const UMissionGroup* Mission) const;
+    void DetectSalvageContests();
     /** Calculates overall fleet combat effectiveness (0–100) using soldier effective stats + vehicle health. */
     float CalculateFleetEffectiveness(const UMissionGroup* Mission) const;
 
