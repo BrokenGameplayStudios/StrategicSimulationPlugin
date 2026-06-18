@@ -6,6 +6,7 @@
 #include "UFactionIntelSubsystem.h"
 #include "URadarTerrainSubsystem.h"
 #include "URadarContactSubsystem.h"
+#include "UExplorationSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
@@ -169,6 +170,11 @@ void UStrategyCampaignSubsystem::ResetSimulation()
     if (URadarContactSubsystem* ContactMgr = GetRadarContactManager())
     {
         ContactMgr->ClearAllContacts();
+    }
+
+    if (UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>())
+    {
+        Exploration->ClearAllExplorationState();
     }
 
     UE_LOG(LogTemp, Display, TEXT("[RESET] Simulation has been fully cleared."));

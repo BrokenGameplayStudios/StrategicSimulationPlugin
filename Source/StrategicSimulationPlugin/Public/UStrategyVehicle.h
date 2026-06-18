@@ -19,6 +19,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnVehicleDetected, UStrategyVehicl
 class UStrategyBase;
 class UMissionGroup;
 class UStrategyFacility;
+class UBaseManagerSubsystem;
+class UFactionIntelSubsystem;
 
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategyVehicle : public UObject
@@ -217,6 +219,9 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
     float LastPingGameTimeHours = 0.0f;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Radar")
+    FVector2D LastRadarSweepOrigin = FVector2D::ZeroVector;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar", meta = (ClampMin = "0.1", ClampMax = "4.0"))
     float PingIntervalHours = 0.5f;  // every 30 game minutes by default
 
@@ -278,6 +283,12 @@ private:
     float GetReturningPathLength() const;
     FVector2D GetPositionOnReturningPath(float DistanceAlongPath) const;
     void TickRadarPings(float CurrentGameHours);
+    bool IsPositionWithinRadarSweep(const FVector2D& WorldPosition) const;
+    bool HasLineOfSightToPosition(const FVector2D& WorldPosition) const;
+    void DiscoverSiteInRange(UStrategySiteDefinition* Site, EFactionType VehicleFaction, float CurrentGameHours,
+        UBaseManagerSubsystem* BaseManager, UFactionIntelSubsystem* IntelMgr);
+    void ScanEnemyBasesAlongSweep(EFactionType VehicleFaction, float CurrentGameHours, UBaseManagerSubsystem* BaseManager,
+        UFactionIntelSubsystem* IntelMgr);
 
     /** Called when this vehicle detects another vehicle.
  *  Decision logic lives in UAIControllerSubsystem (or player UI).

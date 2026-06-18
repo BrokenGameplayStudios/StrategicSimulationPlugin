@@ -11,6 +11,7 @@
 #include "StrategicSiteDefinition.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UFactionIntelSubsystem.h"
+#include "UExplorationSubsystem.h"
 #include "UResourceManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategicSimulationDisplayHelpers.h"
@@ -32,7 +33,7 @@ UStrategyVehicle::UStrategyVehicle()
     TotalTravelTimeHours = 0.0f;
     LastPingGameTimeHours = 0.0f;
     CruiseSpeedPixelsPerHour = 180.0f;
-    PingIntervalHours = 0.5f;
+    PingIntervalHours = 0.25f;
 }
 
 float UStrategyVehicle::GetCruiseSpeed() const
@@ -302,6 +303,7 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
 
     LaunchGameTimeHours = CurrentGameHours;
     LastPingGameTimeHours = CurrentGameHours;
+    LastRadarSweepOrigin = CurrentPosition;
 
     float DistOutbound = FVector2D::Distance(HomeBase->MapLocation, TargetLocation);
     PlannedRoundTripRange = DistOutbound * 2.0f;
@@ -656,6 +658,14 @@ void UStrategyVehicle::UpdatePositionAndPings(float CurrentGameHours, float Delt
                             IntelMgr->ObserveSite(HomeBase->OwningFaction, StationSite, EDiscoveryReason::Radar,
                                 CurrentGameHours);
                         }
+
+                        if (CurrentMission && CurrentMission->MissionType == EMissionType::Recon)
+                        {
+                            if (UExplorationSubsystem* Exploration = GI->GetSubsystem<UExplorationSubsystem>())
+                            {
+                                Exploration->MarkSiteSurveyed(HomeBase->OwningFaction, StationSite);
+                            }
+                        }
                     }
                 }
             }
@@ -795,15 +805,20 @@ void UStrategyVehicle::PerformRadarPing()
 {
     if (!HomeBase) return;
 
-    EFactionType VehicleFaction = HomeBase->OwningFaction;
+    const EFactionType VehicleFaction = HomeBase->OwningFaction;
 
     UGameInstance* GI = GetTypedOuter<UGameInstance>();
     if (!GI)
     {
         if (UWorld* World = GetWorld())
+        {
             GI = World->GetGameInstance();
+        }
     }
-    if (!GI) return;
+    if (!GI)
+    {
+        return;
+    }
 
     float CurrentGameHours = 0.0f;
     if (UMissionManagerSubsystem* MissionMgr = GI->GetSubsystem<UMissionManagerSubsystem>())
@@ -811,81 +826,59 @@ void UStrategyVehicle::PerformRadarPing()
         CurrentGameHours = MissionMgr->GetCurrentGameHours();
     }
 
-    if (UBaseManagerSubsystem* BaseManager = GI->GetSubsystem<UBaseManagerSubsystem>())
+    UBaseManagerSubsystem* BaseManager = GI->GetSubsystem<UBaseManagerSubsystem>();
+    if (!BaseManager)
     {
-        UFactionIntelSubsystem* IntelMgr = GI->GetSubsystem<UFactionIntelSubsystem>();
-        URadarTerrainSubsystem* TerrainMgr = GI->GetSubsystem<URadarTerrainSubsystem>();
+        return;
+    }
 
-        for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
+    UFactionIntelSubsystem* IntelMgr = GI->GetSubsystem<UFactionIntelSubsystem>();
+
+    for (UStrategySiteDefinition* Site : BaseManager->AllPotentialSites)
+    {
+        if (!Site)
         {
-            if (!Site)
-            {
-                continue;
-            }
-
-            if (FVector2D::Distance(Site->Location, CurrentPosition) > GetRadarRange())
-            {
-                continue;
-            }
-
-            if (TerrainMgr && !TerrainMgr->HasRadarLineOfSight(CurrentPosition, Site->Location))
-            {
-                continue;
-            }
-
-            const bool bAlreadyKnown = BaseManager->IsSiteKnownToFaction(VehicleFaction, Site);
-            if (!bAlreadyKnown)
-            {
-                if (!Site->bHasBeenUsed)
-                {
-                    BaseManager->AddDiscoveredSite(VehicleFaction, Site);
-                    OnSiteDetected.Broadcast(VehicleFaction, Site);
-                }
-            }
-            else if (IntelMgr)
-            {
-                IntelMgr->ObserveSite(VehicleFaction, Site, EDiscoveryReason::Radar, CurrentGameHours);
-            }
+            continue;
         }
 
-        TArray<UStrategyBase*> EnemyBases = BaseManager->GetBases(
-            (VehicleFaction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human);
-
-        for (UStrategyBase* OtherBase : EnemyBases)
+        if (!IsPositionWithinRadarSweep(Site->Location) || !HasLineOfSightToPosition(Site->Location))
         {
-            if (!OtherBase) continue;
-
-            for (UStrategyFacility* Facility : OtherBase->Facilities)
-            {
-                if (!Facility || Facility->BuildProgressDays > 0) continue;
-
-                if (Facility->FacilityDefinition &&
-                    Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-                {
-                    for (UStrategyVehicle* OtherVehicle : Facility->ParkedVehicles)
-                    {
-                        TryDetectVehicle(OtherVehicle);
-                    }
-                }
-            }
+            continue;
         }
 
-        if (UMissionManagerSubsystem* MissionMgr = GI->GetSubsystem<UMissionManagerSubsystem>())
-        {
-            for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
-            {
-                if (!Mission) continue;
+        DiscoverSiteInRange(Site, VehicleFaction, CurrentGameHours, BaseManager, IntelMgr);
+    }
 
-                if (Mission->OriginBase && Mission->OriginBase->OwningFaction == VehicleFaction)
+    ScanEnemyBasesAlongSweep(VehicleFaction, CurrentGameHours, BaseManager, IntelMgr);
+
+    if (UMissionManagerSubsystem* MissionMgr = GI->GetSubsystem<UMissionManagerSubsystem>())
+    {
+        for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+        {
+            if (!Mission || !Mission->bMovementActivated)
+            {
+                continue;
+            }
+
+            if (Mission->OriginBase && Mission->OriginBase->OwningFaction == VehicleFaction)
+            {
+                continue;
+            }
+
+            for (UStrategyVehicle* OtherVehicle : Mission->VehiclesInFleet)
+            {
+                if (!OtherVehicle || OtherVehicle->IsDestroyed()
+                    || OtherVehicle->CurrentPhase == EVehicleMissionPhase::Docked)
+                {
                     continue;
-
-                for (UStrategyVehicle* OtherVehicle : Mission->VehiclesInFleet)
-                {
-                    TryDetectVehicle(OtherVehicle);
                 }
+
+                TryDetectVehicle(OtherVehicle);
             }
         }
     }
+
+    LastRadarSweepOrigin = CurrentPosition;
 }
 
 FVector2D UStrategyVehicle::GetPositionOnPath(float Progress) const
@@ -923,17 +916,141 @@ float UStrategyVehicle::GetRadarRange() const
 {
     if (VehicleDefinition)
     {
-        return VehicleDefinition->RadarRangePixels;
+        float Range = VehicleDefinition->RadarRangePixels;
+        if (VehicleDefinition->VehicleType == EVehicleType::Scout)
+        {
+            Range = FMath::Max(Range, 128.0f);
+        }
+        else if (VehicleDefinition->VehicleType == EVehicleType::Gunship
+            || VehicleDefinition->VehicleType == EVehicleType::Heavy)
+        {
+            Range = FMath::Max(Range, 96.0f);
+        }
+        return Range;
     }
-    return 64.0f;
+    return 96.0f;
+}
+
+static float DistancePointToSegment2D(const FVector2D& Point, const FVector2D& SegStart, const FVector2D& SegEnd)
+{
+    const FVector2D AB = SegEnd - SegStart;
+    const float LenSq = AB.SizeSquared();
+    if (LenSq <= KINDA_SMALL_NUMBER)
+    {
+        return FVector2D::Distance(Point, SegStart);
+    }
+
+    const float T = FMath::Clamp(FVector2D::DotProduct(Point - SegStart, AB) / LenSq, 0.0f, 1.0f);
+    return FVector2D::Distance(Point, SegStart + AB * T);
+}
+
+bool UStrategyVehicle::IsPositionWithinRadarSweep(const FVector2D& WorldPosition) const
+{
+    const FVector2D SweepEnd = CurrentPosition;
+    const FVector2D SweepStart = LastRadarSweepOrigin.IsNearlyZero() ? CurrentPosition : LastRadarSweepOrigin;
+    return DistancePointToSegment2D(WorldPosition, SweepStart, SweepEnd) <= GetRadarRange();
+}
+
+bool UStrategyVehicle::HasLineOfSightToPosition(const FVector2D& WorldPosition) const
+{
+    UGameInstance* GI = GetTypedOuter<UGameInstance>();
+    if (!GI)
+    {
+        if (UWorld* World = GetWorld())
+        {
+            GI = World->GetGameInstance();
+        }
+    }
+
+    if (GI)
+    {
+        if (URadarTerrainSubsystem* TerrainMgr = GI->GetSubsystem<URadarTerrainSubsystem>())
+        {
+            return TerrainMgr->HasRadarLineOfSight(CurrentPosition, WorldPosition);
+        }
+    }
+
+    return true;
+}
+
+void UStrategyVehicle::DiscoverSiteInRange(UStrategySiteDefinition* Site, EFactionType VehicleFaction,
+    float CurrentGameHours, UBaseManagerSubsystem* BaseManager, UFactionIntelSubsystem* IntelMgr)
+{
+    if (!Site || !BaseManager)
+    {
+        return;
+    }
+
+    const bool bAlreadyKnown = BaseManager->IsSiteKnownToFaction(VehicleFaction, Site);
+    if (!bAlreadyKnown)
+    {
+        BaseManager->AddDiscoveredSite(VehicleFaction, Site, EDiscoveryReason::Radar);
+        OnSiteDetected.Broadcast(VehicleFaction, Site);
+    }
+    else if (IntelMgr)
+    {
+        IntelMgr->ObserveSite(VehicleFaction, Site, EDiscoveryReason::Radar, CurrentGameHours);
+    }
+}
+
+void UStrategyVehicle::ScanEnemyBasesAlongSweep(EFactionType VehicleFaction, float CurrentGameHours,
+    UBaseManagerSubsystem* BaseManager, UFactionIntelSubsystem* IntelMgr)
+{
+    if (!BaseManager || !HomeBase)
+    {
+        return;
+    }
+
+    const EFactionType EnemyFaction = (VehicleFaction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
+
+    for (UStrategyBase* EnemyBase : BaseManager->GetBases(EnemyFaction))
+    {
+        if (!EnemyBase)
+        {
+            continue;
+        }
+
+        if (!IsPositionWithinRadarSweep(EnemyBase->MapLocation) || !HasLineOfSightToPosition(EnemyBase->MapLocation))
+        {
+            continue;
+        }
+
+        if (EnemyBase->BuiltOnSite)
+        {
+            DiscoverSiteInRange(EnemyBase->BuiltOnSite, VehicleFaction, CurrentGameHours, BaseManager, IntelMgr);
+        }
+
+        for (UStrategyFacility* Facility : EnemyBase->Facilities)
+        {
+            if (!Facility || Facility->BuildProgressDays > 0 || !Facility->FacilityDefinition)
+            {
+                continue;
+            }
+
+            if (Facility->FacilityDefinition->FacilityType != EFacilityType::Hanger)
+            {
+                continue;
+            }
+
+            for (UStrategyVehicle* ParkedVehicle : Facility->ParkedVehicles)
+            {
+                if (ParkedVehicle && !ParkedVehicle->IsDestroyed())
+                {
+                    TryDetectVehicle(ParkedVehicle);
+                }
+            }
+        }
+    }
 }
 
 void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
 {
     if (!OtherVehicle || OtherVehicle == this) return;
 
-    float Distance = FVector2D::Distance(OtherVehicle->CurrentPosition, CurrentPosition);
-    if (Distance > GetRadarRange()) return;
+    if (!IsPositionWithinRadarSweep(OtherVehicle->CurrentPosition))
+    {
+        return;
+    }
 
     UGameInstance* GI = GetTypedOuter<UGameInstance>();
     if (!GI)
@@ -950,12 +1067,9 @@ void UStrategyVehicle::TryDetectVehicle(UStrategyVehicle* OtherVehicle)
             CurrentGameHours = MissionMgr->GetCurrentGameHours();
         }
 
-        if (URadarTerrainSubsystem* TerrainMgr = GI->GetSubsystem<URadarTerrainSubsystem>())
+        if (!HasLineOfSightToPosition(OtherVehicle->CurrentPosition))
         {
-            if (!TerrainMgr->HasRadarLineOfSight(CurrentPosition, OtherVehicle->CurrentPosition))
-            {
-                return;
-            }
+            return;
         }
     }
 

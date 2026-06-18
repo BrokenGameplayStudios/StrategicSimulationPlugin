@@ -367,10 +367,7 @@ void URadarContactSubsystem::ProcessBaseSites(UStrategyBase* Base, EFactionType 
         const bool bAlreadyKnown = BaseMgr->IsSiteKnownToFaction(Faction, Site);
         if (!bAlreadyKnown)
         {
-            if (!Site->bHasBeenUsed)
-            {
-                BaseMgr->AddDiscoveredSite(Faction, Site, EDiscoveryReason::Radar);
-            }
+            BaseMgr->AddDiscoveredSite(Faction, Site, EDiscoveryReason::Radar);
         }
         else if (IntelMgr)
         {

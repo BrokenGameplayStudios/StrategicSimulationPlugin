@@ -16,6 +16,7 @@
 #include "UFactionIntelSubsystem.h"
 #include "URadarContactSubsystem.h"
 #include "UAIControllerSubsystem.h"
+#include "UExplorationSubsystem.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -857,50 +858,23 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
     {
     case EMissionType::Recon:
     {
-        UStrategySiteDefinition* BestSite = nullptr;
-        float BestDist = MAX_FLT;
+        UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>();
 
-        for (UStrategySiteDefinition* Site : BaseMgr->AllPotentialSites)
+        UStrategySiteDefinition* SurveySite = nullptr;
+        if (Exploration && Exploration->FindSurveyTarget(Vehicle, SurveySite) && SurveySite
+            && !InOutReservedSites.Contains(SurveySite))
         {
-            if (!Site || Site->bHasBeenUsed || !IsReconCandidateSite(Site))
-            {
-                continue;
-            }
-
-            if (!IsValidMapLocation(Site->Location, MinX, MinY, MaxX, MaxY))
-            {
-                continue;
-            }
-
-            if (InOutReservedSites.Contains(Site))
-            {
-                continue;
-            }
-
-            const TArray<UStrategySiteDefinition*>& Discovered =
-                (Faction == EFactionType::Human) ? BaseMgr->DiscoveredSitesHuman : BaseMgr->DiscoveredSitesEnemy;
-
-            if (Discovered.Contains(Site))
-            {
-                continue;
-            }
-
-            const float Dist = FVector2D::Distance(Origin, Site->Location);
-            const float RoundTrip = Dist * 2.0f;
-            if (Dist < BestDist && Vehicle->HasEnoughRangeForMission(RoundTrip))
-            {
-                BestDist = Dist;
-                BestSite = Site;
-            }
+            OutTarget = SurveySite->Location;
+            InOutReservedSites.Add(SurveySite);
+            UE_LOG(LogTemp, Display, TEXT("[MISSION TARGET] %s → survey discovered site '%s' at (%.0f, %.0f)"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                *SurveySite->SiteName, OutTarget.X, OutTarget.Y);
+            return true;
         }
 
-        if (BestSite)
+        if (Exploration && Exploration->PickSpokePatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget))
         {
-            OutTarget = BestSite->Location;
-            InOutReservedSites.Add(BestSite);
-            UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → recon site '%s' at (%.0f, %.0f)"),
-                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
-                *BestSite->SiteName, OutTarget.X, OutTarget.Y);
+            Exploration->NotifyReconPatrolScheduled(Vehicle->HomeBase, OutTarget);
             return true;
         }
 
@@ -908,12 +882,12 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
         const float PatrolRoundTrip = FVector2D::Distance(Origin, OutTarget) * 2.0f;
         if (!Vehicle->HasEnoughRangeForMission(PatrolRoundTrip))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MISSION TARGET] %s — no valid recon site and patrol point out of range"),
+            UE_LOG(LogTemp, Warning, TEXT("[MISSION TARGET] %s — recon spoke patrol out of range"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"));
             return false;
         }
 
-        UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → patrol point (%.0f, %.0f) — no undiscovered sites in range"),
+        UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → fallback patrol (%.0f, %.0f)"),
             Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
             OutTarget.X, OutTarget.Y);
         return true;
@@ -921,6 +895,12 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
 
     case EMissionType::Defensive:
     {
+        UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>();
+        if (Exploration && Exploration->PickThreatBearingPatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget))
+        {
+            return true;
+        }
+
         const float GuardRoundTrip = FMath::Min(Vehicle->CurrentRangeLeft, 500.0f);
         OutTarget = PickPatrolPointWithinRange(Origin, GuardRoundTrip, MinX, MinY, MaxX, MaxY);
 
@@ -937,6 +917,11 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
         for (UStrategyBase* EnemyBase : BaseMgr->GetBases(EnemyFaction))
         {
             if (!EnemyBase || !IsValidMapLocation(EnemyBase->MapLocation, MinX, MinY, MaxX, MaxY))
+            {
+                continue;
+            }
+
+            if (EnemyBase->BuiltOnSite && !BaseMgr->IsSiteKnownToFaction(Faction, EnemyBase->BuiltOnSite))
             {
                 continue;
             }
