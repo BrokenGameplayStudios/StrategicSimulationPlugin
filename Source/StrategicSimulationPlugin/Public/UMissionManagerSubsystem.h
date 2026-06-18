@@ -104,7 +104,7 @@ public:
     float GetCurrentGameHours() const;
 
     UFUNCTION(BlueprintCallable, Category = "Mission|Live Movement")
-    void ActivateLiveMovementForVehicles(UMissionGroup* Mission, EMissionType MissionType);
+    bool ActivateLiveMovementForVehicles(UMissionGroup* Mission, EMissionType MissionType);
 
     // ===========================================================================
     // NEW: Live movement integration (keep all vehicles updated)

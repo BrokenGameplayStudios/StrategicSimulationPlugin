@@ -861,26 +861,40 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
         UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>();
 
         UStrategySiteDefinition* SurveySite = nullptr;
+        auto ValidateReconTarget = [&](FVector2D& Target) -> bool
+        {
+            if (!IsValidMapLocation(Target, MinX, MinY, MaxX, MaxY))
+            {
+                return false;
+            }
+
+            const float RoundTrip = FVector2D::Distance(Origin, Target) * 2.0f;
+            return Vehicle->HasEnoughRangeForMission(RoundTrip);
+        };
+
         if (Exploration && Exploration->FindSurveyTarget(Vehicle, SurveySite) && SurveySite
             && !InOutReservedSites.Contains(SurveySite))
         {
             OutTarget = SurveySite->Location;
-            InOutReservedSites.Add(SurveySite);
-            UE_LOG(LogTemp, Display, TEXT("[MISSION TARGET] %s → survey discovered site '%s' at (%.0f, %.0f)"),
-                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
-                *SurveySite->SiteName, OutTarget.X, OutTarget.Y);
-            return true;
+            if (ValidateReconTarget(OutTarget))
+            {
+                InOutReservedSites.Add(SurveySite);
+                UE_LOG(LogTemp, Display, TEXT("[MISSION TARGET] %s → survey discovered site '%s' at (%.0f, %.0f)"),
+                    Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                    *SurveySite->SiteName, OutTarget.X, OutTarget.Y);
+                return true;
+            }
         }
 
-        if (Exploration && Exploration->PickSpokePatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget))
+        if (Exploration && Exploration->PickSpokePatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget)
+            && ValidateReconTarget(OutTarget))
         {
             Exploration->NotifyReconPatrolScheduled(Vehicle->HomeBase, OutTarget);
             return true;
         }
 
         OutTarget = PickPatrolPointWithinRange(Origin, Vehicle->CurrentRangeLeft, MinX, MinY, MaxX, MaxY);
-        const float PatrolRoundTrip = FVector2D::Distance(Origin, OutTarget) * 2.0f;
-        if (!Vehicle->HasEnoughRangeForMission(PatrolRoundTrip))
+        if (!ValidateReconTarget(OutTarget))
         {
             UE_LOG(LogTemp, Warning, TEXT("[MISSION TARGET] %s — recon spoke patrol out of range"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"));
@@ -1045,9 +1059,12 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
     return false;
 }
 
-void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mission, EMissionType MissionType)
+bool UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mission, EMissionType MissionType)
 {
-    if (!Mission) return;
+    if (!Mission)
+    {
+        return false;
+    }
 
     float CurrentHours = GetCurrentGameHours();
 
@@ -1205,9 +1222,11 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
 
     if (Mission->VehiclesInFleet.Num() == 0)
     {
-        ActiveMissions.Remove(Mission);
         UE_LOG(LogTemp, Warning, TEXT("[LIVE MISSION] No vehicles launched — mission cancelled"));
+        return false;
     }
+
+    return true;
 }
 
 float UMissionManagerSubsystem::ComputeEvenlySpacedLaunchHour(int32 SlotIndex, int32 TotalSlots) const
@@ -1452,7 +1471,12 @@ void UMissionManagerSubsystem::ProcessPendingMissionLaunches(float CurrentHours)
 
         Mission->VehiclesInFleet = ReadyVehicles;
         PrepareVehiclesForDeparture(Mission);
-        ActivateLiveMovementForVehicles(Mission, Mission->MissionType);
+        if (!ActivateLiveMovementForVehicles(Mission, Mission->MissionType))
+        {
+            ToCancel.Add(Mission);
+            continue;
+        }
+
         Mission->bMovementActivated = true;
         ++LaunchesThisTick;
 
@@ -1677,7 +1701,12 @@ UMissionGroup* UMissionManagerSubsystem::StartMission(UStrategyBase* OriginBase,
     else
     {
         PrepareVehiclesForDeparture(NewMission);
-        ActivateLiveMovementForVehicles(NewMission, MissionType);
+        if (!ActivateLiveMovementForVehicles(NewMission, MissionType))
+        {
+            ActiveMissions.Remove(NewMission);
+            return nullptr;
+        }
+
         NewMission->bMovementActivated = true;
 
         UE_LOG(LogTemp, Display, TEXT("[MISSION] Launched live %s mission for faction %s with %d vehicles from base '%s'"),

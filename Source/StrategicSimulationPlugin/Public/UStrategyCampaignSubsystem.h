@@ -139,6 +139,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
     bool bAIReactiveInterceptionEnabled = true;
 
+    /** In-transit combat vehicles engage enemies inbound to friendly bases (PR-14). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
+    bool bEngageInboundThreatsWhileInTransit = true;
+
     /** Days a wreck remains on the map before auto-removal if not salvaged. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "90"))
     int32 SalvageWreckExpiryDays = 7;

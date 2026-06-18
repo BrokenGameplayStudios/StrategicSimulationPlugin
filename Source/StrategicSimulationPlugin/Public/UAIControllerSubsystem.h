@@ -89,6 +89,7 @@ private:
     EMissionType PickAIMissionTypeForVehicle(UStrategyVehicle* Vehicle, int32 CurrentDay) const;
     bool ShouldEngageVehicle(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle) const;
     bool ShouldPrioritizeEnRouteIntercept(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle) const;
+    bool IsEnemyInboundToFaction(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction) const;
 
     static bool IsReconVehicleType(EVehicleType Type);
     int32 CountFactionVehiclesOfTypes(EFactionType Faction, const TArray<EVehicleType>& Types) const;

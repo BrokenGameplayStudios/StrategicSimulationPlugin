@@ -54,7 +54,7 @@ bool UExplorationSubsystem::ComputeMapBounds(const UObject* WorldContext, float&
             {
                 MapWidth = Campaign->LogicalMapWidth;
                 MapHeight = Campaign->LogicalMapHeight;
-                MapPadding = 64.0f;
+                MapPadding = Campaign->MapBorderPadding;
             }
         }
     }
@@ -173,6 +173,14 @@ bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, USt
         {
             return false;
         }
+    }
+
+    ClampToMap(Candidate, MinX, MinY, MaxX, MaxY);
+
+    const float FinalRoundTrip = FVector2D::Distance(Origin, Candidate) * 2.0f;
+    if (!Vehicle->HasEnoughRangeForMission(FinalRoundTrip))
+    {
+        return false;
     }
 
     OutTarget = Candidate;

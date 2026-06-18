@@ -137,6 +137,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel", meta = (ClampMin = "0.25", ClampMax = "24.0"))
     float BaseRadarPingIntervalHours = 1.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel")
+    bool bEngageInboundThreatsWhileInTransit = true;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;

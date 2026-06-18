@@ -258,24 +258,25 @@ void AStrategyDebugHUD::DrawHUD()
     for (UStrategyBase* Base : BaseMgr->GetBases(EFactionType::Enemy))
         DrawBase(Base, FLinearColor::Red);
 
-    // === EXISTING: Draw active missions (unchanged) ===
-    if (MissionMgr)
+    const TArray<UMissionGroup*> ActiveMissionSnapshot = MissionMgr ? MissionMgr->ActiveMissions : TArray<UMissionGroup*>();
+
+    for (UMissionGroup* Mission : ActiveMissionSnapshot)
     {
-        for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
-            DrawMission(Mission);
+        DrawMission(Mission);
     }
 
-    // === EXISTING: Draw live vehicles (unchanged) ===
-    if (MissionMgr)
+    for (UMissionGroup* Mission : ActiveMissionSnapshot)
     {
-        for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+        if (!Mission)
         {
-            if (!Mission) continue;
+            continue;
+        }
 
-            for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        for (UStrategyVehicle* Vehicle : Mission->VehiclesInFleet)
+        {
+            if (Vehicle)
             {
-                if (Vehicle)
-                    DrawVehicle(Vehicle);
+                DrawVehicle(Vehicle);
             }
         }
     }
@@ -619,10 +620,10 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
 
     FVector2D ScreenPos = GetScreenPosition(Vehicle->CurrentPosition);
 
-    // Faction color
-    FLinearColor VehicleColor = FLinearColor::Red;
-    if (Vehicle->HomeBase)
-        VehicleColor = (Vehicle->HomeBase->OwningFaction == EFactionType::Human) ? FLinearColor::Green : FLinearColor::Red;
+    const bool bIsHuman = Vehicle->HomeBase && Vehicle->HomeBase->OwningFaction == EFactionType::Human;
+    const FLinearColor VehicleColor = bIsHuman
+        ? FLinearColor(0.55f, 0.78f, 1.0f, 1.0f)
+        : FLinearColor(1.0f, 0.55f, 0.72f, 1.0f);
 
     // Vehicle dot
     float VehicleSize = 8.0f * Scale;
@@ -669,7 +670,9 @@ void AStrategyDebugHUD::DrawVehicle(UStrategyVehicle* Vehicle)
     if (RadarRange > 0.0f)
     {
         float ScreenRadius = RadarRange * Scale;
-        FLinearColor RadarColor(0.0f, 1.0f, 1.0f, 0.35f);
+        const FLinearColor RadarColor = bIsHuman
+            ? FLinearColor(0.72f, 0.86f, 1.0f, 0.42f)
+            : FLinearColor(1.0f, 0.72f, 0.86f, 0.42f);
 
         const int32 NumSegments = 48;
         for (int32 i = 0; i < NumSegments; ++i)
@@ -715,7 +718,10 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
         if (Campaign && Campaign->bBasePassiveRadarEnabled)
         {
             const float RadarRange = Campaign->BaseRadarRangePixels * Scale;
-            const FLinearColor RadarColor(0.3f, 0.8f, 1.0f, 0.35f);
+            const bool bHumanBase = Base->OwningFaction == EFactionType::Human;
+            const FLinearColor RadarColor = bHumanBase
+                ? FLinearColor(0.84f, 0.93f, 1.0f, 0.45f)
+                : FLinearColor(1.0f, 0.84f, 0.92f, 0.45f);
             const int32 Segments = 32;
             FVector2D PreviousPoint = ScreenPos + FVector2D(RadarRange, 0.0f);
 

@@ -39,6 +39,9 @@ public:
 
     UStrategyVehicle* ResolveTrackedVehicle(const FRadarContact& Contact, EFactionType DetectingFaction) const;
 
+    static bool IsInboundThreatVehicle(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
+        UBaseManagerSubsystem* BaseMgr);
+
 private:
     UPROPERTY()
     TMap<FGuid, FRadarContact> HumanContactsById;
@@ -67,8 +70,6 @@ private:
     void TryReactiveInterception(EFactionType Faction, UStrategyBase* Base, const FRadarContact& Contact,
         UMissionManagerSubsystem* MissionMgr);
 
-    static bool IsInboundThreatVehicle(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
-        UBaseManagerSubsystem* BaseMgr);
     static FString InferThreatenedBaseName(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction,
         UBaseManagerSubsystem* BaseMgr);
     static float GetBaseRadarRange();

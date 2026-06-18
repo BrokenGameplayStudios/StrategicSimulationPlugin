@@ -36,15 +36,16 @@ This plugin implements a turn-of-time strategic simulation layer: factions build
 - Debug strategic map HUD (bases, vehicles, paths, radar circles)
 - Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
 
-### In progress (PR-14+)
+### In progress (PR-15+)
 
-- **Radar & intel** — en-route defense polish ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
+- **Radar & intel** — follow-on polish as needed ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
 - PR-8 shipped: docs wiki hub, `bAllowDebugExecCommands`, `bRadarLOSEnabled`, `bStaleIntelEnabled` feature flags
 - PR-9 shipped: `UFactionIntelSubsystem`, stale wreck tooltips, save schema v3 intel arrays
 - PR-10 shipped: `URadarTerrainSubsystem`, LOS blocker zones, combat engagement fix (gunship `AttackPower`), defensive guard patrols
 - PR-11 shipped: Command Center passive radar, `FRadarContact`, `LaunchInterceptionAtContact` (player + AI)
 - PR-12 shipped: contact heading/threatened-base fields, expiry events + stale UI fade, universal `HandleVehicleDestroyed` wreck creation
 - PR-13 shipped: fog-fair spoke recon (`UExplorationSubsystem`), path-sweep vehicle radar, enemy-base discovery, threat-bearing guard patrols
+- PR-14 shipped: en-route inbound intercept (`bEngageInboundThreatsWhileInTransit`, `[INTERCEPT] En-route:`), mission-launch array fix, debug radar pastels
 
 ### What is not implemented yet
 

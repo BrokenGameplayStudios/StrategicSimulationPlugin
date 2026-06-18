@@ -12,6 +12,7 @@
 #include "UStrategyVehicle.h"
 #include "UMissionManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
+#include "URadarContactSubsystem.h"
 #include "StrategicSiteDefinition.h"
 #include "StrategicSimulationTypes.h"
 #include "Engine/Engine.h"
@@ -1241,6 +1242,15 @@ bool UAIControllerSubsystem::ShouldEngageVehicle(UStrategyVehicle* DetectingVehi
 
     if (DetectingVehicle->VehicleDefinition && IsCombatVehicleType(DetectingVehicle->VehicleDefinition->VehicleType))
     {
+        if (DetectingVehicle->CurrentPhase != EVehicleMissionPhase::Docked)
+        {
+            if (Campaign && Campaign->bEngageInboundThreatsWhileInTransit
+                && IsEnemyInboundToFaction(DetectedVehicle, DetectingVehicle->HomeBase->OwningFaction))
+            {
+                return true;
+            }
+        }
+
         return true;
     }
 
@@ -1258,13 +1268,21 @@ bool UAIControllerSubsystem::ShouldEngageVehicle(UStrategyVehicle* DetectingVehi
     return false;
 }
 
+bool UAIControllerSubsystem::IsEnemyInboundToFaction(const UStrategyVehicle* EnemyVehicle, EFactionType FriendlyFaction) const
+{
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    return URadarContactSubsystem::IsInboundThreatVehicle(EnemyVehicle, FriendlyFaction, BaseMgr);
+}
+
 bool UAIControllerSubsystem::ShouldPrioritizeEnRouteIntercept(UStrategyVehicle* DetectingVehicle,
     UStrategyVehicle* DetectedVehicle) const
 {
-    if (!DetectingVehicle || !DetectedVehicle)
+    if (!DetectingVehicle || !DetectedVehicle || !DetectingVehicle->HomeBase)
     {
         return false;
     }
+
+    const EFactionType FriendlyFaction = DetectingVehicle->HomeBase->OwningFaction;
 
     auto IsInboundStrike = [](const UStrategyVehicle* Vehicle) -> bool
     {
@@ -1277,7 +1295,23 @@ bool UAIControllerSubsystem::ShouldPrioritizeEnRouteIntercept(UStrategyVehicle* 
             || Vehicle->CurrentMission->MissionType == EMissionType::Interception;
     };
 
-    return IsInboundStrike(DetectingVehicle) || IsInboundStrike(DetectedVehicle);
+    if (IsInboundStrike(DetectingVehicle) || IsInboundStrike(DetectedVehicle))
+    {
+        return true;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (!Campaign || !Campaign->bEngageInboundThreatsWhileInTransit)
+    {
+        return false;
+    }
+
+    if (DetectedVehicle->HomeBase && DetectedVehicle->HomeBase->OwningFaction != FriendlyFaction)
+    {
+        return IsEnemyInboundToFaction(DetectedVehicle, FriendlyFaction);
+    }
+
+    return false;
 }
 
 void UAIControllerSubsystem::HandleVehicleDetection(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle)
@@ -1294,9 +1328,14 @@ void UAIControllerSubsystem::HandleVehicleDetection(UStrategyVehicle* DetectingV
         bCanEngage ? TEXT("yes") : TEXT("no"),
         bInterceptPriority ? TEXT(", en-route intercept") : TEXT(""));
 
+    const bool bInboundIntercept = bInterceptPriority
+        && DetectingVehicle->HomeBase
+        && IsEnemyInboundToFaction(DetectedVehicle, DetectingVehicle->HomeBase->OwningFaction);
+
     if (bCanEngage)
     {
         UE_LOG(LogTemp, Display, TEXT("%s %s attacking %s"),
+            bInboundIntercept ? TEXT("[INTERCEPT] En-route:") :
             bInterceptPriority ? TEXT("[COMBAT] En-route intercept:") : TEXT("[COMBAT] Engagement started:"),
             DetectingVehicle->VehicleDefinition ? *DetectingVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectingVehicle),
             DetectedVehicle->VehicleDefinition ? *DetectedVehicle->VehicleDefinition->VehicleName.ToString() : *GetNameSafe(DetectedVehicle));

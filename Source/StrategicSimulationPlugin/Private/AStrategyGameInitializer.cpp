@@ -173,6 +173,7 @@ void AStrategyGameInitializer::BeginPlay()
     Campaign->bStaleIntelEnabled = bStaleIntelEnabled;
     Campaign->BaseRadarRangePixels = BaseRadarRangePixels;
     Campaign->BaseRadarPingIntervalHours = BaseRadarPingIntervalHours;
+    Campaign->bEngageInboundThreatsWhileInTransit = bEngageInboundThreatsWhileInTransit;
 
     if (URadarTerrainSubsystem* TerrainMgr = GetGameInstance()->GetSubsystem<URadarTerrainSubsystem>())
     {
