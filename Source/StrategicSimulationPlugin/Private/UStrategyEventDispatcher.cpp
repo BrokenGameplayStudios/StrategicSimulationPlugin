@@ -4,5 +4,5 @@
 void UStrategyEventDispatcher::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-    UE_LOG(LogTemp, Display, TEXT("UStrategyEventDispatcher initialized — ALL UI events ready (full list + loadout)"));
+    UE_LOG(LogTemp, Display, TEXT("UStrategyEventDispatcher initialized — UI events ready (soldiers, production, sites/salvage)"));
 }

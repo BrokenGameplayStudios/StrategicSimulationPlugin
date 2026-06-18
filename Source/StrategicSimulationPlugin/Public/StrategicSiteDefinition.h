@@ -22,6 +22,13 @@ enum class ESalvageSiteState : uint8
     Removed
 };
 
+UENUM(BlueprintType)
+enum class EDiscoveryReason : uint8
+{
+    Radar   UMETA(DisplayName = "Radar"),
+    Combat  UMETA(DisplayName = "Combat")
+};
+
 class UVehicleDefinition;
 class UStrategySoldier;
 

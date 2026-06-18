@@ -481,6 +481,9 @@ void UBaseManagerSubsystem::RemoveSalvageSite(UStrategySiteDefinition* Site, boo
         return;
     }
 
+    const FGuid RemovedSiteId = Site->SiteId;
+    const EFactionType LastSalvagingFaction = EFactionType::Neutral;
+
     if (USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
     {
         for (UStrategySoldier* MIA : Site->MIASoldiers)
@@ -505,6 +508,11 @@ void UBaseManagerSubsystem::RemoveSalvageSite(UStrategySiteDefinition* Site, boo
 
     UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Wreck '%s' removed from map (%s)"),
         *Site->SiteName, bExpired ? TEXT("expired") : TEXT("depleted"));
+
+    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
+        EventDisp->OnSalvageSiteRemoved.Broadcast(RemovedSiteId, LastSalvagingFaction);
+    }
 }
 
 void UBaseManagerSubsystem::ProcessSalvageSiteExpiry(int32 CurrentSimulationDay)
@@ -853,7 +861,8 @@ FString UBaseManagerSubsystem::GetBaseStateDebugString(EFactionType Faction) con
     return Output;
 }
 
-UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType Faction, UStrategySiteDefinition* Site)
+UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType Faction, UStrategySiteDefinition* Site,
+    EDiscoveryReason Reason)
 {
     if (!Site)
     {
@@ -878,10 +887,16 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
 
     if (bNewDiscovery)
     {
-        UE_LOG(LogTemp, Display, TEXT("[DISCOVERY] %s discovered %s at (%.0f, %.0f)"),
+        UE_LOG(LogTemp, Display, TEXT("[DISCOVERY] %s discovered %s at (%.0f, %.0f) via %s"),
             *UEnum::GetValueAsString(Faction),
             *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(Site->SiteType)),
-            Site->Location.X, Site->Location.Y);
+            Site->Location.X, Site->Location.Y,
+            *StaticEnum<EDiscoveryReason>()->GetNameStringByValue(static_cast<int64>(Reason)));
+
+        if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+        {
+            EventDisp->OnSiteDiscovered.Broadcast(Faction, Site, Reason);
+        }
     }
 
     return Site;
@@ -942,7 +957,7 @@ void UBaseManagerSubsystem::RegisterCombatKnownSalvage(UStrategySiteDefinition* 
     {
         if (Faction == EFactionType::Human || Faction == EFactionType::Enemy)
         {
-            AddDiscoveredSite(Faction, Site);
+            AddDiscoveredSite(Faction, Site, EDiscoveryReason::Combat);
         }
     }
 }
@@ -1035,6 +1050,11 @@ UStrategySiteDefinition* UBaseManagerSubsystem::CreateSalvageSite(FVector2D Loca
         Location.X, Location.Y,
         *UEnum::GetValueAsString(Site->WreckOwnerFaction),
         Site->KnownFactions.Num());
+
+    if (UStrategyEventDispatcher* EventDisp = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
+    {
+        EventDisp->OnSalvageSiteCreated.Broadcast(Site->WreckOwnerFaction, Site->KnownFactions, Site);
+    }
 
     return Site;
 }

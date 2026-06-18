@@ -81,7 +81,8 @@ public:
 
     /** Registers the exact site pointer for a faction (canonical discovery path). */
     UFUNCTION(BlueprintCallable, Category = "Expansion")
-    UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, UStrategySiteDefinition* Site);
+    UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, UStrategySiteDefinition* Site,
+        EDiscoveryReason Reason = EDiscoveryReason::Radar);
 
     /** Legacy location-based discovery. Prefer AddDiscoveredSite(Faction, Site) — nearest-match can register the wrong site. */
     UFUNCTION(BlueprintCallable, Category = "Expansion", meta = (DeprecatedFunction, DeprecationMessage = "Use AddDiscoveredSite(Faction, Site)."))
