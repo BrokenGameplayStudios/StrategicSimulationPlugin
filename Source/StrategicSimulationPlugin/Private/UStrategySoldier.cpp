@@ -7,8 +7,9 @@ UStrategySoldier::UStrategySoldier()
     CurrentStats.Health = 10;
     Status = ESoldierStatus::Healthy;
     bIsWounded = false;
-    bIsPOW = false;      // NEW
-    bIsKIA = false;      // NEW
+    bIsPOW = false;
+    bIsKIA = false;
+    bIsMIA = false;
     DaysUntilRecovered = 0;
 }
 

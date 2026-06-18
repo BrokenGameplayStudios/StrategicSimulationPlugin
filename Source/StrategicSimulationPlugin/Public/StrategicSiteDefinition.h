@@ -23,6 +23,7 @@ enum class ESalvageSiteState : uint8
 };
 
 class UVehicleDefinition;
+class UStrategySoldier;
 
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UStrategySiteDefinition : public UDataAsset
@@ -58,6 +59,18 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
     int32 CreatedOnSimulationDay = 0;
+
+    /** Simulation day when this wreck is removed if not salvaged (CreatedOnSimulationDay + expiry). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    int32 SalvageExpiresOnDay = 0;
+
+    /** Soldiers missing after the crash (rescue/POW eligible while wreck is active). */
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Site|Salvage")
+    TArray<UStrategySoldier*> MIASoldiers;
+
+    /** Soldiers killed in the vehicle destruction (not mission KIA). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    int32 KIACrashCount = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Site")
     bool bHasBeenUsed = false;

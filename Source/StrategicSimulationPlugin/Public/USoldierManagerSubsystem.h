@@ -54,6 +54,21 @@ public:
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     void ReleasePOW(UStrategySoldier* POW);
 
+    /** Rolls crash deaths; survivors become MIA at the wreck site. */
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA|Salvage")
+    void ProcessCrewOnVehicleDestruction(class UStrategyVehicle* Vehicle, class UStrategySiteDefinition* WreckSite);
+
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA|Salvage")
+    void MarkAsMIA(UStrategySoldier* Soldier, class UStrategySiteDefinition* WreckSite, EFactionType OwnerFaction);
+
+    /** Owning faction salvage: return MIA soldiers to the given base roster. */
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA|Salvage")
+    int32 RescueMIAsFromWreck(EFactionType RescuingFaction, class UStrategySiteDefinition* WreckSite, class UStrategyBase* ReturnBase);
+
+    /** Opposing faction salvage (AI dice): MIA may become POW. Player salvage uses contested combat (PR-6b). */
+    UFUNCTION(BlueprintCallable, Category = "POW/KIA|Salvage")
+    int32 ProcessMIAsOnOpposingSalvage(EFactionType SalvagingFaction, class UStrategySiteDefinition* WreckSite);
+
 private:
 
     // Exsisting Rosters

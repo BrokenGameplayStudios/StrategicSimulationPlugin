@@ -1,4 +1,8 @@
 #include "USoldierManagerSubsystem.h"
+#include "UStrategyVehicle.h"
+#include "StrategicSiteDefinition.h"
+#include "UStrategyCampaignSubsystem.h"
+#include "UStrategyBase.h"
 #include "UStrategyEventDispatcher.h"
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyBase.h"
@@ -231,6 +235,8 @@ void USoldierManagerSubsystem::MarkAsKIA(EFactionType Faction, UStrategySoldier*
         EnemyKIARoster.Add(Soldier);
 
     Soldier->bIsKIA = true;
+    Soldier->bIsMIA = false;
+    Soldier->WreckSiteId = FGuid();
     Soldier->StationedBase = nullptr;
 
     BroadcastSoldierListChanged(Faction);
@@ -242,4 +248,193 @@ void USoldierManagerSubsystem::ReleasePOW(UStrategySoldier* POW)
 {
     if (!POW || !POW->bIsPOW) return;
     UE_LOG(LogTemp, Display, TEXT("[POW] POW '%s' released (placeholder)"), *POW->SoldierName);
+}
+
+void USoldierManagerSubsystem::MarkAsMIA(UStrategySoldier* Soldier, UStrategySiteDefinition* WreckSite, EFactionType OwnerFaction)
+{
+    if (!Soldier || !WreckSite)
+    {
+        return;
+    }
+
+    const EFactionType Faction = OwnerFaction;
+    if (Faction == EFactionType::Human)
+    {
+        HumanRoster.Remove(Soldier);
+    }
+    else if (Faction == EFactionType::Enemy)
+    {
+        EnemyRoster.Remove(Soldier);
+    }
+
+    Soldier->bIsMIA = true;
+    Soldier->bIsKIA = false;
+    Soldier->bIsPOW = false;
+    Soldier->WreckSiteId = WreckSite->SiteId;
+    Soldier->CurrentMission = nullptr;
+    Soldier->StationedBase = nullptr;
+    Soldier->Status = ESoldierStatus::Wounded;
+
+    WreckSite->MIASoldiers.AddUnique(Soldier);
+
+    if (Faction == EFactionType::Human || Faction == EFactionType::Enemy)
+    {
+        BroadcastSoldierListChanged(Faction);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[MIA] %s soldier '%s' missing at wreck '%s'"),
+        *UEnum::GetValueAsString(Faction), *Soldier->SoldierName, *WreckSite->SiteName);
+}
+
+void USoldierManagerSubsystem::ProcessCrewOnVehicleDestruction(UStrategyVehicle* Vehicle, UStrategySiteDefinition* WreckSite)
+{
+    if (!Vehicle || !WreckSite)
+    {
+        return;
+    }
+
+    float CrashDeathChance = 0.25f;
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            CrashDeathChance = Campaign->VehicleCrashDeathChance;
+        }
+    }
+
+    EFactionType OwnerFaction = EFactionType::Neutral;
+    if (Vehicle->HomeBase)
+    {
+        OwnerFaction = Vehicle->HomeBase->OwningFaction;
+    }
+
+    TArray<UStrategySoldier*> Passengers = Vehicle->CurrentPassengers;
+    for (UStrategySoldier* Soldier : Passengers)
+    {
+        if (!Soldier)
+        {
+            continue;
+        }
+
+        Soldier->CurrentMission = nullptr;
+
+        if (FMath::FRand() < CrashDeathChance)
+        {
+            if (OwnerFaction != EFactionType::Neutral)
+            {
+                MarkAsKIA(OwnerFaction, Soldier);
+            }
+            WreckSite->KIACrashCount++;
+            UE_LOG(LogTemp, Display, TEXT("[SALVAGE] %s died in vehicle destruction at wreck '%s'"),
+                *Soldier->SoldierName, *WreckSite->SiteName);
+        }
+        else
+        {
+            MarkAsMIA(Soldier, WreckSite, OwnerFaction);
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Crew processed at '%s' — KIA crash: %d | MIA: %d"),
+        *WreckSite->SiteName, WreckSite->KIACrashCount, WreckSite->MIASoldiers.Num());
+}
+
+int32 USoldierManagerSubsystem::RescueMIAsFromWreck(EFactionType RescuingFaction, UStrategySiteDefinition* WreckSite, UStrategyBase* ReturnBase)
+{
+    if (!WreckSite || !ReturnBase || ReturnBase->OwningFaction != RescuingFaction)
+    {
+        return 0;
+    }
+
+    int32 Rescued = 0;
+    TArray<UStrategySoldier*> ToRescue = WreckSite->MIASoldiers;
+
+    for (UStrategySoldier* Soldier : ToRescue)
+    {
+        if (!Soldier || !Soldier->bIsMIA)
+        {
+            continue;
+        }
+
+        if (WreckSite->WreckOwnerFaction != RescuingFaction)
+        {
+            continue;
+        }
+
+        Soldier->bIsMIA = false;
+        Soldier->WreckSiteId = FGuid();
+        Soldier->StationedBase = ReturnBase;
+        Soldier->Status = ESoldierStatus::Wounded;
+        Soldier->bIsWounded = true;
+        Soldier->DaysUntilRecovered = 3;
+
+        if (RescuingFaction == EFactionType::Human)
+        {
+            HumanRoster.AddUnique(Soldier);
+        }
+        else
+        {
+            EnemyRoster.AddUnique(Soldier);
+        }
+
+        WreckSite->MIASoldiers.Remove(Soldier);
+        Rescued++;
+
+        UE_LOG(LogTemp, Display, TEXT("[MIA] Rescued '%s' from wreck '%s' → base '%s'"),
+            *Soldier->SoldierName, *WreckSite->SiteName, *ReturnBase->BaseName.ToString());
+    }
+
+    if (Rescued > 0)
+    {
+        BroadcastSoldierListChanged(RescuingFaction);
+    }
+
+    return Rescued;
+}
+
+int32 USoldierManagerSubsystem::ProcessMIAsOnOpposingSalvage(EFactionType SalvagingFaction, UStrategySiteDefinition* WreckSite)
+{
+    if (!WreckSite || SalvagingFaction == WreckSite->WreckOwnerFaction)
+    {
+        return 0;
+    }
+
+    float POWChance = 0.40f;
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GI->GetSubsystem<UStrategyCampaignSubsystem>())
+        {
+            POWChance = Campaign->OpposingSalvageMIAPOWChance;
+        }
+    }
+
+    int32 Captured = 0;
+    TArray<UStrategySoldier*> RemainingMIA = WreckSite->MIASoldiers;
+
+    for (UStrategySoldier* Soldier : RemainingMIA)
+    {
+        if (!Soldier || !Soldier->bIsMIA)
+        {
+            continue;
+        }
+
+        EFactionType SoldierFaction = WreckSite->WreckOwnerFaction;
+        if (SoldierFaction == SalvagingFaction)
+        {
+            continue;
+        }
+
+        if (FMath::FRand() < POWChance)
+        {
+            Soldier->bIsMIA = false;
+            Soldier->WreckSiteId = FGuid();
+            WreckSite->MIASoldiers.Remove(Soldier);
+            CaptureAsPOW(SalvagingFaction, Soldier);
+            Captured++;
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Opposing salvage at '%s' — %d MIA captured as POW by %s"),
+        *WreckSite->SiteName, Captured, *UEnum::GetValueAsString(SalvagingFaction));
+
+    return Captured;
 }

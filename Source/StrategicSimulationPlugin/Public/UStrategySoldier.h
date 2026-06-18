@@ -47,6 +47,13 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "POW/KIA")
     bool bIsKIA = false;
 
+    /** Missing in action at a vehicle wreck — rescueable by owning faction or POW if enemy salvages. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "POW/KIA")
+    bool bIsMIA = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "POW/KIA")
+    FGuid WreckSiteId;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Status")
     int32 DaysUntilRecovered = 0;
 

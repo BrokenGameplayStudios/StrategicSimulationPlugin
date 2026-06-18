@@ -77,6 +77,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Simulation", meta = (ClampMin = "0", ClampMax = "500"))
     int32 MinOffenseToEngage = 10;
 
+    /** Days a vehicle wreck stays salvageable before auto-removal (default 7). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "1", ClampMax = "90"))
+    int32 SalvageWreckExpiryDays = 7;
+
+    /** Per-soldier chance to die in vehicle crash/destruction; survivors become MIA at the wreck. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float VehicleCrashDeathChance = 0.25f;
+
+    /** AI: chance enemy MIA becomes POW when opposing faction salvages the wreck. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salvage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float OpposingSalvageMIAPOWChance = 0.40f;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;

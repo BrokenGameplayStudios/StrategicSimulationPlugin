@@ -67,6 +67,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage")
     bool bSalvageSitesEnabled = true;
 
+    /** Days a wreck remains on the map before auto-removal if not salvaged. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "90"))
+    int32 SalvageWreckExpiryDays = 7;
+
+    /** Per-soldier chance to die in the vehicle crash/destruction (remainder become MIA). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float VehicleCrashDeathChance = 0.25f;
+
+    /** AI: chance each enemy MIA becomes POW when the opposing faction salvages the wreck. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float OpposingSalvageMIAPOWChance = 0.40f;
+
     /** Full reset of the simulation (call from UI for New Game) */
     UFUNCTION(BlueprintCallable, Category = "Simulation")
     void ResetSimulation();

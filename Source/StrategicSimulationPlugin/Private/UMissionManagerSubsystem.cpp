@@ -9,6 +9,7 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "StrategicSiteDefinition.h"
+#include "USoldierManagerSubsystem.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -1070,9 +1071,18 @@ void UMissionManagerSubsystem::HandleVehicleDestroyedInCombat(UStrategyVehicle* 
     Vehicle->bWreckSalvageProcessed = true;
 
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
+    UStrategySiteDefinition* WreckSite = nullptr;
     if (BaseMgr)
     {
-        BaseMgr->CreateSalvageSite(Vehicle->CurrentPosition, Vehicle);
+        WreckSite = BaseMgr->CreateSalvageSite(Vehicle->CurrentPosition, Vehicle);
+    }
+
+    if (WreckSite)
+    {
+        if (USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
+        {
+            SoldierMgr->ProcessCrewOnVehicleDestruction(Vehicle, WreckSite);
+        }
     }
 
     for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)

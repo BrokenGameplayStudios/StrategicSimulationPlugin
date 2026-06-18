@@ -105,6 +105,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
     bool IsSiteKnownToFaction(EFactionType Faction, const UStrategySiteDefinition* Site) const;
 
+    UFUNCTION(BlueprintPure, Category = "Expansion|Salvage")
+    int32 GetSalvageDaysRemaining(const UStrategySiteDefinition* Site) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Expansion|Salvage")
+    void RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired = false);
+
+    void ProcessSalvageSiteExpiry(int32 CurrentSimulationDay);
+
     /** Attempts to build a new base on a discovered site. Returns true if successful. */
     UFUNCTION(BlueprintCallable, Category = "Base Expansion")
     bool TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName);

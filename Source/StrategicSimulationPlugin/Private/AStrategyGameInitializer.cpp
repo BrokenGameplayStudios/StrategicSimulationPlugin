@@ -151,6 +151,9 @@ void AStrategyGameInitializer::BeginPlay()
     Campaign->bStaggerMissionLaunches = bStaggerMissionLaunches;
     Campaign->OffensiveMissionsStartDay = OffensiveMissionsStartDay;
     Campaign->MinOffenseToEngage = MinOffenseToEngage;
+    Campaign->SalvageWreckExpiryDays = SalvageWreckExpiryDays;
+    Campaign->VehicleCrashDeathChance = VehicleCrashDeathChance;
+    Campaign->OpposingSalvageMIAPOWChance = OpposingSalvageMIAPOWChance;
 
     UE_LOG(LogTemp, Display, TEXT("[MAP] Initializer applied map settings → Sites: %d | Site spacing: %.0f | Map: %.0fx%.0f | Border: %.0f | Faction separation: %.0f | Max bases/faction: %d"),
         NumberOfStrategicSites, MinimumDistanceBetweenSites, LogicalMapWidth, LogicalMapHeight,

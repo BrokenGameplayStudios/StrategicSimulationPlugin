@@ -6,6 +6,7 @@
 #include "StrategicSiteDefinition.h"
 #include "UStrategicSimulationDisplayHelpers.h"
 #include "UStrategyBase.h"
+#include "UStrategySoldier.h"
 #include "UMissionGroup.h"
 #include "UMissionManagerSubsystem.h"
 #include "UStrategyVehicle.h"
@@ -260,7 +261,15 @@ void AStrategyDebugHUD::DrawHUD()
                 InspectorText += FString::Printf(TEXT("Name: %s\n"), *Site->SiteName);
                 InspectorText += FString::Printf(TEXT("Location: (%.0f, %.0f)\n"), Site->Location.X, Site->Location.Y);
                 InspectorText += FString::Printf(TEXT("Type: %s\n"),
-                    *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(Site->SiteType)));
+                    *UStrategicSimulationDisplayHelpers::GetSiteTypeDisplayName(Site->SiteType).ToString());
+                InspectorText += FString::Printf(TEXT("Status: %s\n"),
+                    *UStrategicSimulationDisplayHelpers::GetSiteStatusDisplayText(Site));
+
+                bool bHumanDiscovered = BaseManager->DiscoveredSitesHuman.Contains(Site);
+                bool bEnemyDiscovered = BaseManager->DiscoveredSitesEnemy.Contains(Site);
+                InspectorText += FString::Printf(TEXT("Discovered: Human: %s | Enemy: %s\n"),
+                    bHumanDiscovered ? TEXT("Yes") : TEXT("No"),
+                    bEnemyDiscovered ? TEXT("Yes") : TEXT("No"));
 
                 if (Site->SiteType == EStrategySiteType::SalvageSite)
                 {
@@ -278,21 +287,30 @@ void AStrategyDebugHUD::DrawHUD()
                     }
                     InspectorText += FString::Printf(TEXT("Known Factions: %s\n"),
                         KnownList.IsEmpty() ? TEXT("None") : *KnownList);
-                    InspectorText += FString::Printf(TEXT("Salvage State: %s\n"),
-                        *StaticEnum<ESalvageSiteState>()->GetNameStringByValue(static_cast<int64>(Site->SalvageState)));
+
+                    const int32 DaysRemaining = BaseManager->GetSalvageDaysRemaining(Site);
+                    InspectorText += FString::Printf(TEXT("Days Remaining: %d (expires day %d)\n"),
+                        DaysRemaining, Site->SalvageExpiresOnDay);
+                    InspectorText += FString::Printf(TEXT("Crew — KIA (crash): %d | MIA: %d\n"),
+                        Site->KIACrashCount, Site->MIASoldiers.Num());
+
+                    if (Site->MIASoldiers.Num() > 0)
+                    {
+                        InspectorText += TEXT("MIA: ");
+                        for (int32 M = 0; M < Site->MIASoldiers.Num(); ++M)
+                        {
+                            if (UStrategySoldier* MIA = Site->MIASoldiers[M])
+                            {
+                                if (M > 0) InspectorText += TEXT(", ");
+                                InspectorText += MIA->SoldierName;
+                            }
+                        }
+                        InspectorText += TEXT("\n");
+                    }
                 }
 
-                bool bHumanDiscovered = BaseManager->DiscoveredSitesHuman.Contains(Site);
-                bool bEnemyDiscovered = BaseManager->DiscoveredSitesEnemy.Contains(Site);
-                InspectorText += FString::Printf(TEXT("Discovered: Human: %s | Enemy: %s\n"),
-                    bHumanDiscovered ? TEXT("Yes") : TEXT("No"),
-                    bEnemyDiscovered ? TEXT("Yes") : TEXT("No"));
-
-                FString StatusText = Site->bHasBeenUsed ? TEXT("Used (Base Built)") : TEXT("Available");
-                InspectorText += FString::Printf(TEXT("Status: %s\n"), *StatusText);
-
-                // Remaining Resources on Site
-                InspectorText += FString::Printf(TEXT("Remaining Resources - Mt: %d Bio: %d Chem: %d Exo: %d\n\n"),
+                InspectorText += FString::Printf(TEXT("Salvage Resources — M: %d Mt: %d Bio: %d Chem: %d Exo: %d\n\n"),
+                    Site->CurrentResources.Money,
                     Site->CurrentResources.Metals,
                     Site->CurrentResources.Biologicals,
                     Site->CurrentResources.Chemicals,
@@ -355,7 +373,7 @@ void AStrategyDebugHUD::DrawHUD()
 
                 // Draw at bottom
                 Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(InspectorText),
-                    50, Canvas->SizeY - 380, 1.0f, 1.0f, FFontRenderInfo());
+                    50, Canvas->SizeY - 450, 1.0f, 1.0f, FFontRenderInfo());
             }
         }
     }
@@ -396,22 +414,16 @@ void AStrategyDebugHUD::DrawSiteTriangle(const FVector2D& ScreenPos, float Size,
     Canvas->K2_DrawLine(BottomRight, Top, LineThickness, Color);
 }
 
-void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 SiteIndex, float Scale)
+void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 SiteIndex, float Scale, const UBaseManagerSubsystem* BaseManager)
 {
-    if (!Site || !Canvas) return;
+    if (!Site || !Canvas || Site->SalvageState != ESalvageSiteState::Active)
+    {
+        return;
+    }
 
     const FVector2D ScreenPos = GetScreenPosition(Site->Location);
     const float NodeSize = 10.0f * Scale;
-
-    FLinearColor WreckColor(0.7f, 0.7f, 0.7f, 0.9f);
-    if (Site->WreckOwnerFaction == EFactionType::Human)
-    {
-        WreckColor = FLinearColor::Blue;
-    }
-    else if (Site->WreckOwnerFaction == EFactionType::Enemy)
-    {
-        WreckColor = FLinearColor::Red;
-    }
+    const FLinearColor WreckColor = UStrategicSimulationDisplayHelpers::GetSalvageWreckColor(Site->WreckOwnerFaction);
 
     DrawSiteTriangle(ScreenPos, NodeSize, 2.0f * Scale, WreckColor);
 
@@ -419,6 +431,21 @@ void AStrategyDebugHUD::DrawSalvageSite(UStrategySiteDefinition* Site, int32 Sit
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString(IndexText),
         ScreenPos.X + 10.0f * Scale, ScreenPos.Y - 14.0f * Scale,
         0.85f, 0.85f, FFontRenderInfo());
+
+    if (BaseManager)
+    {
+        const float MarkerSize = 4.0f * Scale;
+        if (BaseManager->DiscoveredSitesHuman.Contains(Site))
+        {
+            Canvas->K2_DrawBox(ScreenPos - FVector2D(8.0f * Scale, 12.0f * Scale),
+                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Blue);
+        }
+        if (BaseManager->DiscoveredSitesEnemy.Contains(Site))
+        {
+            Canvas->K2_DrawBox(ScreenPos + FVector2D(4.0f * Scale, -12.0f * Scale),
+                FVector2D(MarkerSize, MarkerSize), 1.0f, FLinearColor::Red);
+        }
+    }
 }
 
 void AStrategyDebugHUD::DrawAllPotentialSites()
@@ -437,7 +464,7 @@ void AStrategyDebugHUD::DrawAllPotentialSites()
 
         if (Site->SiteType == EStrategySiteType::SalvageSite)
         {
-            DrawSalvageSite(Site, i, Scale);
+            DrawSalvageSite(Site, i, Scale, BaseManager);
             continue;
         }
 

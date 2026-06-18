@@ -455,6 +455,84 @@ void UBaseManagerSubsystem::OnDayPassed(int32 NewDay)
     // === NEW: Daily resource extraction from sites ===
     ProcessDailyResourceExtraction(EFactionType::Human);
     ProcessDailyResourceExtraction(EFactionType::Enemy);
+    ProcessSalvageSiteExpiry(NewDay);
+}
+
+int32 UBaseManagerSubsystem::GetSalvageDaysRemaining(const UStrategySiteDefinition* Site) const
+{
+    if (!Site || Site->SiteType != EStrategySiteType::SalvageSite || Site->SalvageState != ESalvageSiteState::Active)
+    {
+        return 0;
+    }
+
+    int32 CurrentDay = Site->CreatedOnSimulationDay;
+    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
+    {
+        CurrentDay = TimeMgr->GetTotalSimulationDays();
+    }
+
+    return FMath::Max(0, Site->SalvageExpiresOnDay - CurrentDay);
+}
+
+void UBaseManagerSubsystem::RemoveSalvageSite(UStrategySiteDefinition* Site, bool bExpired)
+{
+    if (!Site || Site->SiteType != EStrategySiteType::SalvageSite)
+    {
+        return;
+    }
+
+    if (USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>())
+    {
+        for (UStrategySoldier* MIA : Site->MIASoldiers)
+        {
+            if (MIA && MIA->bIsMIA)
+            {
+                MIA->bIsMIA = false;
+                MIA->WreckSiteId = FGuid();
+                SoldierMgr->MarkAsKIA(Site->WreckOwnerFaction, MIA);
+                UE_LOG(LogTemp, Display, TEXT("[SALVAGE] MIA '%s' presumed lost — wreck %s"),
+                    *MIA->SoldierName, bExpired ? TEXT("expired") : TEXT("removed"));
+            }
+        }
+    }
+
+    Site->MIASoldiers.Empty();
+    Site->SalvageState = ESalvageSiteState::Removed;
+    Site->bHasBeenUsed = true;
+    DiscoveredSitesHuman.Remove(Site);
+    DiscoveredSitesEnemy.Remove(Site);
+    AllPotentialSites.Remove(Site);
+
+    UE_LOG(LogTemp, Display, TEXT("[SALVAGE] Wreck '%s' removed from map (%s)"),
+        *Site->SiteName, bExpired ? TEXT("expired") : TEXT("depleted"));
+}
+
+void UBaseManagerSubsystem::ProcessSalvageSiteExpiry(int32 CurrentSimulationDay)
+{
+    TArray<UStrategySiteDefinition*> ExpiredSites;
+
+    for (UStrategySiteDefinition* Site : AllPotentialSites)
+    {
+        if (!Site || Site->SiteType != EStrategySiteType::SalvageSite)
+        {
+            continue;
+        }
+
+        if (Site->SalvageState != ESalvageSiteState::Active)
+        {
+            continue;
+        }
+
+        if (CurrentSimulationDay >= Site->SalvageExpiresOnDay)
+        {
+            ExpiredSites.Add(Site);
+        }
+    }
+
+    for (UStrategySiteDefinition* Site : ExpiredSites)
+    {
+        RemoveSalvageSite(Site, true);
+    }
 }
 
 bool UBaseManagerSubsystem::CanBuildNewBase(EFactionType Faction) const
@@ -918,10 +996,19 @@ UStrategySiteDefinition* UBaseManagerSubsystem::CreateSalvageSite(FVector2D Loca
         Site->CurrentResources = Site->MaxResources;
     }
 
+    int32 CreatedDay = 0;
     if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
     {
-        Site->CreatedOnSimulationDay = TimeMgr->GetTotalSimulationDays();
+        CreatedDay = TimeMgr->GetTotalSimulationDays();
+        Site->CreatedOnSimulationDay = CreatedDay;
     }
+
+    int32 ExpiryDays = 7;
+    if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+    {
+        ExpiryDays = FMath::Max(1, Campaign->SalvageWreckExpiryDays);
+    }
+    Site->SalvageExpiresOnDay = CreatedDay + ExpiryDays;
 
     for (UStrategySiteDefinition* Existing : AllPotentialSites)
     {
