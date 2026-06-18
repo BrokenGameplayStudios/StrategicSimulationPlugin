@@ -18,6 +18,13 @@ struct FBaseExplorationState
 
     UPROPERTY()
     TArray<int32> SpokeRingDepths;
+
+    /** Spokes to re-patrol sooner after inbound radar contacts (PR-15). */
+    UPROPERTY()
+    TArray<int32> HotSpokeIndices;
+
+    UPROPERTY()
+    float HotSpokeUntilGameHours = 0.0f;
 };
 
 UCLASS()
@@ -39,11 +46,20 @@ public:
     /** Threat-weighted guard patrol bearing from inbound radar contacts near a base. */
     bool PickThreatBearingPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget) const;
 
+    /** Patrol to first-detection entry point + ambush offset along threat heading (PR-15). */
+    bool PickInboundEntryPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget) const;
+
+    /** True when this base's faction has active inbound radar tracks relevant to the base. */
+    bool HasInboundThreatsNearBase(const UStrategyBase* OriginBase) const;
+
+    void NotifyInboundThreatContact(UStrategyBase* DetectingBase, const FRadarContact& Contact, float CurrentGameHours);
     void NotifyReconPatrolScheduled(UStrategyBase* OriginBase, const FVector2D& PatrolTarget);
     void MarkSiteSurveyed(EFactionType Faction, const UStrategySiteDefinition* Site);
 
     static constexpr int32 NumSpokes = 8;
     static constexpr float SpokeStepPixels = 140.0f;
+    static constexpr float HotSpokeDurationHours = 12.0f;
+    static constexpr float AmbushLaneOffsetPixels = 48.0f;
 
 private:
     TMap<TWeakObjectPtr<UStrategyBase>, FBaseExplorationState> ExplorationByBase;

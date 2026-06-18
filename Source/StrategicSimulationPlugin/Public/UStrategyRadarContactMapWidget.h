@@ -89,6 +89,9 @@ private:
     UFUNCTION()
     void OnRadarContactExpired(EFactionType Faction, FRadarContact Contact);
 
+    UFUNCTION()
+    void OnOpposingFactionRadarAlert(FRadarContact Contact, FText AlertMessage);
+
     void BindRadarEvents();
     void UnbindRadarEvents();
     void QueueContactToast(const FRadarContact& Contact);

@@ -139,6 +139,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
     bool bAIReactiveInterceptionEnabled = true;
 
+    /** Toast when enemy passive radar picks up a friendly inbound vehicle (PR-15). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
+    bool bNotifyPlayerOfEnemyRadarContacts = true;
+
+    /** Debug map draws enemy-faction radar entry points (PR-15). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
+    bool bShowEnemyRadarContactsOnDebugMap = true;
+
     /** In-transit combat vehicles engage enemies inbound to friendly bases (PR-14). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
     bool bEngageInboundThreatsWhileInTransit = true;

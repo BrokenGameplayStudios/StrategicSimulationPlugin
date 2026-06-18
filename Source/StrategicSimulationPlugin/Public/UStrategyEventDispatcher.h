@@ -26,6 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSalvageSiteCreated, EFactionTy
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSiteDiscovered, EFactionType, Faction, UStrategySiteDefinition*, Site, EDiscoveryReason, Reason);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRadarContactUpdated, EFactionType, Faction, FRadarContact, Contact);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRadarContactExpired, EFactionType, Faction, FRadarContact, Contact);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnOpposingFactionRadarAlert, FRadarContact, Contact, FText, AlertMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSalvageSiteRemoved, FGuid, SiteId, EFactionType, LastSalvagingFaction);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSalvageContestStarted, UStrategySiteDefinition*, Site,
     FSalvageContestForceSnapshot, HumanForceSnapshot, FSalvageContestForceSnapshot, EnemyForceSnapshot);
@@ -52,6 +53,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSiteDiscovered OnSiteDiscovered;
     UPROPERTY(BlueprintAssignable, Category = "Events|Radar") FOnRadarContactUpdated OnRadarContactUpdated;
     UPROPERTY(BlueprintAssignable, Category = "Events|Radar") FOnRadarContactExpired OnRadarContactExpired;
+    UPROPERTY(BlueprintAssignable, Category = "Events|Radar") FOnOpposingFactionRadarAlert OnOpposingFactionRadarAlert;
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSalvageSiteRemoved OnSalvageSiteRemoved;
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSalvageContestStarted OnSalvageContestStarted;
 };

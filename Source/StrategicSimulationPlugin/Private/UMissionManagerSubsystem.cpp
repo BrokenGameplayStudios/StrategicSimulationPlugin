@@ -338,16 +338,18 @@ bool UMissionManagerSubsystem::LaunchInterceptionAtContact(UStrategyBase* Origin
         return false;
     }
 
+    ContactMgr->MarkContactTargeted(ContactId);
+
     UMissionGroup* Mission = StartMission(OriginBase, { Vehicle }, 0, {}, EMissionType::Interception,
         OriginBase->OwningFaction, -1.f);
     if (!Mission)
     {
+        ContactMgr->UnmarkContactTargeted(ContactId);
         return false;
     }
 
     Mission->TargetContactId = ContactId;
     Mission->TargetInterceptVehicle = TrackedVehicle;
-    ContactMgr->MarkContactTargeted(ContactId);
 
     UE_LOG(LogTemp, Display, TEXT("[INTERCEPT] %s launched interception from '%s' → %s at (%.0f, %.0f)"),
         *UEnum::GetValueAsString(OriginBase->OwningFaction),
@@ -874,6 +876,12 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
             const float RoundTrip = FVector2D::Distance(Origin, Target) * 2.0f;
             return Vehicle->HasEnoughRangeForMission(RoundTrip);
         };
+
+        if (Exploration && Exploration->PickInboundEntryPatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget)
+            && ValidateReconTarget(OutTarget))
+        {
+            return true;
+        }
 
         if (Exploration && Exploration->FindSurveyTarget(Vehicle, SurveySite) && SurveySite
             && !InOutReservedSites.Contains(SurveySite))

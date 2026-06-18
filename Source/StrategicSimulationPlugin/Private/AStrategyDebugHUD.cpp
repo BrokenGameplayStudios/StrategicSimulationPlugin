@@ -7,6 +7,7 @@
 #include "UStrategicSimulationDisplayHelpers.h"
 #include "UFactionIntelSubsystem.h"
 #include "URadarTerrainSubsystem.h"
+#include "URadarContactSubsystem.h"
 #include "UStrategyCampaignSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategySoldier.h"
@@ -283,6 +284,7 @@ void AStrategyDebugHUD::DrawHUD()
 
     // === PHASE 1: Draw ALL potential nodes + fog-of-war markers ===
     DrawRadarBlockerZones();
+    DrawRadarContactEntryPoints();
     DrawAllPotentialSites();
 
     DrawInspectedSiteHighlight();
@@ -296,8 +298,9 @@ void AStrategyDebugHUD::DrawHUD()
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE/RED TRIANGLE = Salvage Wreck (destroyed vehicle faction)"), 50, 200, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GRAY = Radar LOS blocker zones (mountains)"), 50, 230, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN RING = Command Center passive radar range"), 50, 260, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 290, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 320, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN DIAMOND = Friendly radar entry  |  MAGENTA = Enemy radar entry"), 50, 290, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 320, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 350, 1.0f, 1.0f, FFontRenderInfo());
 
     // === SITE INSPECTOR (Bottom of screen) ===
     if (SelectedSiteIndex >= 0)
@@ -732,6 +735,70 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
                 Canvas->K2_DrawLine(PreviousPoint, NextPoint, 1.0f, RadarColor);
                 PreviousPoint = NextPoint;
             }
+        }
+    }
+}
+
+void AStrategyDebugHUD::DrawRadarContactEntryPoints()
+{
+    if (!Canvas || !GetGameInstance())
+    {
+        return;
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    if (!Campaign || !Campaign->bBasePassiveRadarEnabled || !ContactMgr)
+    {
+        return;
+    }
+
+    const float Scale = GetCurrentMapScale();
+    const float DiamondSize = 7.0f * Scale;
+
+    auto DrawDiamond = [&](const FVector2D& LogicalPos, const FLinearColor& Color)
+    {
+        const FVector2D Center = GetScreenPosition(LogicalPos);
+        const FVector2D Top(Center.X, Center.Y - DiamondSize);
+        const FVector2D Right(Center.X + DiamondSize, Center.Y);
+        const FVector2D Bottom(Center.X, Center.Y + DiamondSize);
+        const FVector2D Left(Center.X - DiamondSize, Center.Y);
+
+        Canvas->K2_DrawLine(Top, Right, 1.5f * Scale, Color);
+        Canvas->K2_DrawLine(Right, Bottom, 1.5f * Scale, Color);
+        Canvas->K2_DrawLine(Bottom, Left, 1.5f * Scale, Color);
+        Canvas->K2_DrawLine(Left, Top, 1.5f * Scale, Color);
+    };
+
+    if (bShowFriendlyRadarContacts)
+    {
+        for (const FRadarContact& Contact : ContactMgr->GetContactsForFaction(EFactionType::Human))
+        {
+            if (!Contact.ContactId.IsValid())
+            {
+                continue;
+            }
+
+            const FLinearColor Color = Contact.bIsInboundThreat
+                ? FLinearColor(0.2f, 0.85f, 1.0f, 0.95f)
+                : FLinearColor(0.35f, 0.65f, 0.95f, 0.65f);
+            DrawDiamond(URadarContactSubsystem::GetContactInterceptPosition(Contact), Color);
+        }
+    }
+
+    if (bShowEnemyRadarContacts && Campaign->bShowEnemyRadarContactsOnDebugMap)
+    {
+        for (const FRadarContact& Contact : ContactMgr->GetContactsForFaction(EFactionType::Enemy))
+        {
+            if (!Contact.ContactId.IsValid())
+            {
+                continue;
+            }
+
+            const FLinearColor Color = Contact.bIsInboundThreat
+                ? FLinearColor(0.95f, 0.25f, 0.75f, 0.95f)
+                : FLinearColor(0.85f, 0.45f, 0.65f, 0.65f);
+            DrawDiamond(URadarContactSubsystem::GetContactInterceptPosition(Contact), Color);
         }
     }
 }

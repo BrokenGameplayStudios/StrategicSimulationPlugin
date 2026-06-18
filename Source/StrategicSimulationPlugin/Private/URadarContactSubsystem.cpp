@@ -5,6 +5,7 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "UStrategyEventDispatcher.h"
 #include "UMissionManagerSubsystem.h"
+#include "UExplorationSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyVehicle.h"
 #include "UAIControllerSubsystem.h"
@@ -195,7 +196,8 @@ UStrategyVehicle* URadarContactSubsystem::ResolveTrackedVehicle(const FRadarCont
 
     const EFactionType EnemyFaction = (DetectingFaction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-    for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+    const TArray<UMissionGroup*> MissionSnapshot = MissionMgr->ActiveMissions;
+    for (UMissionGroup* Mission : MissionSnapshot)
     {
         if (!Mission || !Mission->OriginBase || !Mission->bMovementActivated)
         {
@@ -506,19 +508,106 @@ FRadarContact URadarContactSubsystem::UpsertVehicleContact(EFactionType Detectin
         ? EnemyVehicle->VehicleDefinition->VehicleName.ToString()
         : EnemyVehicle->GetName();
 
-    UE_LOG(LogTemp, Display, TEXT("[BASE RADAR] %s at '%s' tracked %s at (%.0f, %.0f)%s"),
-        *UEnum::GetValueAsString(DetectingFaction),
-        *DetectingBase->BaseName.ToString(),
-        *Contact.TrackedVehicleName,
-        Contact.LastPosition.X, Contact.LastPosition.Y,
-        Contact.bIsInboundThreat ? TEXT(" — INBOUND") : TEXT(""));
+    const FVector2D EntryPos = GetContactInterceptPosition(Contact);
+    const bool bIsNewContact = !bHadPrevious;
 
+    if (bIsNewContact && Contact.bIsInboundThreat)
+    {
+        UE_LOG(LogTemp, Display, TEXT("[BASE RADAR] %s FIRST INBOUND at '%s': %s entered at (%.0f, %.0f) heading %.0f deg speed %.0f"),
+            *UEnum::GetValueAsString(DetectingFaction),
+            *DetectingBase->BaseName.ToString(),
+            *Contact.TrackedVehicleName,
+            EntryPos.X, EntryPos.Y,
+            Contact.EstimatedHeadingDegrees,
+            Contact.EstimatedVelocity.Size());
+
+        if (UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>())
+        {
+            Exploration->NotifyInboundThreatContact(DetectingBase, Contact, CurrentGameHours);
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("[BASE RADAR] %s at '%s' tracked %s at (%.0f, %.0f)%s"),
+            *UEnum::GetValueAsString(DetectingFaction),
+            *DetectingBase->BaseName.ToString(),
+            *Contact.TrackedVehicleName,
+            Contact.LastPosition.X, Contact.LastPosition.Y,
+            Contact.bIsInboundThreat ? TEXT(" — INBOUND") : TEXT(""));
+    }
+
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
     if (UStrategyEventDispatcher* Events = GetGameInstance()->GetSubsystem<UStrategyEventDispatcher>())
     {
         Events->OnRadarContactUpdated.Broadcast(DetectingFaction, Contact);
+
+        if (bIsNewContact && Contact.bIsInboundThreat && Campaign && Campaign->bNotifyPlayerOfEnemyRadarContacts
+            && DetectingFaction == EFactionType::Enemy)
+        {
+            const FText AlertMessage = FText::FromString(FString::Printf(
+                TEXT("Enemy radar may have detected %s near (%.0f, %.0f)"),
+                *Contact.TrackedVehicleName, EntryPos.X, EntryPos.Y));
+            Events->OnOpposingFactionRadarAlert.Broadcast(Contact, AlertMessage);
+        }
     }
 
     return Contact;
+}
+
+void URadarContactSubsystem::QueueReactiveInterception(EFactionType Faction, UStrategyBase* Base, FGuid ContactId)
+{
+    if (!Base || !ContactId.IsValid() || ContactsWithActiveInterception.Contains(ContactId))
+    {
+        return;
+    }
+
+    for (const FDeferredReactiveIntercept& Pending : DeferredReactiveIntercepts)
+    {
+        if (Pending.Faction == Faction && Pending.ContactId == ContactId)
+        {
+            return;
+        }
+    }
+
+    FDeferredReactiveIntercept Entry;
+    Entry.Faction = Faction;
+    Entry.Base = Base;
+    Entry.ContactId = ContactId;
+    DeferredReactiveIntercepts.Add(Entry);
+}
+
+void URadarContactSubsystem::FlushDeferredReactiveInterceptions(UMissionManagerSubsystem* MissionMgr)
+{
+    if (!MissionMgr || DeferredReactiveIntercepts.Num() == 0)
+    {
+        DeferredReactiveIntercepts.Empty();
+        return;
+    }
+
+    const TArray<FDeferredReactiveIntercept> Pending = DeferredReactiveIntercepts;
+    DeferredReactiveIntercepts.Empty();
+
+    for (const FDeferredReactiveIntercept& Entry : Pending)
+    {
+        if (ContactsWithActiveInterception.Contains(Entry.ContactId))
+        {
+            continue;
+        }
+
+        UStrategyBase* Base = Entry.Base.Get();
+        if (!Base)
+        {
+            continue;
+        }
+
+        FRadarContact Contact;
+        if (!GetContactById(Entry.Faction, Entry.ContactId, Contact) || !Contact.bIsInboundThreat)
+        {
+            continue;
+        }
+
+        TryReactiveInterception(Entry.Faction, Base, Contact, MissionMgr);
+    }
 }
 
 void URadarContactSubsystem::TryReactiveInterception(EFactionType Faction, UStrategyBase* Base,
@@ -590,7 +679,8 @@ void URadarContactSubsystem::ProcessBaseVehicles(UStrategyBase* Base, EFactionTy
 
     const EFactionType EnemyFaction = (Faction == EFactionType::Human) ? EFactionType::Enemy : EFactionType::Human;
 
-    for (UMissionGroup* Mission : MissionMgr->ActiveMissions)
+    const TArray<UMissionGroup*> MissionSnapshot = MissionMgr->ActiveMissions;
+    for (UMissionGroup* Mission : MissionSnapshot)
     {
         if (!Mission || !Mission->bMovementActivated || !Mission->OriginBase)
         {
@@ -624,9 +714,9 @@ void URadarContactSubsystem::ProcessBaseVehicles(UStrategyBase* Base, EFactionTy
 
             const bool bInbound = IsInboundThreatVehicle(EnemyVehicle, Faction, BaseMgr);
             const FRadarContact Contact = UpsertVehicleContact(Faction, Base, EnemyVehicle, CurrentGameHours, bInbound);
-            if (Contact.ContactId.IsValid())
+            if (Contact.ContactId.IsValid() && Contact.bIsInboundThreat)
             {
-                TryReactiveInterception(Faction, Base, Contact, MissionMgr);
+                QueueReactiveInterception(Faction, Base, Contact.ContactId);
             }
         }
     }
@@ -660,5 +750,6 @@ void URadarContactSubsystem::ProcessBaseRadarPings(float CurrentGameHours)
         }
     }
 
+    FlushDeferredReactiveInterceptions(MissionMgr);
     ExpireStaleContacts(CurrentGameHours);
 }

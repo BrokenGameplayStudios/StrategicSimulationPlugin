@@ -13,6 +13,7 @@
 #include "UMissionManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "URadarContactSubsystem.h"
+#include "UExplorationSubsystem.h"
 #include "StrategicSiteDefinition.h"
 #include "StrategicSimulationTypes.h"
 #include "Engine/Engine.h"
@@ -1205,6 +1206,14 @@ EMissionType UAIControllerSubsystem::PickAIMissionTypeForVehicle(UStrategyVehicl
         if (MissionMgr->HasInterceptionTargetFromContacts(Vehicle))
         {
             return EMissionType::Interception;
+        }
+
+        if (UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>())
+        {
+            if (Vehicle->HomeBase && Exploration->HasInboundThreatsNearBase(Vehicle->HomeBase))
+            {
+                return EMissionType::Defensive;
+            }
         }
 
         if (CurrentDay >= OffensiveStartDay && MissionMgr->HasOffensiveTargetInRange(Vehicle))

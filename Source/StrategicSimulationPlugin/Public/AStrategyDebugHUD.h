@@ -43,6 +43,12 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map|Vehicles")
     bool bShowVehiclePaths = true;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map|Radar")
+    bool bShowFriendlyRadarContacts = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug Map|Radar")
+    bool bShowEnemyRadarContacts = true;
+
     UFUNCTION(Exec)
     void ToggleDebugHUD();
 
@@ -73,6 +79,7 @@ private:
     void AppendCommandCenterStats(UStrategyBase* Base, FString& DebugText);
     void DrawSalvageSite(UStrategySiteDefinition* Site, int32 SiteIndex, float Scale, const UBaseManagerSubsystem* BaseManager);
     void DrawRadarBlockerZones();
+    void DrawRadarContactEntryPoints();
     void DrawSiteTriangle(const FVector2D& ScreenPos, float Size, float LineThickness, const FLinearColor& Color);
     static FString BuildFacilityListText(UStrategyBase* Base);
 };

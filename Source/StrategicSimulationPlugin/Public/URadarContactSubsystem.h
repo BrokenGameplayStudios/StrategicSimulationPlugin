@@ -59,6 +59,18 @@ private:
     float AccumulatedPingHours = 0.0f;
     TSet<FGuid> ContactsWithActiveInterception;
 
+    struct FDeferredReactiveIntercept
+    {
+        EFactionType Faction = EFactionType::Neutral;
+        TWeakObjectPtr<UStrategyBase> Base;
+        FGuid ContactId;
+    };
+
+    TArray<FDeferredReactiveIntercept> DeferredReactiveIntercepts;
+
+    void QueueReactiveInterception(EFactionType Faction, UStrategyBase* Base, FGuid ContactId);
+    void FlushDeferredReactiveInterceptions(UMissionManagerSubsystem* MissionMgr);
+
     TMap<FGuid, FRadarContact>& GetContactMap(EFactionType Faction);
     const TMap<FGuid, FRadarContact>& GetContactMap(EFactionType Faction) const;
     TMap<TWeakObjectPtr<UStrategyVehicle>, FGuid>& GetVehicleIdMap(EFactionType Faction);

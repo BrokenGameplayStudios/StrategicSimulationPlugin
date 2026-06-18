@@ -168,6 +168,7 @@ void UStrategyRadarContactMapWidget::BindRadarEvents()
     {
         EventDisp->OnRadarContactUpdated.AddDynamic(this, &UStrategyRadarContactMapWidget::OnRadarContactUpdated);
         EventDisp->OnRadarContactExpired.AddDynamic(this, &UStrategyRadarContactMapWidget::OnRadarContactExpired);
+        EventDisp->OnOpposingFactionRadarAlert.AddDynamic(this, &UStrategyRadarContactMapWidget::OnOpposingFactionRadarAlert);
     }
 }
 
@@ -177,6 +178,7 @@ void UStrategyRadarContactMapWidget::UnbindRadarEvents()
     {
         EventDisp->OnRadarContactUpdated.RemoveDynamic(this, &UStrategyRadarContactMapWidget::OnRadarContactUpdated);
         EventDisp->OnRadarContactExpired.RemoveDynamic(this, &UStrategyRadarContactMapWidget::OnRadarContactExpired);
+        EventDisp->OnOpposingFactionRadarAlert.RemoveDynamic(this, &UStrategyRadarContactMapWidget::OnOpposingFactionRadarAlert);
     }
 }
 
@@ -207,6 +209,20 @@ void UStrategyRadarContactMapWidget::OnRadarContactExpired(EFactionType Faction,
 
     SeenContactIds.Remove(Contact.ContactId);
     RefreshRadarContactMarkers();
+}
+
+void UStrategyRadarContactMapWidget::OnOpposingFactionRadarAlert(FRadarContact Contact, FText AlertMessage)
+{
+    if (ViewerFaction != EFactionType::Human || AlertMessage.IsEmpty())
+    {
+        return;
+    }
+
+    const double ExpiresAt = GetWorld() ? GetWorld()->GetTimeSeconds() + ToastDurationSeconds : 0.0;
+    PendingToasts.Add({ AlertMessage, ExpiresAt });
+    Invalidate(EInvalidateWidgetReason::Paint);
+
+    UE_LOG(LogTemp, Display, TEXT("[RADAR MAP] %s"), *AlertMessage.ToString());
 }
 
 void UStrategyRadarContactMapWidget::QueueContactToast(const FRadarContact& Contact)

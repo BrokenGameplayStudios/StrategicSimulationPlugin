@@ -5,7 +5,40 @@
 #include "UStrategyBase.h"
 #include "UStrategyVehicle.h"
 #include "UMissionManagerSubsystem.h"
+#include "UTimeManagerSubsystem.h"
 #include "Engine/Engine.h"
+
+namespace ExplorationHelpers
+{
+    int32 BearingToSpokeIndex(const FVector2D& DirectionFromBase)
+    {
+        if (DirectionFromBase.IsNearlyZero())
+        {
+            return 0;
+        }
+
+        const float BearingRad = FMath::Atan2(DirectionFromBase.Y, DirectionFromBase.X);
+        const float Normalized = FMath::Fmod(BearingRad + 2.0f * PI, 2.0f * PI);
+        const int32 SpokeIndex = FMath::RoundToInt((Normalized / (2.0f * PI)) * static_cast<float>(UExplorationSubsystem::NumSpokes));
+        return SpokeIndex % UExplorationSubsystem::NumSpokes;
+    }
+
+    bool IsContactRelevantToBase(const FRadarContact& Contact, const UStrategyBase* Base, float RadarRange)
+    {
+        if (!Base || !Contact.bIsInboundThreat)
+        {
+            return false;
+        }
+
+        if (Contact.DetectingBaseName == Base->BaseName.ToString())
+        {
+            return true;
+        }
+
+        const FVector2D Entry = URadarContactSubsystem::GetContactInterceptPosition(Contact);
+        return FVector2D::Distance(Entry, Base->MapLocation) <= RadarRange * 1.1f;
+    }
+}
 
 void UExplorationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -150,7 +183,25 @@ bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, USt
     const float MaxOutbound = FMath::Max(80.0f, Vehicle->CurrentRangeLeft * 0.45f);
 
     FBaseExplorationState& State = GetOrCreateState(OriginBase);
-    const int32 SpokeIndex = State.NextSpokeIndex % NumSpokes;
+
+    float CurrentGameHours = 0.0f;
+    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
+    {
+        CurrentGameHours = TimeMgr->GetElapsedSimulationHours();
+    }
+
+    if (CurrentGameHours > State.HotSpokeUntilGameHours)
+    {
+        State.HotSpokeIndices.Empty();
+        State.HotSpokeUntilGameHours = 0.0f;
+    }
+
+    int32 SpokeIndex = State.NextSpokeIndex % NumSpokes;
+    if (State.HotSpokeIndices.Num() > 0)
+    {
+        SpokeIndex = State.HotSpokeIndices[State.NextSpokeIndex % State.HotSpokeIndices.Num()];
+    }
+
     const float BearingRad = (static_cast<float>(SpokeIndex) / static_cast<float>(NumSpokes)) * 2.0f * PI;
     const FVector2D BearingDir(FMath::Cos(BearingRad), FMath::Sin(BearingRad));
 
@@ -192,9 +243,105 @@ bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, USt
     return true;
 }
 
+bool UExplorationSubsystem::PickInboundEntryPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
+    FVector2D& OutTarget) const
+{
+    OutTarget = FVector2D::ZeroVector;
+    if (!OriginBase || !Vehicle)
+    {
+        return false;
+    }
+
+    URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (!ContactMgr)
+    {
+        return false;
+    }
+
+    const EFactionType Faction = OriginBase->OwningFaction;
+    const FVector2D Origin = OriginBase->MapLocation;
+    const float RadarRange = Campaign ? Campaign->BaseRadarRangePixels : 512.0f;
+
+    float CurrentGameHours = 0.0f;
+    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
+    {
+        CurrentGameHours = TimeMgr->GetElapsedSimulationHours();
+    }
+
+    const FRadarContact* BestContact = nullptr;
+    float BestScore = -MAX_FLT;
+
+    for (const FRadarContact& Contact : ContactMgr->GetContactsForFaction(Faction))
+    {
+        if (!ExplorationHelpers::IsContactRelevantToBase(Contact, OriginBase, RadarRange))
+        {
+            continue;
+        }
+
+        const float AgeHours = FMath::Max(0.0f, CurrentGameHours - Contact.LastSeenGameHours);
+        float Score = 1000.0f - AgeHours;
+        if (Contact.DetectingBaseName == OriginBase->BaseName.ToString())
+        {
+            Score += 250.0f;
+        }
+
+        if (Score > BestScore)
+        {
+            BestScore = Score;
+            BestContact = &Contact;
+        }
+    }
+
+    if (!BestContact)
+    {
+        return false;
+    }
+
+    float MinX, MinY, MaxX, MaxY;
+    if (!ComputeMapBounds(OriginBase, MinX, MinY, MaxX, MaxY))
+    {
+        return false;
+    }
+
+    const FVector2D Entry = URadarContactSubsystem::GetContactInterceptPosition(*BestContact);
+    FVector2D AmbushDir = BestContact->EstimatedVelocity.GetSafeNormal();
+    if (AmbushDir.IsNearlyZero())
+    {
+        AmbushDir = (Origin - Entry).GetSafeNormal();
+    }
+
+    OutTarget = Entry + AmbushDir * AmbushLaneOffsetPixels;
+    ClampToMap(OutTarget, MinX, MinY, MaxX, MaxY);
+
+    const float RoundTrip = FVector2D::Distance(Origin, OutTarget) * 2.0f;
+    if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
+    {
+        OutTarget = Entry;
+        ClampToMap(OutTarget, MinX, MinY, MaxX, MaxY);
+        if (!Vehicle->HasEnoughRangeForMission(FVector2D::Distance(Origin, OutTarget) * 2.0f))
+        {
+            return false;
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[PATROL] %s border guard from '%s' → entry lane (%.0f, %.0f) watching %s"),
+        *UEnum::GetValueAsString(Faction),
+        *OriginBase->BaseName.ToString(),
+        OutTarget.X, OutTarget.Y,
+        *BestContact->TrackedVehicleName);
+
+    return true;
+}
+
 bool UExplorationSubsystem::PickThreatBearingPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
     FVector2D& OutTarget) const
 {
+    if (PickInboundEntryPatrolTarget(OriginBase, Vehicle, OutTarget))
+    {
+        return true;
+    }
+
     OutTarget = FVector2D::ZeroVector;
     if (!OriginBase || !Vehicle)
     {
@@ -255,6 +402,55 @@ bool UExplorationSubsystem::PickThreatBearingPatrolTarget(UStrategyBase* OriginB
         *UEnum::GetValueAsString(Faction), *OriginBase->BaseName.ToString(), OutTarget.X, OutTarget.Y);
 
     return true;
+}
+
+bool UExplorationSubsystem::HasInboundThreatsNearBase(const UStrategyBase* OriginBase) const
+{
+    if (!OriginBase)
+    {
+        return false;
+    }
+
+    URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+    if (!ContactMgr)
+    {
+        return false;
+    }
+
+    const float RadarRange = Campaign ? Campaign->BaseRadarRangePixels : 512.0f;
+    for (const FRadarContact& Contact : ContactMgr->GetContactsForFaction(OriginBase->OwningFaction))
+    {
+        if (ExplorationHelpers::IsContactRelevantToBase(Contact, OriginBase, RadarRange))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void UExplorationSubsystem::NotifyInboundThreatContact(UStrategyBase* DetectingBase, const FRadarContact& Contact,
+    float CurrentGameHours)
+{
+    if (!DetectingBase || !Contact.bIsInboundThreat)
+    {
+        return;
+    }
+
+    const FVector2D Entry = URadarContactSubsystem::GetContactInterceptPosition(Contact);
+    const FVector2D DirFromBase = (Entry - DetectingBase->MapLocation).GetSafeNormal();
+    const int32 SpokeIndex = ExplorationHelpers::BearingToSpokeIndex(DirFromBase);
+
+    FBaseExplorationState& State = GetOrCreateState(DetectingBase);
+    State.HotSpokeIndices.AddUnique(SpokeIndex);
+    State.HotSpokeUntilGameHours = CurrentGameHours + HotSpokeDurationHours;
+
+    UE_LOG(LogTemp, Display, TEXT("[PATROL] %s marked spoke %d hot after inbound %s at entry (%.0f, %.0f)"),
+        *UEnum::GetValueAsString(DetectingBase->OwningFaction),
+        SpokeIndex,
+        *Contact.TrackedVehicleName,
+        Entry.X, Entry.Y);
 }
 
 void UExplorationSubsystem::NotifyReconPatrolScheduled(UStrategyBase* OriginBase, const FVector2D& PatrolTarget)
