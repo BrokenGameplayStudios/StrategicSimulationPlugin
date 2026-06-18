@@ -68,6 +68,8 @@ public:
     /** Clears per-faction day guards so a restarted campaign can run Day 1 AI again. */
     void ResetDailyProcessingState();
 
+    static bool IsCombatVehicleType(EVehicleType Type);
+
 private:
 
     // Per-faction day guard (fixes the skip bug)
@@ -89,7 +91,6 @@ private:
     bool ShouldPrioritizeEnRouteIntercept(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle) const;
 
     static bool IsReconVehicleType(EVehicleType Type);
-    static bool IsCombatVehicleType(EVehicleType Type);
     int32 CountFactionVehiclesOfTypes(EFactionType Faction, const TArray<EVehicleType>& Types) const;
 
     /** Finds a suitable discovered but unused site for AI expansion */

@@ -171,6 +171,8 @@ void AStrategyGameInitializer::BeginPlay()
     Campaign->bAllowDebugExecCommands = bAllowDebugExecCommands;
     Campaign->bRadarLOSEnabled = bRadarLOSEnabled;
     Campaign->bStaleIntelEnabled = bStaleIntelEnabled;
+    Campaign->BaseRadarRangePixels = BaseRadarRangePixels;
+    Campaign->BaseRadarPingIntervalHours = BaseRadarPingIntervalHours;
 
     if (URadarTerrainSubsystem* TerrainMgr = GetGameInstance()->GetSubsystem<URadarTerrainSubsystem>())
     {

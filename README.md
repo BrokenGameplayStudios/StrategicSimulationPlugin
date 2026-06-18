@@ -36,12 +36,13 @@ This plugin implements a turn-of-time strategic simulation layer: factions build
 - Debug strategic map HUD (bases, vehicles, paths, radar circles)
 - Test harness (`AStrategyTestActor`) and `WBP_StrategicHUD` UI widgets
 
-### In progress (PR-11+)
+### In progress (PR-12+)
 
-- **Radar & intel** — base passive radar, contact tracks, patrol/guard and interception ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
+- **Radar & intel** — contact polish, patrol/guard and en-route defense ([`docs/design-radar-intel-patrol-summary.md`](docs/design-radar-intel-patrol-summary.md))
 - PR-8 shipped: docs wiki hub, `bAllowDebugExecCommands`, `bRadarLOSEnabled`, `bStaleIntelEnabled` feature flags
 - PR-9 shipped: `UFactionIntelSubsystem`, stale wreck tooltips, save schema v3 intel arrays
 - PR-10 shipped: `URadarTerrainSubsystem`, LOS blocker zones, combat engagement fix (gunship `AttackPower`), defensive guard patrols
+- PR-11 shipped: Command Center passive radar, `FRadarContact`, `LaunchInterceptionAtContact` (player + AI)
 
 ### What is not implemented yet
 
@@ -579,7 +580,19 @@ v2 saves seed intel from discovery lists on load. Toggle off via `bStaleIntelEna
 
 Vehicular combat: gunships engage when `GetVehicleOffensiveRating() >= MinOffenseToEngage` (intrinsic `AttackPower` counts). Offensive / interception missions log `[COMBAT] En-route intercept:` when strike fleets meet. `Defensive` missions patrol near their origin base instead of targeting enemy bases.
 
-### 2.18 Build dependencies
+### 2.18 Base passive radar (PR-11)
+
+Operational Command Centers ping on `BaseRadarPingIntervalHours` within `BaseRadarRangePixels` (no vehicle sortie). Sites inside range with LOS are discovered / intel-refreshed. In-transit enemy vehicles become `FRadarContact` entries (position, velocity estimate, inbound flag).
+
+| API | Role |
+|-----|------|
+| `URadarContactSubsystem::GetContactsForFaction` | UI lists threats near your bases |
+| `UMissionManagerSubsystem::LaunchInterceptionAtContact` | Player dispatches gunship at a contact (same as AI reactive path) |
+| `OnRadarContactUpdated` | Widget toast when a new track appears |
+
+AI: inbound contacts trigger immediate `[INTERCEPT AI]` if a combat vehicle is idle; daily scheduling prefers `Interception` when contacts exist.
+
+### 2.19 Build dependencies
 
 `Source/StrategicSimulationPlugin/StrategicSimulationPlugin.Build.cs`:
 

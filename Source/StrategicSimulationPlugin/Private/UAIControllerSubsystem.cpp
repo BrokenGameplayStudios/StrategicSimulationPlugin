@@ -1199,9 +1199,17 @@ EMissionType UAIControllerSubsystem::PickAIMissionTypeForVehicle(UStrategyVehicl
         return EMissionType::Recon;
     }
 
-    if (IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType) && MissionMgr && MissionMgr->HasOffensiveTargetInRange(Vehicle))
+    if (IsCombatVehicleType(Vehicle->VehicleDefinition->VehicleType) && MissionMgr)
     {
-        return EMissionType::Offensive;
+        if (MissionMgr->HasInterceptionTargetFromContacts(Vehicle))
+        {
+            return EMissionType::Interception;
+        }
+
+        if (CurrentDay >= OffensiveStartDay && MissionMgr->HasOffensiveTargetInRange(Vehicle))
+        {
+            return EMissionType::Offensive;
+        }
     }
 
     return EMissionType::Recon;

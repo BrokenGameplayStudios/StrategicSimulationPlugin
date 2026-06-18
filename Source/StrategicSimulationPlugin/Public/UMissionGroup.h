@@ -95,4 +95,12 @@ public:
     /** True once the base-attack arrival placeholder has been logged for this mission */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
     bool bBaseAttackArrivalLogged = false;
+
+    /** Passive-radar contact that spawned an Interception mission (PR-11). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
+    FGuid TargetContactId;
+
+    /** Live enemy vehicle resolved from a radar contact. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mission|Target")
+    TWeakObjectPtr<UStrategyVehicle> TargetInterceptVehicle;
 };

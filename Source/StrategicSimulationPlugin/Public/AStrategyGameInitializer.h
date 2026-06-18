@@ -130,6 +130,13 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel")
     TArray<FRadarBlockerZone> RadarBlockerZones;
 
+    /** Command Center passive radar range (PR-11). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel", meta = (ClampMin = "64.0", ClampMax = "2000.0"))
+    float BaseRadarRangePixels = 512.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radar & Intel", meta = (ClampMin = "0.25", ClampMax = "24.0"))
+    float BaseRadarPingIntervalHours = 1.0f;
+
     // === Starting Resources (editable in editor) ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Starting Resources")
     FResourceStockpile HumanStartingStockpile;

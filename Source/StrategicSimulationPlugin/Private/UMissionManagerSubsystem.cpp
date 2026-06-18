@@ -14,6 +14,7 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "UStrategyEventDispatcher.h"
 #include "UFactionIntelSubsystem.h"
+#include "URadarContactSubsystem.h"
 #include "Engine/Engine.h"
 
 void UMissionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -27,6 +28,11 @@ void UMissionManagerSubsystem::ClearRuntimeMissionStateForSiteMapLoad()
     if (UFactionIntelSubsystem* IntelMgr = GetGameInstance()->GetSubsystem<UFactionIntelSubsystem>())
     {
         IntelMgr->ClearAllIntel();
+    }
+
+    if (URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>())
+    {
+        ContactMgr->ClearAllContacts();
     }
 
     RecentCombatSalvageWrecks.Empty();
@@ -272,6 +278,81 @@ bool UMissionManagerSubsystem::HasOffensiveTargetInRange(UStrategyVehicle* Vehic
     FVector2D DummyTarget;
     TSet<UStrategySiteDefinition*> DummyReserved;
     return TryPickMissionTarget(Vehicle, EMissionType::Offensive, DummyTarget, DummyReserved, nullptr);
+}
+
+bool UMissionManagerSubsystem::HasInterceptionTargetFromContacts(UStrategyVehicle* Vehicle) const
+{
+    if (!Vehicle || !Vehicle->HomeBase)
+    {
+        return false;
+    }
+
+    URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    if (!ContactMgr)
+    {
+        return false;
+    }
+
+    FRadarContact Contact;
+    return ContactMgr->FindBestContactForInterception(Vehicle->HomeBase->OwningFaction, Vehicle->HomeBase,
+        Vehicle, Contact);
+}
+
+bool UMissionManagerSubsystem::LaunchInterceptionAtContact(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
+    FGuid ContactId)
+{
+    if (!OriginBase || !Vehicle || !ContactId.IsValid())
+    {
+        return false;
+    }
+
+    if (IsVehicleCommittedToAnyMission(Vehicle))
+    {
+        return false;
+    }
+
+    URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>();
+    if (!ContactMgr)
+    {
+        return false;
+    }
+
+    FRadarContact Contact;
+    if (!ContactMgr->GetContactById(OriginBase->OwningFaction, ContactId, Contact))
+    {
+        return false;
+    }
+
+    if (ContactMgr->IsContactAlreadyTargeted(ContactId))
+    {
+        return false;
+    }
+
+    UStrategyVehicle* TrackedVehicle = ContactMgr->ResolveTrackedVehicle(Contact, OriginBase->OwningFaction);
+    const float RoundTrip = FVector2D::Distance(OriginBase->MapLocation, Contact.LastPosition) * 2.0f;
+    if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
+    {
+        return false;
+    }
+
+    UMissionGroup* Mission = StartMission(OriginBase, { Vehicle }, 0, {}, EMissionType::Interception,
+        OriginBase->OwningFaction, -1.f);
+    if (!Mission)
+    {
+        return false;
+    }
+
+    Mission->TargetContactId = ContactId;
+    Mission->TargetInterceptVehicle = TrackedVehicle;
+    ContactMgr->MarkContactTargeted(ContactId);
+
+    UE_LOG(LogTemp, Display, TEXT("[INTERCEPT] %s launched interception from '%s' → %s at (%.0f, %.0f)"),
+        *UEnum::GetValueAsString(OriginBase->OwningFaction),
+        *OriginBase->BaseName.ToString(),
+        *Contact.TrackedVehicleName,
+        Contact.LastPosition.X, Contact.LastPosition.Y);
+
+    return true;
 }
 
 float UMissionManagerSubsystem::ComputeSalvageTargetScore(EFactionType Faction, const UStrategySiteDefinition* Site,
@@ -747,6 +828,20 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
 
     case EMissionType::Interception:
     {
+        if (URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>())
+        {
+            FRadarContact Contact;
+            if (ContactMgr->FindBestContactForInterception(Faction, Vehicle->HomeBase, Vehicle, Contact))
+            {
+                OutTarget = Contact.LastPosition;
+                UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → radar contact '%s' at (%.0f, %.0f)%s"),
+                    Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                    *Contact.TrackedVehicleName, OutTarget.X, OutTarget.Y,
+                    Contact.bIsInboundThreat ? TEXT(" (inbound)") : TEXT(""));
+                return true;
+            }
+        }
+
         UStrategyVehicle* NearestEnemy = nullptr;
         float NearestDist = MAX_FLT;
 
@@ -950,6 +1045,20 @@ void UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
         if (TargetEnemyBase)
         {
             Mission->TargetEnemyBase = TargetEnemyBase;
+        }
+        if (MissionType == EMissionType::Interception)
+        {
+            if (URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>())
+            {
+                FRadarContact Contact;
+                if (ContactMgr->FindBestContactForInterception(Mission->AttackingFaction, Vehicle->HomeBase,
+                    Vehicle, Contact))
+                {
+                    Mission->TargetContactId = Contact.ContactId;
+                    Mission->TargetInterceptVehicle = ContactMgr->ResolveTrackedVehicle(Contact, Mission->AttackingFaction);
+                    ContactMgr->MarkContactTargeted(Contact.ContactId);
+                }
+            }
         }
         if (MissionType == EMissionType::Salvage)
         {
@@ -1694,6 +1803,11 @@ void UMissionManagerSubsystem::UpdateAllLiveVehicles(float DeltaGameHours)
     {
         IntelMgr->ClearFreshIntelFlags();
     }
+
+    if (URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>())
+    {
+        ContactMgr->TickBaseRadar(CurrentHours, DeltaGameHours);
+    }
 }
 
 void UMissionManagerSubsystem::HandleVehicleDestroyedInCombat(UStrategyVehicle* Vehicle, UStrategyVehicle* DestroyedBy)
@@ -1796,6 +1910,14 @@ void UMissionManagerSubsystem::ResolveMissionOutcome(UMissionGroup* Mission)
 {
     if (!Mission || !Mission->OriginBase || Mission->VehiclesInFleet.Num() == 0)
         return;
+
+    if (Mission->TargetContactId.IsValid())
+    {
+        if (URadarContactSubsystem* ContactMgr = GetGameInstance()->GetSubsystem<URadarContactSubsystem>())
+        {
+            ContactMgr->UnmarkContactTargeted(Mission->TargetContactId);
+        }
+    }
 
     const bool bIsRecon = (Mission->MissionType == EMissionType::Recon);
     const bool bIsSalvage = (Mission->MissionType == EMissionType::Salvage);

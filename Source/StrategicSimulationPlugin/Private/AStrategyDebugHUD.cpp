@@ -294,8 +294,9 @@ void AStrategyDebugHUD::DrawHUD()
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 170, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE/RED TRIANGLE = Salvage Wreck (destroyed vehicle faction)"), 50, 200, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GRAY = Radar LOS blocker zones (mountains)"), 50, 230, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 260, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 290, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN RING = Command Center passive radar range"), 50, 260, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 290, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 320, 1.0f, 1.0f, FFontRenderInfo());
 
     // === SITE INSPECTOR (Bottom of screen) ===
     if (SelectedSiteIndex >= 0)
@@ -707,6 +708,26 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
         FText::FromString(Base->BaseName.ToString()),
         ScreenPos.X + (25.0f * Scale), ScreenPos.Y - (10.0f * Scale),
         1.0f, 1.0f, FFontRenderInfo());
+
+    if (Base->HasOperationalCommandCenter())
+    {
+        UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
+        if (Campaign && Campaign->bBasePassiveRadarEnabled)
+        {
+            const float RadarRange = Campaign->BaseRadarRangePixels * Scale;
+            const FLinearColor RadarColor(0.3f, 0.8f, 1.0f, 0.35f);
+            const int32 Segments = 32;
+            FVector2D PreviousPoint = ScreenPos + FVector2D(RadarRange, 0.0f);
+
+            for (int32 Segment = 1; Segment <= Segments; ++Segment)
+            {
+                const float Angle = (2.0f * PI * Segment) / Segments;
+                const FVector2D NextPoint = ScreenPos + FVector2D(FMath::Cos(Angle), FMath::Sin(Angle)) * RadarRange;
+                Canvas->K2_DrawLine(PreviousPoint, NextPoint, 1.0f, RadarColor);
+                PreviousPoint = NextPoint;
+            }
+        }
+    }
 }
 
 void AStrategyDebugHUD::DrawMission(UMissionGroup* Mission)

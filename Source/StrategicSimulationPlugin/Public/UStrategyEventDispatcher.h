@@ -24,6 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnProductionCompleted, EFactionTyp
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthlyEvent, int32, Month);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSalvageSiteCreated, EFactionType, WreckOwnerFaction, const TArray<EFactionType>&, KnownFactions, UStrategySiteDefinition*, Site);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSiteDiscovered, EFactionType, Faction, UStrategySiteDefinition*, Site, EDiscoveryReason, Reason);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRadarContactUpdated, EFactionType, Faction, FRadarContact, Contact);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSalvageSiteRemoved, FGuid, SiteId, EFactionType, LastSalvagingFaction);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSalvageContestStarted, UStrategySiteDefinition*, Site,
     FSalvageContestForceSnapshot, HumanForceSnapshot, FSalvageContestForceSnapshot, EnemyForceSnapshot);
@@ -48,6 +49,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Events") FOnMonthlyEvent OnMonthlyEvent;
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSalvageSiteCreated OnSalvageSiteCreated;
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSiteDiscovered OnSiteDiscovered;
+    UPROPERTY(BlueprintAssignable, Category = "Events|Radar") FOnRadarContactUpdated OnRadarContactUpdated;
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSalvageSiteRemoved OnSalvageSiteRemoved;
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSalvageContestStarted OnSalvageContestStarted;
 };

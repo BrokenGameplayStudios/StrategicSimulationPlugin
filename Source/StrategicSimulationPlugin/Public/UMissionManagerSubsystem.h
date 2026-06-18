@@ -36,6 +36,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     bool HasOffensiveTargetInRange(UStrategyVehicle* Vehicle) const;
 
+    /** Returns true when passive radar has a contact this vehicle can intercept. */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
+    bool HasInterceptionTargetFromContacts(UStrategyVehicle* Vehicle) const;
+
+    /** Player/AI: launch Interception at a base-radar contact (immediate departure). */
+    UFUNCTION(BlueprintCallable, Category = "Mission|Interception")
+    bool LaunchInterceptionAtContact(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FGuid ContactId);
+
     /** Returns true if the vehicle can reach a known active wreck for salvage */
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     bool HasSalvageTargetInRange(UStrategyVehicle* Vehicle) const;

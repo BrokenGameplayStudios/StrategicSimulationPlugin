@@ -119,6 +119,26 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
     bool bStaleIntelEnabled = true;
 
+    /** Command Center passive radar without vehicle sortie (PR-11). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
+    bool bBasePassiveRadarEnabled = true;
+
+    /** Passive radar range from operational Command Center (logical map pixels). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel", meta = (ClampMin = "64.0", ClampMax = "2000.0"))
+    float BaseRadarRangePixels = 512.0f;
+
+    /** Hours between Command Center passive radar pings. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel", meta = (ClampMin = "0.25", ClampMax = "24.0"))
+    float BaseRadarPingIntervalHours = 1.0f;
+
+    /** Hours before an unseen radar contact expires. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel", meta = (ClampMin = "1.0", ClampMax = "72.0"))
+    float RadarContactExpiryHours = 6.0f;
+
+    /** AI launches Interception when base radar spots inbound threats (PR-11). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Radar & Intel")
+    bool bAIReactiveInterceptionEnabled = true;
+
     /** Days a wreck remains on the map before auto-removal if not salvaged. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Campaign | Salvage", meta = (ClampMin = "1", ClampMax = "90"))
     int32 SalvageWreckExpiryDays = 7;
@@ -192,6 +212,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Managers")
     class URadarTerrainSubsystem* GetRadarTerrainManager() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Managers")
+    class URadarContactSubsystem* GetRadarContactManager() const;
 
     UFUNCTION(BlueprintCallable, Category = "Databases")
     class UItemDatabase* GetItemDatabase() const { return ItemDatabaseAsset.Get(); }

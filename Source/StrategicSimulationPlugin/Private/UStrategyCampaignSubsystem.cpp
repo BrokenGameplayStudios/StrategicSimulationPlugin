@@ -5,6 +5,7 @@
 #include "UMissionManagerSubsystem.h"
 #include "UFactionIntelSubsystem.h"
 #include "URadarTerrainSubsystem.h"
+#include "URadarContactSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 #include "UStrategyBase.h"
 #include "UStrategyFacility.h"
@@ -163,6 +164,11 @@ void UStrategyCampaignSubsystem::ResetSimulation()
     if (UFactionIntelSubsystem* IntelMgr = GetFactionIntelManager())
     {
         IntelMgr->ClearAllIntel();
+    }
+
+    if (URadarContactSubsystem* ContactMgr = GetRadarContactManager())
+    {
+        ContactMgr->ClearAllContacts();
     }
 
     UE_LOG(LogTemp, Display, TEXT("[RESET] Simulation has been fully cleared."));
@@ -463,6 +469,11 @@ UFactionIntelSubsystem* UStrategyCampaignSubsystem::GetFactionIntelManager() con
 URadarTerrainSubsystem* UStrategyCampaignSubsystem::GetRadarTerrainManager() const
 {
     return GetGameInstance() ? GetGameInstance()->GetSubsystem<URadarTerrainSubsystem>() : nullptr;
+}
+
+URadarContactSubsystem* UStrategyCampaignSubsystem::GetRadarContactManager() const
+{
+    return GetGameInstance() ? GetGameInstance()->GetSubsystem<URadarContactSubsystem>() : nullptr;
 }
 
 void UStrategyCampaignSubsystem::SaveCampaign(int32 SlotIndex)

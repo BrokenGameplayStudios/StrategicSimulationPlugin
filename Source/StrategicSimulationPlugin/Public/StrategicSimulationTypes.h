@@ -181,6 +181,34 @@ enum class ERadarBlockerShape : uint8
     Rect    UMETA(DisplayName = "Rectangle")
 };
 
+/** Enemy vehicle track from Command Center passive radar (PR-11). */
+USTRUCT(BlueprintType)
+struct FRadarContact
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    FGuid ContactId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    EFactionType DetectingFaction = EFactionType::Neutral;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    FVector2D LastPosition = FVector2D::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    FVector2D EstimatedVelocity = FVector2D::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    float LastSeenGameHours = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    bool bIsInboundThreat = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Radar Contact")
+    FString TrackedVehicleName;
+};
+
 USTRUCT(BlueprintType)
 struct FRadarBlockerZone
 {
