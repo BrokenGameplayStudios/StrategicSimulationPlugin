@@ -182,6 +182,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Base Expansion")
     bool IsCommandCenterOperational(const UStrategyBase* Base) const;
 
+    /** Days remaining on an in-progress Command Center (0 if none or already operational). */
+    UFUNCTION(BlueprintPure, Category = "Base Expansion")
+    int32 GetCommandCenterBuildDaysRemaining(const UStrategyBase* Base) const;
+
     /** Finds a base under construction at a site (CC not yet operational). */
     UFUNCTION(BlueprintPure, Category = "Base Expansion")
     UStrategyBase* FindExpansionBaseAtSite(const UStrategySiteDefinition* Site) const;

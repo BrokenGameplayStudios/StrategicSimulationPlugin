@@ -142,6 +142,8 @@ void AStrategyDebugHUD::Tick(float DeltaTime)
         AppendCommandCenterStats(EnemyCC, DebugText);
     }
 
+    AppendExpansionConstructionStatus(BaseMgr, DebugText);
+
     GEngine->AddOnScreenDebugMessage(999, 0.0f, FColor::Cyan, DebugText);
 }
 
@@ -188,6 +190,45 @@ void AStrategyDebugHUD::AppendCommandCenterStats(UStrategyBase* Base, FString& D
         Base->GetPOWCount(), Base->GetKIABodyCount());
     DebugText += FString::Printf(TEXT("  Soldiers on mission: %d | Vehicles on mission: %d\n"),
         Base->GetSoldiersOnMissionCount(), Base->GetVehiclesOnMissionCount());
+}
+
+/** Appends forward bases with CC construction in progress and days remaining. */
+void AStrategyDebugHUD::AppendExpansionConstructionStatus(const UBaseManagerSubsystem* BaseMgr, FString& DebugText)
+{
+    if (!BaseMgr)
+    {
+        return;
+    }
+
+    bool bHeaderWritten = false;
+
+    auto AppendFactionBases = [&](EFactionType Faction, const TCHAR* FactionLabel)
+    {
+        for (UStrategyBase* Base : BaseMgr->GetBases(Faction))
+        {
+            if (!Base || BaseMgr->IsCommandCenterOperational(Base))
+            {
+                continue;
+            }
+
+            if (!bHeaderWritten)
+            {
+                DebugText += TEXT("\n=== CC Under Construction ===\n");
+                bHeaderWritten = true;
+            }
+
+            const int32 DaysRemaining = BaseMgr->GetCommandCenterBuildDaysRemaining(Base);
+            const FString StatusText = DaysRemaining > 0
+                ? FString::Printf(TEXT("%d day(s) left"), DaysRemaining)
+                : FString(TEXT("awaiting CC placement"));
+
+            DebugText += FString::Printf(TEXT("  %s '%s': %s\n"),
+                FactionLabel, *Base->BaseName.ToString(), *StatusText);
+        }
+    };
+
+    AppendFactionBases(EFactionType::Human, TEXT("Human"));
+    AppendFactionBases(EFactionType::Enemy, TEXT("Enemy"));
 }
 
 /** Console exec: toggles on-screen faction/resource debug text (gated by campaign debug flag). */
@@ -302,15 +343,16 @@ void AStrategyDebugHUD::DrawHUD()
     // Legend (updated)
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE  = Human Bases"), 50, 50, 1.0f, 1.0f, FFontRenderInfo());
     Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("RED   = Enemy Bases"), 50, 80, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GREEN = Human Vehicles  |  RED = Enemy Vehicles"), 50, 110, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths"), 50, 140, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 170, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE/RED TRIANGLE = Salvage Wreck (destroyed vehicle faction)"), 50, 200, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GRAY = Radar LOS blocker zones (mountains)"), 50, 230, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN RING = Command Center passive radar range"), 50, 260, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN DIAMOND = Friendly radar entry  |  MAGENTA = Enemy radar entry"), 50, 290, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 320, 1.0f, 1.0f, FFontRenderInfo());
-    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 350, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("ORANGE = CC under construction (label shows days left)"), 50, 95, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GREEN = Human Vehicles  |  RED = Enemy Vehicles"), 50, 125, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Yellow lines = Active Mission paths"), 50, 155, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("WHITE SQUARE = Node | Blue/Red dots = Discovered by faction"), 50, 185, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("BLUE/RED TRIANGLE = Salvage Wreck (destroyed vehicle faction)"), 50, 215, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("GRAY = Radar LOS blocker zones (mountains)"), 50, 245, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN RING = Command Center passive radar range"), 50, 275, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("CYAN DIAMOND = Friendly radar entry  |  MAGENTA = Enemy radar entry"), 50, 305, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("Press ToggleSiteInfo to show resource info on sites"), 50, 335, 1.0f, 1.0f, FFontRenderInfo());
+    Canvas->DrawText(GEngine->GetSmallFont(), FText::FromString("YELLOW SQUARE = Inspected Site"), 50, 365, 1.0f, 1.0f, FFontRenderInfo());
 
     // === SITE INSPECTOR (Bottom of screen) ===
     if (SelectedSiteIndex >= 0)
@@ -721,16 +763,37 @@ void AStrategyDebugHUD::DrawBase(UStrategyBase* Base, FLinearColor Color)
 
     FVector2D ScreenPos = GetScreenPosition(Base->MapLocation);
 
+    UBaseManagerSubsystem* BaseMgr = GetGameInstance() ? GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>() : nullptr;
+    const bool bCCUnderConstruction = BaseMgr && !BaseMgr->IsCommandCenterOperational(Base);
+    const int32 CCDaysRemaining = bCCUnderConstruction ? BaseMgr->GetCommandCenterBuildDaysRemaining(Base) : 0;
+
+    FLinearColor DrawColor = Color;
+    if (bCCUnderConstruction)
+    {
+        DrawColor = FLinearColor(1.0f, 0.55f, 0.1f);
+    }
+
     // Scaled base box (20x20 logical pixels → grows/shrinks with map)
     float BaseSize = 20.0f * Scale;
     Canvas->K2_DrawBox(ScreenPos - FVector2D(BaseSize * 0.5f, BaseSize * 0.5f),
-        FVector2D(BaseSize, BaseSize), 2.0f * Scale, Color);
+        FVector2D(BaseSize, BaseSize), 2.0f * Scale, DrawColor);
 
     // Scaled name label offset
     Canvas->DrawText(GEngine->GetSmallFont(),
         FText::FromString(Base->BaseName.ToString()),
         ScreenPos.X + (25.0f * Scale), ScreenPos.Y - (10.0f * Scale),
         1.0f, 1.0f, FFontRenderInfo());
+
+    if (bCCUnderConstruction)
+    {
+        const FString BuildLabel = CCDaysRemaining > 0
+            ? FString::Printf(TEXT("CC: %dd"), CCDaysRemaining)
+            : FString(TEXT("CC: ---"));
+        Canvas->DrawText(GEngine->GetSmallFont(),
+            FText::FromString(BuildLabel),
+            ScreenPos.X + (25.0f * Scale), ScreenPos.Y + (8.0f * Scale),
+            1.0f, 1.0f, FFontRenderInfo());
+    }
 
     if (Base->HasOperationalCommandCenter())
     {

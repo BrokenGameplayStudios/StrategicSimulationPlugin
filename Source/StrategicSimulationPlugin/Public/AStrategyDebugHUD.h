@@ -111,4 +111,7 @@ private:
 
     /** Builds a comma-separated facility count string for a base (non-zero types only). */
     static FString BuildFacilityListText(UStrategyBase* Base);
+
+    /** Appends forward bases with CC construction in progress and days remaining. */
+    void AppendExpansionConstructionStatus(const UBaseManagerSubsystem* BaseMgr, FString& DebugText);
 };

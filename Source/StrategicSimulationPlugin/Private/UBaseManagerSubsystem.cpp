@@ -167,8 +167,7 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         return NewBase;
     }
 
-    // === NORMAL PAID EXPANSION (unchanged) ===
-    UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
+    // === NORMAL PAID EXPANSION (cost deducted once inside BuildFacility) ===
     UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>();
 
     UFacilityDefinition* CommandDef = nullptr;
@@ -190,38 +189,42 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
         }
     }
 
-    if (ResourceMgr && CommandDef)
+    auto AbortExpansionBase = [&](const TCHAR* Reason)
     {
-        if (!ResourceMgr->CanAfford(Faction, CommandDef->BuildCost))
+        UE_LOG(LogTemp, Warning, TEXT("%s"), Reason);
+        GetMutableBases(Faction).Remove(NewBase);
+        if (Site)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[BASE] Cannot afford Command Center — ABORTING new base"));
-            if (Faction == EFactionType::Enemy) EnemyBases.Remove(NewBase);
-            else HumanBases.Remove(NewBase);
-            return nullptr;
+            Site->bHasBeenUsed = false;
         }
+        OnBaseListChanged.Broadcast(Faction);
+        OnFacilityListChanged.Broadcast(Faction);
+    };
 
-        FResourceStockpile NegativeCost = CommandDef->BuildCost;
-        NegativeCost.Money = -NegativeCost.Money;
-        NegativeCost.Metals = -NegativeCost.Metals;
-        NegativeCost.Biologicals = -NegativeCost.Biologicals;
-        NegativeCost.Chemicals = -NegativeCost.Chemicals;
-        ResourceMgr->AddResources(Faction, NegativeCost);
-
-        UE_LOG(LogTemp, Display, TEXT("[BUILD] Order accepted — deducted cost for Command Center"));
+    if (!CommandDef)
+    {
+        AbortExpansionBase(TEXT("[BASE] No Command Center definition — ABORTING new base"));
+        return nullptr;
     }
 
     UStrategyFacility* CommandFacility = BuildFacility(Faction, CommandDef, NewBase);
 
-    if (CommandFacility)
+    if (!CommandFacility)
     {
-        const int32 BuildDays = CommandDef ? FMath::Max(1, CommandDef->BuildTimeDays) : 4;
-        CommandFacility->bIsOperational = false;
-        CommandFacility->BuildProgressDays = BuildDays;
-        NewBase->UpdatePowerFromFacilities();
-
-        UE_LOG(LogTemp, Display, TEXT("[FACILITY] Command Center construction started in new base '%s' (%d days)"),
-            *NewBase->BaseName.ToString(), BuildDays);
+        const FString AbortMsg = FString::Printf(
+            TEXT("[BASE] Command Center placement failed for '%s' — ABORTING new base (site reopened)"),
+            *NewBase->BaseName.ToString());
+        AbortExpansionBase(*AbortMsg);
+        return nullptr;
     }
+
+    const int32 BuildDays = FMath::Max(1, CommandDef->BuildTimeDays);
+    CommandFacility->bIsOperational = false;
+    CommandFacility->BuildProgressDays = BuildDays;
+    NewBase->UpdatePowerFromFacilities();
+
+    UE_LOG(LogTemp, Display, TEXT("[FACILITY] Command Center construction started in new base '%s' (%d days)"),
+        *NewBase->BaseName.ToString(), BuildDays);
 
     UE_LOG(LogTemp, Display, TEXT("[AI] Expanded to new base '%s'"), *NewBase->BaseName.ToString());
     return NewBase;
@@ -475,6 +478,12 @@ void UBaseManagerSubsystem::AdvanceFacilityConstruction(EFactionType Faction)
             }
 
             Fac->BuildProgressDays--;
+
+            if (Fac->FacilityDefinition->FacilityType == EFacilityType::Command && Fac->BuildProgressDays > 0)
+            {
+                UE_LOG(LogTemp, Display, TEXT("[CC BUILD] %s '%s' — %d day(s) remaining"),
+                    *UEnum::GetValueAsString(Faction), *Base->BaseName.ToString(), Fac->BuildProgressDays);
+            }
 
             if (Fac->BuildProgressDays <= 0)
             {
@@ -1458,6 +1467,30 @@ bool UBaseManagerSubsystem::CanBuildBaseOnSite(EFactionType Faction, UStrategySi
     // Check base limit
     if (!CanBuildNewBase(Faction)) return false;
 
+    if (UStrategyCampaignSubsystem* Campaign = GetGameInstance()->GetSubsystem<UStrategyCampaignSubsystem>())
+    {
+        if (UFacilityDatabase* FacilityDB = Campaign->FacilityDatabaseAsset.Get())
+        {
+            for (const TSoftObjectPtr<UFacilityDefinition>& SoftDef : FacilityDB->AvailableFacilities)
+            {
+                if (UFacilityDefinition* Def = SoftDef.Get())
+                {
+                    if (Def->FacilityType == EFacilityType::Command)
+                    {
+                        if (UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>())
+                        {
+                            if (!ResourceMgr->CanAfford(Faction, Def->BuildCost))
+                            {
+                                return false;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     return true;
 }
 
@@ -1479,6 +1512,26 @@ bool UBaseManagerSubsystem::IsCommandCenterOperational(const UStrategyBase* Base
     }
 
     return false;
+}
+
+/** Days remaining on an in-progress Command Center (0 if none or already operational). */
+int32 UBaseManagerSubsystem::GetCommandCenterBuildDaysRemaining(const UStrategyBase* Base) const
+{
+    if (!Base)
+    {
+        return 0;
+    }
+
+    for (const UStrategyFacility* Fac : Base->Facilities)
+    {
+        if (Fac && Fac->FacilityDefinition && Fac->FacilityDefinition->FacilityType == EFacilityType::Command
+            && !Fac->bIsOperational && Fac->BuildProgressDays > 0)
+        {
+            return Fac->BuildProgressDays;
+        }
+    }
+
+    return 0;
 }
 
 /** Finds a base under construction at a site (CC not yet operational). */
