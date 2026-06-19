@@ -12,6 +12,8 @@
 #include "UStrategyFacility.h"
 #include "UStrategyEventDispatcher.h"
 #include "StrategicSiteDefinition.h"
+#include "UStrategyTechDefinition.h"
+#include "UItemDefinition.h"
 
 // Wires subsystem dependencies and binds OnDayPassed to campaign, mission, and AI subsystems.
 void UStrategyCampaignSubsystem::Initialize(FSubsystemCollectionBase& Collection)

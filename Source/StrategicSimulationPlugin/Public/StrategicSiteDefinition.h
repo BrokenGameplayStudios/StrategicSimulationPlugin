@@ -42,53 +42,59 @@ class STRATEGICSIMULATIONPLUGIN_API UStrategySiteDefinition : public UDataAsset
     GENERATED_BODY()
 
 public:
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site")
-    FGuid SiteId;
+    // === Identity (design-time / map authoring) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Identity")
+    FString SiteName = TEXT("Unnamed Site");
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site")
-    FVector2D Location;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Identity")
     EStrategySiteType SiteType = EStrategySiteType::PotentialBase;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Identity",
+        meta = (ToolTip = "Logical map position in pixels (matches vehicle waypoints and radar)."))
+    FVector2D Location;
+
+    // === Runtime state ===
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Runtime")
+    FGuid SiteId;
+
     /** Faction that owned the vehicle destroyed at this salvage site (Human = blue, Enemy = red on debug map). */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Salvage|Runtime")
     EFactionType WreckOwnerFaction = EFactionType::Neutral;
 
     /** Factions that know this wreck location without radar (combat engagement participants). */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Salvage|Runtime")
     TArray<EFactionType> KnownFactions;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Salvage|Runtime")
     ESalvageSiteState SalvageState = ESalvageSiteState::Active;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Salvage|Runtime")
     TSoftObjectPtr<UVehicleDefinition> SourceVehicleDefinition;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Salvage|Runtime")
     int32 CreatedOnSimulationDay = 0;
 
     /** Simulation day when this wreck is removed if not salvaged (CreatedOnSimulationDay + expiry). */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Salvage|Runtime")
     int32 SalvageExpiresOnDay = 0;
 
     /** Soldiers missing after the crash (rescue/POW eligible while wreck is active). */
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Site|Salvage")
+    UPROPERTY(VisibleAnywhere, Transient, Category = "Salvage|Runtime")
     TArray<UStrategySoldier*> MIASoldiers;
 
     /** Soldiers killed in the vehicle destruction (not mission KIA). */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Salvage|Runtime")
     int32 KIACrashCount = 0;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Site")
+    UPROPERTY(BlueprintReadOnly, Category = "Runtime",
+        meta = (ToolTip = "True after a base has been built or a one-time resource node has been fully harvested."))
     bool bHasBeenUsed = false;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site")
-    FString SiteName = TEXT("Unnamed Site");
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site|Resources")
+    // === Resources (design-time seed + runtime depletion) ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources|Seed",
+        meta = (ToolTip = "Starting extractable stockpile when the site is generated or authored."))
     FResourceStockpile MaxResources;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Resources")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Resources|Runtime")
     FResourceStockpile CurrentResources;
 };

@@ -5,14 +5,14 @@
 #include "UResearchTechDefinition.h"
 #include "UResearchDatabase.generated.h"
 
-/** Registry of research tech definitions available in the campaign tech tree. */
+/** Master catalog of laboratory research projects (tech tree roots and branches). */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UResearchDatabase : public UPrimaryDataAsset
 {
     GENERATED_BODY()
 
 public:
-    /** Soft references to all research projects that can be started at laboratories. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Research")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Catalog",
+        meta = (ToolTip = "Ordered list of research projects. AI iterates this list; chain follow-ups via UnlocksResearch on each project."))
     TArray<TSoftObjectPtr<UResearchTechDefinition>> AvailableTechs;
 };

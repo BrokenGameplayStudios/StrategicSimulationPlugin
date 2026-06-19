@@ -6,38 +6,50 @@
 #include "UItemDefinition.h"
 #include "USoldierClassDefinition.generated.h"
 
-/** Primary data asset defining a soldier archetype: stats, training cost, and loadout rules. */
+/**
+ * Soldier archetype: base stats, training cost/time, and loadout rules.
+ *
+ * Designer order: Identity → Stats → Training → Progression → Loadout.
+ */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API USoldierClassDefinition : public UPrimaryDataAsset
 {
     GENERATED_BODY()
 
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soldier")
+    // === Identity ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Identity")
     FText ClassName;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soldier")
+    // === Stats ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats",
+        meta = (ShowOnlyInnerProperties, ToolTip = "Base combat and mobility attributes before gear bonuses."))
     FSoldierStats BaseStats;
 
-    /** Full cost to train one soldier of this class */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Training")
+    // === Training ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Training|Cost",
+        meta = (ToolTip = "Resources spent when training starts at Living Quarters."))
     FResourceStockpile TrainingCost;
 
-    /** How many days it takes to train one soldier of this class */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Training")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Training|Timing",
+        meta = (ClampMin = "1", ToolTip = "Days to complete training in a Living Quarters slot."))
     int32 TrainingDays = 4;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soldier")
+    // === Progression ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression",
+        meta = (ClampMin = "0", ToolTip = "Experience granted when the soldier finishes training."))
     int32 StartingXP = 0;
 
-    /** Items this soldier is allowed to equip (class restrictions) */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout")
+    // === Loadout ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout|Rules",
+        meta = (ToolTip = "Item definitions this class is allowed to equip (empty = unrestricted)."))
     TArray<TSoftObjectPtr<UItemDefinition>> AllowedItems;
 
-    /** Maximum number of items this class can carry */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout|Rules",
+        meta = (ClampMin = "1", ToolTip = "Maximum equipped items for this class."))
     int32 MaxLoadoutSize = 6;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout|Starting Gear",
+        meta = (ToolTip = "Items granted when training completes."))
     TArray<TSoftObjectPtr<UItemDefinition>> StartingGear;
 };

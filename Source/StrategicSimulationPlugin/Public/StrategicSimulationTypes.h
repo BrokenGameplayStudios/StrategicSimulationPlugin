@@ -32,22 +32,22 @@ struct FResourceStockpile
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy|Currency")
     int32 Money = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy|Materials")
     int32 Metals = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy|Materials")
     int32 Biologicals = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy|Materials")
     int32 Chemicals = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy|Materials")
     int32 ExoticMaterial = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy|Research")
     int32 ResearchPoints = 0;
 
     /** Returns a new stockpile with each field summed with Other. */
@@ -106,11 +106,11 @@ enum class EItemCategory : uint8
 UENUM(BlueprintType)
 enum class ETechTier : uint8
 {
-    Tier0,
-    Tier1,
-    Tier2,
-    Tier3,
-    Tier4
+    Tier0   UMETA(DisplayName = "Tier 0 — Prototype"),
+    Tier1   UMETA(DisplayName = "Tier 1 — Basic"),
+    Tier2   UMETA(DisplayName = "Tier 2 — Advanced"),
+    Tier3   UMETA(DisplayName = "Tier 3 — Elite"),
+    Tier4   UMETA(DisplayName = "Tier 4 — Experimental")
 };
 
 /** Base facility archetype; drives build rules, production, and prerequisites. */
@@ -136,11 +136,11 @@ enum class EFacilityType : uint8
 UENUM(BlueprintType)
 enum class EVehicleType : uint8
 {
-    Transport,
-    Gunship,
-    Support,
-    Scout,
-    Heavy
+    Transport   UMETA(DisplayName = "Transport"),
+    Gunship     UMETA(DisplayName = "Gunship"),
+    Support     UMETA(DisplayName = "Support"),
+    Scout       UMETA(DisplayName = "Scout"),
+    Heavy       UMETA(DisplayName = "Heavy")
 };
 
 /** Damage band for vehicles; affects repair cost, availability, and salvage eligibility. */
@@ -169,19 +169,19 @@ struct FSoldierStats
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vitality", meta = (ClampMin = "1"))
     int32 Health = 10;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = "0", ClampMax = "100"))
     int32 Aim = 65;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = "0"))
     int32 Defense = 10;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mental", meta = (ClampMin = "0", ClampMax = "100"))
     int32 Willpower = 50;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mobility", meta = (ClampMin = "0"))
     int32 Mobility = 12;
 };
 
@@ -317,16 +317,16 @@ struct FVehicleStats
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Durability", meta = (ClampMin = "1"))
     int32 MaxHealth = 100;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = "0"))
     int32 AttackPower = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crew", meta = (ClampMin = "1"))
     int32 SoldierCapacity = 4;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Build", meta = (ClampMin = "1"))
     int32 ProductionDays = 20;
 };
 

@@ -5,14 +5,14 @@
 #include "UVehicleDefinition.h"
 #include "UVehicleDatabase.generated.h"
 
-/** Registry of vehicle definitions available for production and AI fleet planning. */
+/** Master catalog of vehicle hull definitions for hangar production and AI fleet planning. */
 UCLASS(BlueprintType)
 class STRATEGICSIMULATIONPLUGIN_API UVehicleDatabase : public UPrimaryDataAsset
 {
     GENERATED_BODY()
 
 public:
-    /** Soft references to all vehicle types that can be built at hangars. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicles")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Catalog",
+        meta = (ToolTip = "All vehicle hulls buildable at Hangars. Weapon/defense items live in the item database."))
     TArray<TSoftObjectPtr<UVehicleDefinition>> AvailableVehicles;
 };
