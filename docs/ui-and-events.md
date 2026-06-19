@@ -7,36 +7,88 @@
 | `UStrategyUserWidget` | CommonUI base for strategic HUD panels |
 | `UStrategyActivatableWidget` | Menus and modal screens |
 | `UStrategySalvageMapWidget` | Fog-aware wreck overlay |
-| `UStrategyRadarContactMapWidget` | Radar contacts, hover intel, optional click-to-intercept |
-| `UStrategicSimulationDisplayHelpers` | Blueprint function library for markers and tooltips |
+| `UStrategyRadarContactMapWidget` | Radar contacts, hover intel, optional intercept |
+| `UStrategicSimulationDisplayHelpers` | Blueprint library for markers and tooltips |
 
 ## Sample content widgets
 
 Under `Content/UI/`:
 
-- `WBP_StrategicHUD` — main HUD; call `StartSimulation` from here
+- `WBP_StrategicHUD` — call `StartSimulation` from here
 - `WBP_TimeControl` — pause and time scale
 - `WBP_ResourcePanel`, `WBP_RosterScreen` — resources and soldiers
 - `WBP_Notification` / `WBP_NotificationStack` — toasts
 
 ## Event dispatcher
 
-Subscribe in Widget Blueprints to **UStrategyEventDispatcher**:
+Subscribe in Widget Blueprints to **UStrategyEventDispatcher** (game instance subsystem).
 
-| Delegate | Use in UI |
-|----------|-----------|
-| `OnSoldierRecruited` / `OnSoldierListChanged` | Refresh roster |
-| `OnResearchCompleted` | Tech unlocked toast |
-| `OnVehicleCompleted` / `OnFacilityCompleted` / `OnProductionCompleted` | Production notifications |
-| `OnSiteDiscovered` | New site on map |
-| `OnSalvageSiteCreated` / `OnSalvageSiteRemoved` | Wreck markers |
-| `OnSalvageContestStarted` | Launch tactical salvage fight |
-| `OnRadarContactUpdated` / `OnRadarContactExpired` | Threat map layer |
-| `OnOpposingFactionRadarAlert` | Enemy detected your vehicle |
+### Soldiers & production
+
+| Delegate | Params | Typical UI use |
+|----------|--------|----------------|
+| `OnSoldierRecruited` | Faction, Soldier | Roster toast |
+| `OnSoldierListChanged` | Faction, Soldiers[] | Refresh roster panel |
+| `OnSoldierLoadoutChanged` | Faction, Soldier | Gear display |
+| `OnResearchCompleted` | Faction, Tech | Tech unlocked toast |
+| `OnVehicleCompleted` | Faction, Vehicle | Hangar notification |
+| `OnFacilityCompleted` | Faction, Facility | Build complete |
+| `OnProductionCompleted` | Faction, Item | Workshop item done |
+
+**Removed (never emitted):** `OnSoldierDismissed`, `OnItemProduced`, `OnMonthlyEvent`.
+
+### Sites & salvage
+
+| Delegate | Params | Typical UI use |
+|----------|--------|----------------|
+| `OnSiteDiscovered` | Faction, Site, Reason | Map pin |
+| `OnSalvageSiteCreated` | WreckOwner, KnownFactions[], Site | Wreck marker |
+| `OnSalvageSiteRemoved` | SiteId, LastSalvagingFaction | Remove marker |
+| `OnSalvageContestStarted` | Site, HumanSnapshot, EnemySnapshot | Launch tactical fight |
+
+### Radar
+
+| Delegate | Params | Typical UI use |
+|----------|--------|----------------|
+| `OnRadarContactUpdated` | Faction, Contact | Threat layer refresh |
+| `OnRadarContactExpired` | Faction, Contact | Remove blip |
+| `OnOpposingFactionRadarAlert` | Contact, AlertMessage | Enemy spotted you |
+
+### Base expansion
+
+| Delegate | Params | Typical UI use |
+|----------|--------|----------------|
+| `OnBaseExpansionOrdered` | Faction, Site, Vehicle | Expansion dispatched |
+| `OnBaseExpansionClaimed` | Faction, Site, Base | Site claimed, CC building |
+| `OnBaseExpansionCancelled` | Faction, Site | Guard lost — site reopened |
+| `OnBaseExpansionGuardComplete` | Faction, Base, Vehicle | CC operational |
+
+### Other delegates (not on event dispatcher)
+
+| Delegate | Owner | Use |
+|----------|-------|-----|
+| `OnMissionCompleted` | `UMissionManagerSubsystem` | Mission wrap-up UI |
+| `OnResearchListChanged` | `UResearchManagerSubsystem` | Lab queue UI |
+| `OnFacilitiesChanged` | `UStrategyBase` | Base facility panel |
+| `OnSimulationClockStateChanged` | `UTimeManagerSubsystem` | Pause/speed buttons |
+| `OnDayPassed` | `UTimeManagerSubsystem` | Day counter |
 
 ## Time UI
 
-Bind **`UTimeManagerSubsystem::OnSimulationClockStateChanged`** to update pause/speed button state. Use **`IsSimulationClockHalted`** for a single paused indicator.
+Bind **`OnSimulationClockStateChanged`** on the time manager. Use **`IsSimulationClockHalted`** for a single paused indicator.
+
+Date label: **`UTimeManagerSubsystem::GetFormattedDateString`** (not campaign `GetFormattedDate`).
+
+## Display helpers
+
+| Function | Use |
+|----------|-----|
+| `BuildSalvageMapMarkers` | Fog-aware wreck markers |
+| `BuildRadarContactMapMarkers` | Contact diamonds (`bIncludeOpposingFactionContacts`, `bAllowClickDispatch`) |
+| `GetSiteStatusDisplayText` | Inspector status including under-construction |
+| `GetSiteStatusDisplayText(Site, BaseManager)` | Same with live base manager |
+| `FormatSalvageTooltipText` | Wreck hover (stale intel) |
+| `FormatRadarContactTooltipText` | Contact hover |
 
 ## Blueprint cheat sheet
 
@@ -45,9 +97,9 @@ Bind **`UTimeManagerSubsystem::OnSimulationClockStateChanged`** to update pause/
 | Start campaign | `UStrategyCampaignSubsystem::StartSimulation` |
 | Unpause | `UTimeManagerSubsystem::TogglePause` |
 | Get managers | `GetResourceManager`, `GetBaseManager`, `GetMissionManager`, … on Campaign |
-| Intercept contact (player) | `TryLaunchInterceptionAtContactAuto` or `UStrategyRadarContactMapWidget::TryInterceptContactById` |
-| Intercept from HUD button | `GetHoveredContactId` + `TryInterceptContactByIdForFaction` on radar widget |
-| Site status (inspector) | `GetSiteStatusDisplayText(Site, BaseManager)` — includes under-construction |
+| Launch mission | `UMissionManagerSubsystem::StartMission` |
+| Order expansion | `UBaseManagerSubsystem::StartBaseExpansion` |
+| Intercept (player) | `TryLaunchInterceptionAtContactAuto` or radar widget |
+| Intercept (HUD button) | `GetHoveredContactId` + `TryInterceptContactByIdForFaction` |
 | Resolve salvage fight | `ResolveSalvageContest` |
-| Build salvage markers | `UStrategicSimulationDisplayHelpers::BuildSalvageMapMarkers` |
-| Build radar markers | `BuildRadarContactMapMarkers` (optional `bIncludeOpposingFactionContacts`, `bAllowClickDispatch`) |
+| Save QA slot | `SaveCampaign(SlotIndex)` |

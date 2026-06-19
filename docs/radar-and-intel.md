@@ -2,80 +2,91 @@
 
 ## Vehicle radar
 
-Vehicles ping on an interval while on mission. Within range and line of sight they can:
+Vehicles ping on **`PingIntervalHours`** while on mission. Within range and line of sight they can:
 
-- Discover undiscovered **sites** (potential bases, resource nodes)
+- Discover undiscovered **sites** → `AddDiscoveredSite` + `OnSiteDiscovered`
 - Detect **enemy vehicles** (parked or in flight)
 - Scan **enemy bases** along the flight path
 
-Blocked pings respect **`bRadarLOSEnabled`** and mountain **blocker zones** on the initializer.
+Respects **`bRadarLOSEnabled`** and **`RadarBlockerZones`** on the initializer (mountain blockers).
 
 ## Command Center passive radar
 
-Operational Command Centers sweep on **`BaseRadarPingIntervalHours`** within **`BaseRadarRangePixels`** without sending a vehicle.
+Operational Command Centers sweep every **`BaseRadarPingIntervalHours`** within **`BaseRadarRangePixels`**.
 
-Creates **radar contacts** for enemy vehicles in range:
+Creates **radar contacts** (`FRadarContact`) for enemy vehicles:
 
-- **Entry point** — where the threat first entered range (used for intercept and patrol)
-- **Heading and speed** — estimated from movement
-- **Inbound flag** — vehicle moving toward friendly territory
-- **Threatened base** — nearest friendly base at risk
+| Field | Use |
+|-------|-----|
+| First-detected position | On the **passive radar ring** (backtracked along flight path) — intercept/patrol target |
+| Last position / velocity | Track updates |
+| `bIsInboundThreat` | Moving toward friendly territory |
+| `ThreatenedBaseName` | Nearest friendly base at risk |
 
 Contacts expire after **`RadarContactExpiryHours`** without refresh.
 
+Requires **`bBasePassiveRadarEnabled`**.
+
 ## Player map overlay
 
-**UStrategyRadarContactMapWidget** draws contact diamonds on the HUD:
+**UStrategyRadarContactMapWidget** draws contact diamonds:
 
-- Hover for tooltip (faction, base, entry point, heading, speed, staleness)
-- Toasts on new contacts for the widget's `ViewerFaction`
-- **`bShowOpposingFactionContacts`** (default on) — also draws the other faction's contacts (cyan = Human, magenta = Enemy)
+- Hover tooltip via **`FormatRadarContactTooltipText`**
+- Toasts on new contacts for widget **`ViewerFaction`**
+- **`bShowOpposingFactionContacts`** (default on) — cyan = Human, magenta = Enemy
 
-Requires **`bBasePassiveRadarEnabled`**. Spawned by test actor at z-order 11 or embed in your HUD.
+Spawned by test actor at z-order 11 or embed in your HUD.
 
 ### AI vs AI / spectate mode
 
-When **`UAIControllerSubsystem`** is simulating a faction (`IsSimulatingHumanAI` / `IsSimulatingEnemyAI`):
+When **`UAIControllerSubsystem`** is simulating a faction:
 
-- **Left-click intercept is off** by default (`bAllowPlayerClickToIntercept = false`)
-- Tooltips show *"AI handles interception when enabled"* instead of *"Click to launch interception"*
-- **Reactive AI** still dispatches gunships via `URadarContactSubsystem` when `bAIReactiveInterceptionEnabled` is on
+- **`bAllowPlayerClickToIntercept`** defaults **false**
+- Tooltips say *"AI handles interception when enabled"*
+- **`TryReactiveInterception`** still dispatches AI gunships when enabled
 
-Set **`bAllowPlayerClickToIntercept = true`** on the widget to restore click-to-intercept during AI runs (testing only).
+Set **`bAllowPlayerClickToIntercept = true`** on the widget for click-to-intercept during AI runs (testing).
 
 ### Manual intercept (designer UI)
-
-Wire a button instead of map click:
 
 | Blueprint call | Purpose |
 |----------------|---------|
 | `GetHoveredContactId` | Contact under cursor |
-| `GetHoveredContactFaction` | Human or Enemy owner of that contact |
-| `GetHoveredTooltipText` | Same text as the hover panel |
-| `IsClickToInterceptAllowed` | Hide/disable button in spectate mode |
+| `GetHoveredContactFaction` | Human or Enemy owner |
+| `GetHoveredTooltipText` | Hover panel text |
+| `IsClickToInterceptAllowed` | Hide button in spectate mode |
 | `TryInterceptContactById` | Dispatch for `ViewerFaction` |
-| `TryInterceptContactByIdForFaction` | Dispatch for either faction's hovered contact |
+| `TryInterceptContactByIdForFaction` | Dispatch for either faction |
 
-Backend: `UMissionManagerSubsystem::TryLaunchInterceptionAtContactAuto` (requires crew — see [Missions & AI](missions-and-ai.md)).
+Backend: **`TryLaunchInterceptionAtContactAuto`** (requires crew — see [Missions & AI](missions-and-ai.md)).
 
 ## AI response
 
-- **Reactive interception** — idle gunships launch on inbound contacts when AI reactive mode is on
-- **Defensive patrol** — vehicles patrol toward entry lanes when threats exist
-- **Hot spokes** — recon patrols prefer directions where threats were recently detected
+- **Reactive interception** — idle gunships on inbound contacts (`bAIReactiveInterceptionEnabled`)
+- **Defensive patrol** — toward radar entry lanes when threats exist
+- **Hot spokes** — recon prefers directions of recent inbound contacts (`UExplorationSubsystem`)
 
 ## Enemy detection alert
 
-When enemy radar picks up **your** inbound vehicle, **`OnOpposingFactionRadarAlert`** fires (if `bNotifyPlayerOfEnemyRadarContacts`). Radar map widget shows an intel toast.
+Enemy radar on **your** inbound vehicle fires **`OnOpposingFactionRadarAlert`** when `bNotifyPlayerOfEnemyRadarContacts` is on.
 
-Debug HUD can draw **magenta diamonds** for enemy-side contacts when `bShowEnemyRadarContactsOnDebugMap` is on.
+Debug HUD draws magenta contact diamonds when **`bShowEnemyRadarContactsOnDebugMap`** is on.
 
 ## Stale intel
 
-**UFactionIntelSubsystem** stores per-faction snapshots of site resources and base-built state. UI reads **last-known** values when intel is stale (`bStaleIntelEnabled`). Fresh intel updates on radar ping, discovery, or on-station observation.
+**UFactionIntelSubsystem** stores per-faction **`FSiteIntelSnapshot`** (resources, base-built state, location known).
 
-Salvage tooltips append *"Intel stale"* when appropriate.
+| API | Use |
+|-----|-----|
+| `GetDisplayResources` | UI resource read (stale-aware) |
+| `GetDisplayHasBase` | Whether viewer believes a base exists |
+| `IsIntelFresh` | Refreshed this simulation step |
+| `ObserveSite` | Called on discovery / ping / visit |
+
+Gated by **`bStaleIntelEnabled`**. When off, UI reads live site data.
+
+**`HasKnownSiteLocation` and `GetSiteIntelSnapshot` were removed** from the public API; use display helpers above.
 
 ## Line of sight
 
-Configure **`RadarBlockerZones`** on the initializer (circles or rectangles). Debug HUD draws blockers in **brown**.
+**`RadarBlockerZones`** on initializer (circles or rectangles) → **`URadarTerrainSubsystem`**. Debug HUD draws blockers in **brown**.

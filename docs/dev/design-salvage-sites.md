@@ -1,15 +1,17 @@
 # Salvage Sites System — Design Document
 
+> **Archive notice (June 2026):** PR-1–7 + 6b are **implemented**. For current behavior use the [user salvage guide](../salvage.md) and [implementation summary](./design-salvage-sites-summary.md). Superseded in source: `AddDiscoveredSiteAtLocation`, `TryBuildBaseOnSite`, `DiscoveringFaction` field. Discovery is `AddDiscoveredSite(Faction, Site, Reason)` only. New bases use vehicle-guarded expansion.
+
 | Field | Value |
 |-------|-------|
 | **Author** | Strategic Simulation Team |
 | **Reviewer** | See `design-salvage-sites-review.md` |
 | **Date** | June 17, 2026 |
-| **Status** | Draft (revision 5 — product decisions) |
+| **Status** | Archive — revision 5 spec; implementation summary is authoritative |
 | **Plugin** | StrategicSimulationPlugin |
-| **Related** | `README.md` §2.6 Combat and detection, `UBaseManagerSubsystem`, `UMissionManagerSubsystem` |
+| **Related** | `UBaseManagerSubsystem`, `UMissionManagerSubsystem` |
 
-**See also:** [Documentation wiki](./README.md) · [Summary](./design-salvage-sites-summary.md) · [Radar & intel (follow-on)](./design-radar-intel-patrol.md)
+**See also:** [User wiki](../README.md) · [Summary](./design-salvage-sites-summary.md) · [Radar & intel](./design-radar-intel-patrol.md)
 
 ### Changelog
 

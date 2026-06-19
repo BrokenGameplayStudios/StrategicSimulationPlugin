@@ -4,6 +4,20 @@ User-facing changes to the Strategic Simulation Plugin. For setup and usage, see
 
 ## [Unreleased]
 
+### Documentation
+- Full rewrite of user wiki (`docs/`) — data assets guide, removed API table, crew/expansion/spectate coverage
+- Dev archive summaries updated; full design specs marked archive with status banners
+
+### API cleanup (Tier A/B)
+- Removed unused/legacy APIs: `AddDiscoveredSiteAtLocation`, `TryBuildBaseOnSite`, `LaunchMissionFromBase`, `PerformDailyBuildOrder`, `GetFormattedDate`, `UProductionManagerSubsystem`, engineering `TryProduce`/`StartProduction`/`GetActiveProduction`, research `TryResearch`/`ResearchDatabase`, soldier `GetCommander`/`DismissSoldier`/`ReleasePOW`/`Debug_PrintTeamRoster`, base POW daily hooks, facility `CancelConstruction`/`ProcessContainmentDaily`/`ProcessAutopsyDaily`, vehicle `LaunchScoutingMission`, intel `HasKnownSiteLocation`/`GetSiteIntelSnapshot`, events `OnSoldierDismissed`/`OnItemProduced`/`OnMonthlyEvent`, campaign `SetVictoryChances`/`SetDefeatKIAChance`
+- Removed fields: `DiscoveringFaction`, `PingRadiusPixels`, `MaxMissionDurationDays`
+- `SimulateOneDay` is a no-op; live missions complete in `UpdateAllLiveVehicles`
+- `ResetProduction` clears workshop item jobs on facilities
+
+### Data asset editor layout
+- Consistent **Identity → Economy → gameplay → Unlocks** categories on all definition headers
+- New guide: [docs/data-assets.md](docs/data-assets.md)
+
 ### Vehicle crew
 - Vehicles require **at least one soldier** aboard before any mission can launch (including reactive interception)
 - Crew is drawn from **soldiers stationed at the origin base** who are not already on another mission or vehicle

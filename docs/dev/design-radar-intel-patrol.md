@@ -1,12 +1,14 @@
 # Radar, Intel, Patrol & Interception — Design Document
 
+> **Archive notice (June 2026):** PR-8–14 are **implemented**. For current behavior use [radar & intel](../radar-and-intel.md) and the [implementation summary](./design-radar-intel-patrol-summary.md). Spectate mode, designer intercept APIs, and crew requirements were added after this spec — see user docs.
+
 | Field | Value |
 |-------|-------|
 | **Author** | Broken Gameplay Studios |
-| **Status** | Approved for PR-8–14 |
+| **Status** | Archive — PR-8–14 shipped |
 | **Depends on** | Salvage sites PR-1–7 + PR-6b (shipped) |
 
-**See also:** [Documentation wiki](./README.md) · [Summary](./design-radar-intel-patrol-summary.md) · [Salvage sites](./design-salvage-sites.md) · [Plugin README](../README.md)
+**See also:** [User wiki](../README.md) · [Summary](./design-radar-intel-patrol-summary.md) · [Salvage sites](./design-salvage-sites.md)
 
 ---
 

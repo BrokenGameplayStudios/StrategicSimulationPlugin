@@ -1,5 +1,7 @@
 ## Design Document Review: Salvage Sites System (Revision 3 — Final)
 
+> **Archive (June 2026):** Review closed; PR-1–7 shipped. Current docs: [salvage.md](../salvage.md), [design-salvage-sites-summary.md](./design-salvage-sites-summary.md). APIs noted here may reference removed symbols (`AddDiscoveredSiteAtLocation`, `TryBuildBaseOnSite`).
+
 ### Summary
 
 **Approved for PR-1–7 implementation.** Revision 4 addresses the final minor issue (stale mission state on load). All review rounds closed.

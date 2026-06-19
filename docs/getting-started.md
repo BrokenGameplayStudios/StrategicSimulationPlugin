@@ -32,12 +32,7 @@ On **AStrategyGameInitializer**, assign:
 
 Individual definitions live under `Content/Data/DA/` (Fac, Veh, Sol, Item, Res, Tech).
 
-**Vehicle Type** on each `UVehicleDefinition` controls AI behavior:
-
-| Vehicle Type | Typical role |
-|--------------|--------------|
-| Scout, Transport, Support | Recon, salvage |
-| Gunship, Heavy | Combat, offensive, interception |
+See **[Data assets](data-assets.md)** for how to author facilities, research chains, items, soldiers, and vehicles.
 
 ## First run
 
@@ -65,10 +60,11 @@ flowchart TD
 - Salvage map overlay (z-order 10)
 - Radar contact overlay (z-order 11)
 
-Assign widget classes on the test actor in the level.
+Assign widget classes on the test actor in the level. Radar overlay defaults to **spectate mode** (no click-to-intercept while AI is on).
 
 ## Next steps
 
+- [Data assets](data-assets.md) — author content and unlock chains
 - [Tuning guide](tuning.md) — adjust map, AI, salvage, radar
 - [UI & events](ui-and-events.md) — bind delegates in Widget Blueprints
 - [Debug tools](debug-tools.md) — map overlay and log filters

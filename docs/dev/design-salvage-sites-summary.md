@@ -1,82 +1,58 @@
-# Salvage Sites Design — Summary
+# Salvage Sites — Implementation Summary
 
-**See also:** [Documentation wiki](./README.md) · [Radar & intel (next)](./design-radar-intel-patrol-summary.md)
+**Last updated:** June 2026  
+**User guide:** [Salvage](../salvage.md) · [Missions & AI](../missions-and-ai.md) · [Tuning](../tuning.md)
 
-**Produced:** June 17, 2026 (revision 5 — product decisions; PR-2 implemented)  
-**Full document:** [`design-salvage-sites.md`](./design-salvage-sites.md)  
-**Review:** [`design-salvage-sites-review.md`](./design-salvage-sites-review.md)
-
----
-
-## Status
-
-**Approved for PR-1–7 + PR-6b.** Revision 5 incorporates user product decisions on fog-of-war, depletion, contested salvage, and universal wreck creation.
-
-**Follow-on:** [Radar, intel & patrol](./design-radar-intel-patrol-summary.md) (PR-8–14) extends fog-of-war with stale intel, LOS, base radar, and patrol/interception missions.
+The full PR-1–7 design spec remains in [`design-salvage-sites.md`](./design-salvage-sites.md) (archive). This page describes **what is in the codebase today**.
 
 ---
 
-## Product decisions (rev 5)
+## Shipped behavior
 
-| Topic | Decision |
-|-------|----------|
-| **Depleted wrecks** | **Disappear** from map — removed from `AllPotentialSites`, not gray markers |
-| **Both factions salvage** | **Yes** — contested salvage fires `OnSalvageContestStarted`, pauses strategic clock, loads tactical scenario from both force snapshots; abort leaves wreck for other faction (XCOM-style) |
-| **Wreck creation** | **All destroyed vehicles** create salvage sites; geography filter (ocean/jungle) deferred until per-pixel terrain exists |
-| **Salvage fog-of-war** | **Combat-known** — engagement participants already know wreck location; sending salvage is a strategic choice (winner may return expecting retaliation) |
-| **Regular site fog** | Radar discovery + blue/red dots on debug map (unchanged) |
-| **Vehicles** | Spotted only by radar (unchanged) |
+| Feature | Implementation |
+|---------|----------------|
+| Wreck on destroy | `CreateSalvageSite` — all combat destroys (when `bSalvageSitesEnabled`) |
+| Combat-known | `KnownFactions` + `RegisterCombatKnownSalvage` — no radar to dispatch |
+| Depletion | Resources hit zero → `RemoveSalvageSite` — site removed from map |
+| Expiry | `SalvageWreckExpiryDays` → `ProcessSalvageSiteExpiry` |
+| Salvage missions | Transport/Support/Scout; on-station extraction window |
+| Crew at wreck | `ProcessCrewOnVehicleDestruction` — KIA dice + MIA at site |
+| MIA rescue | `RescueMIAsFromWreck` (own faction salvage) |
+| MIA → POW | `ProcessMIAsOnOpposingSalvage` (AI dice) |
+| Contested salvage | `BeginSalvageContest` → pause clock → `ResolveSalvageContest` |
+| Fog UI | `UStrategySalvageMapWidget`, `BuildSalvageMapMarkers`, stale tooltips |
+| QA save | Site map + intel schema v3 — not full campaign |
 
----
+## Discovery API (current)
 
-## Fog-of-war model (split)
+- **Canonical:** `AddDiscoveredSite(Faction, UStrategySiteDefinition*, EDiscoveryReason)`
+- **Removed:** `AddDiscoveredSiteAtLocation`, location-based overload, `DiscoveringFaction` field
 
-```
-PotentialBase / ResourceNode  →  hidden until friendly radar ping  →  discovery dots
-SalvageSite (combat)        →  auto-known to KnownFactions       →  strategic dispatch choice
-```
+Visibility uses `DiscoveredSitesHuman` / `DiscoveredSitesEnemy` and salvage `KnownFactions`.
 
----
+## Base expansion interaction
 
-## PR plan
+New bases use **vehicle-guarded expansion** — not `TryBuildBaseOnSite` (removed). Salvage and expansion can contest the same map space; expansion uses live combat at sites, not salvage-style contest UI.
 
-| PR | Title | Focus |
-|----|-------|-------|
-| **PR-1** | Foundation + discovery fix | `KnownFactions`, `RegisterCombatKnownSalvage`, `SiteId`, guards |
-| **PR-2** | Debug HUD hardening | Inspector, visibility helpers, removed wrecks not drawn |
-| **PR-3** | Event dispatcher | Site/salvage/contest events |
-| **PR-4** | Site-map save/load (QA) | Serialize sites + clear missions on load |
-| **PR-5** | Player map | Fog-aware icons (combat-known wrecks visible immediately) |
-| **PR-6** | Salvage mission MVP | Extraction + `RemoveSalvageSite` on depletion |
-| **PR-6b** | Contested salvage dispatch | Pause clock, force snapshots, tactical hook, abort/win outcomes |
-| **PR-7** | AI & balance | Salvage vs return-after-win, retaliation tuning |
+## Events
 
----
+`OnSalvageSiteCreated`, `OnSalvageSiteRemoved`, `OnSalvageContestStarted` on `UStrategyEventDispatcher`.
 
-## PR-2 implemented (rev 5+)
+## Out of scope (still)
 
-| Feature | Detail |
-|---------|--------|
-| **Wreck expiry** | `SalvageWreckExpiryDays` (default 7) on initializer + campaign; auto-remove via `ProcessSalvageSiteExpiry` |
-| **Inspector** | Days remaining, full salvage resources (M/Mt/Bio/Chem/Exo), MIA list, KIA crash count |
-| **Crash crew** | `VehicleCrashDeathChance` dice → KIA; survivors → MIA at wreck |
-| **MIA rescue** | `RescueMIAsFromWreck` (own faction salvage, PR-6 wire-up) |
-| **MIA → POW** | `ProcessMIAsOnOpposingSalvage` + `OpposingSalvageMIAPOWChance` (AI dice; player = PR-6b combat) |
-| **Display helpers** | `GetSiteStatusDisplayText`, `ShouldShowSalvageToFaction`, salvage discovery dots on triangles |
+- Tactical salvage battle map inside plugin
+- Pixel geography filter for wreck placement
+- Full Continue Game save
 
-## Key architectural additions (rev 5)
+## PR map (historical)
 
-- `KnownFactions` on `UStrategySiteDefinition` — who knows wreck without radar
-- `RegisterCombatKnownSalvage()` — auto-populate `DiscoveredSites*` for combat participants
-- `RemoveSalvageSite()` — depletion removes wreck entirely
-- `OnSalvageContestStarted` + `PauseStrategicClock` / `ResolveSalvageContest` — contested dual-faction salvage
-- `FSalvageContestForceSnapshot` — vehicle/soldier stats for tactical layer
-
----
-
-## Review history
-
-| Round | Issues | Result |
-|-------|--------|--------|
-| Rev 1–4 | 29 | All closed (engineering review) |
-| Rev 5 | Product decisions | Incorporated directly |
+| PR | Focus | Status |
+|----|-------|--------|
+| PR-1 | Foundation, `KnownFactions`, guards | Done |
+| PR-2 | Debug HUD salvage display | Done |
+| PR-3 | Event dispatcher | Done |
+| PR-4 | Site-map QA save | Done |
+| PR-5 | Player fog map widget | Done |
+| PR-6 | Salvage mission MVP | Done |
+| PR-6b | Contested salvage hook | Done |
+| PR-7 | AI salvage scoring | Done |

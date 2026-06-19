@@ -8,7 +8,7 @@ Unreal Engine 5 strategic layer plugin (XCOM-style geoscape): factions build bas
 
 1. Enable this plugin and **CommonUI** in your project.
 2. Place **`AStrategyGameInitializer`** in your level and assign all six database assets (see [Getting started](docs/getting-started.md)).
-3. From your HUD Blueprint, call **`UStrategyCampaignSubsystem::StartSimulation()`**, then unpause time with **`UTimeManagerSubsystem::TogglePause()`** or **`StartSimulation()`**.
+3. From your HUD Blueprint, call **`UStrategyCampaignSubsystem::StartSimulation()`**, then unpause time with **`UTimeManagerSubsystem::TogglePause()`**.
 
 Optional: place **`AStrategyTestActor`** to auto-spawn `WBP_StrategicHUD` and map overlays on play.
 
@@ -16,7 +16,8 @@ Optional: place **`AStrategyTestActor`** to auto-spawn `WBP_StrategicHUD` and ma
 
 | Resource | Description |
 |----------|-------------|
-| **[Documentation Wiki](docs/README.md)** | Main index — setup, tuning, gameplay systems, UI, debug |
+| **[Documentation Wiki](docs/README.md)** | Setup, data authoring, tuning, gameplay, UI, debug |
+| **[Data assets](docs/data-assets.md)** | Author items, facilities, soldiers, vehicles, research |
 | **[Changelog](CHANGELOG.md)** | Version history |
 
 ## Repository layout

@@ -1,55 +1,53 @@
-# Radar, Intel & Patrol — Summary
+# Radar, Intel & Patrol — Implementation Summary
 
-**See also:** [Documentation wiki](./README.md) · [Full design](./design-radar-intel-patrol.md) · [Salvage sites summary](./design-salvage-sites-summary.md)
+**Last updated:** June 2026  
+**User guide:** [Radar & intel](../radar-and-intel.md) · [Missions & AI](../missions-and-ai.md)
 
-**Produced:** June 2026 · **Status:** PR-12 shipped; PR-13 next
-
----
-
-## Goal
-
-Upgrade the strategic layer from **permanent perfect intel** to **fog-of-war with stale snapshots**, **LOS-aware radar** (mountain zones), **base passive scanning**, **enemy contact tracks**, and **patrol/guard + interception** missions — increasing vehicular combat and salvage contests.
+Full PR-8–14 spec: [`design-radar-intel-patrol.md`](./design-radar-intel-patrol.md) (archive).
 
 ---
 
-## Product decisions
+## Shipped behavior
 
-| Topic | Decision |
-|-------|----------|
-| **Site location** | Stays known after first sighting |
-| **Site details** | Resources, base-built state are **stale** until revisited |
-| **Mountains (v1)** | Circular/rect **blocker zones** on initializer; ray LOS |
-| **Base radar** | Command Center passive ping (v1); dedicated facility later |
-| **Contacts** | Faction registry: last position, estimated heading, expiry |
-| **Defensive missions** | Guard patrol nodes near threatened bases (fix current bug: Defensive targets enemy bases today) |
-| **En-route defense** | Friendly ships engage enemies **inbound to own bases** |
+| Feature | Implementation |
+|---------|----------------|
+| Stale intel | `UFactionIntelSubsystem` — `GetDisplayResources`, `GetDisplayHasBase`, save schema v3 |
+| Radar LOS | `URadarTerrainSubsystem` + `RadarBlockerZones` on initializer |
+| Vehicle radar | `UStrategyVehicle::PerformRadarPing` — sites, vehicles, bases |
+| Base passive radar | `URadarContactSubsystem::TickBaseRadar` — `FRadarContact` registry |
+| First-detection point | Entry position on passive ring (backtracked) |
+| Contact expiry | `RadarContactExpiryHours` |
+| Defensive / recon patrol | `UExplorationSubsystem` — entry lanes, spokes, hot spokes |
+| Interception missions | `LaunchInterceptionAtContact`, reactive queue |
+| En-route engagement | `bEngageInboundThreatsWhileInTransit` |
+| Player radar widget | `UStrategyRadarContactMapWidget` — spectate mode, designer dispatch APIs |
+| Enemy alert | `OnOpposingFactionRadarAlert` |
 
----
+## Spectate / AI vs AI (2026)
 
-## PR plan
+- `bAllowPlayerClickToIntercept` default **false** while AI sim runs
+- `bShowOpposingFactionContacts` default **true** — both factions drawn
+- Designer APIs: `GetHoveredContactId`, `TryInterceptContactByIdForFaction`, etc.
 
-| PR | Focus |
-|----|-------|
-| **PR-8** | Docs wiki, `bAllowDebugExecCommands`, `bRadarLOSEnabled`, `bStaleIntelEnabled` |
-| **PR-9** | `UFactionIntelSubsystem`, stale UI, save schema v3 |
-| **PR-10** | `URadarTerrainSubsystem`, blocker zones, LOS in all radar |
-| **PR-11** | Base passive radar tick |
-| **PR-12** | `FRadarContact`, `OnRadarContactUpdated`, universal wreck destroy |
-| **PR-13** | Patrol/Guard missions + AI |
-| **PR-14** | Interception scheduling + in-transit engagement |
+## Removed / not exposed
 
----
+- `HasKnownSiteLocation`, `GetSiteIntelSnapshot` — use display helpers on intel subsystem
+- Dedicated radar facility type — CC passive radar only in v1
 
-## Salvage integration
+## PR map (historical)
 
-- Stale wreck tooltips (PR-9)
-- More combat → more wrecks → more salvage contests (PR-12–14)
-- Prior gaps folded in: Exec shipping guard (PR-8), `ensure` on salvage base build (PR-8)
+| PR | Focus | Status |
+|----|-------|--------|
+| PR-8 | Wiki, feature flags, exec guard | Done |
+| PR-9 | Intel subsystem + stale UI | Done |
+| PR-10 | Terrain LOS | Done |
+| PR-11 | Base passive radar | Done |
+| PR-12 | Contact registry + wreck destroy | Done |
+| PR-13 | Patrol / defensive targeting fix | Done |
+| PR-14 | Interception + in-transit combat | Done |
 
----
+## Out of scope (still)
 
-## Out of scope
-
-- Pixel geography map / zone authoring tool
+- Pixel geography / zone authoring tool
 - Tactical combat map load
-- Full Continue Game save (intel extends site-map save only)
+- Full Continue Game save
