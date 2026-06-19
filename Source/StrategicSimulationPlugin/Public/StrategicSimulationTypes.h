@@ -327,9 +327,6 @@ struct FVehicleStats
     int32 SoldierCapacity = 4;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
-    int32 MaxMissionDurationDays = 15;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
     int32 ProductionDays = 20;
 };
 

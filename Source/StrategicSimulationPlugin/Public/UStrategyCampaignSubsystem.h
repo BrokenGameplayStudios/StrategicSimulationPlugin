@@ -225,23 +225,6 @@ public:
     float EnemyKIAChanceOnDefeat = 0.40f;
 
     /**
-     * Debug override for victor-side POW and KIA probabilities.
-     * Call from test harness or console during balance tuning.
-     * @param NewPOWCaptureChance Clamped 0–1 capture chance on victory.
-     * @param NewKIAChanceOnVictory Clamped 0–1 KIA chance on victory.
-     */
-    UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-    void SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory);
-
-    /**
-     * Debug override for defender KIA probability on defeat.
-     * Call from test harness when tuning casualty rates.
-     * @param NewEnemyKIAChanceOnDefeat Clamped 0–1 defender KIA chance.
-     */
-    UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
-    void SetDefeatKIAChance(float NewEnemyKIAChanceOnDefeat);
-
-    /**
      * Returns the resource stockpile manager for both factions.
      * Call from UI or systems that read/write Money, Metals, etc.
      * @return UResourceManagerSubsystem or nullptr if unavailable.
@@ -446,14 +429,6 @@ public:
      */
     UFUNCTION(BlueprintCallable, Category = "Campaign|Salvage Contest")
     void ResolveSalvageContest(ESalvageContestOutcome Outcome);
-
-    /**
-     * Returns a short HUD-friendly day string from the time manager.
-     * Call from lightweight UI that only needs "Day N".
-     * @return Formatted day label.
-     */
-    UFUNCTION(BlueprintCallable, Category = "Campaign")
-    FString GetFormattedDate() const;
 
     /**
      * Scans save slots 1–10 and returns metadata objects for occupied slots.

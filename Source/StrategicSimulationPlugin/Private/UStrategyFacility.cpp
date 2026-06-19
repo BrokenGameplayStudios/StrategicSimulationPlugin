@@ -11,7 +11,6 @@
 #include "USoldierManagerSubsystem.h"
 #include "UStrategyEventDispatcher.h"
 #include "Kismet/GameplayStatics.h"
-#include "UProductionManagerSubsystem.h"
 #include "UBaseManagerSubsystem.h"
 
 /** Repairs parked vehicles and heals stationed soldiers. */
@@ -307,79 +306,9 @@ bool UStrategyFacility::StartConstruction(UFacilityDefinition* Def)
     return true;
 }
 
-/** Cancels construction job with optional refund. */
-bool UStrategyFacility::CancelConstruction(int32 JobIndex, bool bFullRefund)
-{
-    if (JobIndex < 0 || JobIndex >= ActiveProductionJobs.Num()) return false;
-
-    UFacilityDefinition* Def = nullptr;
-    if (ActiveProductionJobs[JobIndex].Type == EProductionType::Facility)
-        Def = Cast<UFacilityDefinition>(ActiveProductionJobs[JobIndex].TargetAsset);
-
-    if (bFullRefund && Def && OwningBase)
-    {
-        if (UWorld* W = OwningBase->GetWorld())
-        {
-            if (UResourceManagerSubsystem* ResMgr = W->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>())
-            {
-                ResMgr->AddResources(EFactionType::Enemy, Def->BuildCost);
-                UE_LOG(LogTemp, Display, TEXT("[BUILD] Cancelled %s — full refund issued"), *Def->FacilityName.ToString());
-            }
-        }
-    }
-
-    ActiveProductionJobs.RemoveAt(JobIndex);
-    return true;
-}
-
 /** Alias for AdvanceProductionDay. */
 void UStrategyFacility::AdvanceConstructionDay()
 {
     AdvanceProductionDay();
 }
 
-/** Grants research bonus from held POWs. */
-void UStrategyFacility::ProcessContainmentDaily()
-{
-    if (!bIsOperational || !OwningBase || !FacilityDefinition) return;
-
-    UResourceManagerSubsystem* ResourceMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UResourceManagerSubsystem>();
-    if (!ResourceMgr) return;
-
-    int32 POWCount = OwningBase->GetPOWCount();
-    if (POWCount == 0) return;
-
-    int32 Bonus = FacilityDefinition->ProductionSlots * POWCount;
-
-    FResourceStockpile BonusStock;
-    BonusStock.ResearchPoints = Bonus;
-
-    ResourceMgr->AddResources(OwningBase->OwningFaction, BonusStock);   // we'll add OwningFaction below if missing
-
-    UE_LOG(LogTemp, Display, TEXT("[CONTAINMENT] %s at base '%s' processed %d POWs → +%d research"),
-        *FacilityDefinition->FacilityName.ToString(), *OwningBase->BaseName.ToString(), POWCount, Bonus);
-}
-
-/** Grants research from KIA bodies and clears storage. */
-void UStrategyFacility::ProcessAutopsyDaily()
-{
-    if (!bIsOperational || !OwningBase || !FacilityDefinition) return;
-
-    UResourceManagerSubsystem* ResourceMgr = UGameplayStatics::GetGameInstance(this)->GetSubsystem<UResourceManagerSubsystem>();
-    if (!ResourceMgr) return;
-
-    int32 KIACount = OwningBase->GetKIABodyCount();
-    if (KIACount == 0) return;
-
-    int32 BonusResearch = FacilityDefinition->ProductionSlots * KIACount * 15;
-
-    FResourceStockpile BonusStock;
-    BonusStock.ResearchPoints = BonusResearch;
-
-    ResourceMgr->AddResources(OwningBase->OwningFaction, BonusStock);
-
-    UE_LOG(LogTemp, Display, TEXT("[AUTOPSY] %s at base '%s' processed %d KIA bodies → +%d research (bodies disposed)"),
-        *FacilityDefinition->FacilityName.ToString(), *OwningBase->BaseName.ToString(), KIACount, BonusResearch);
-
-    OwningBase->StoredKIABodies.Empty();
-}

@@ -3,9 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "StrategicSimulationTypes.h"
-#include "UActiveProductionJob.h"
 #include "UItemDefinition.h"
-#include "UStrategyBase.h"
 #include "UEngineeringManagerSubsystem.generated.h"
 
 /** Game-instance subsystem for instant procurement and workshop-based item production. */
@@ -30,26 +28,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Procurement")
     bool PurchaseAmmoForVehicle(EFactionType Faction, UStrategyVehicle* TargetVehicle, int32 WeaponIndex);
 
-    /** Queues ItemDef production in a workshop at TargetBase (or first faction base). */
-    UFUNCTION(BlueprintCallable, Category = "Production")
-    UActiveProductionJob* StartProduction(EFactionType Faction, UItemDefinition* ItemDef, int32 Quantity = 1, UStrategyBase* TargetBase = nullptr);
-
-    /** Builds transient UActiveProductionJob snapshots from all workshop jobs for Faction. */
-    UFUNCTION(BlueprintCallable, Category = "Production")
-    TArray<UActiveProductionJob*> GetActiveProduction(EFactionType Faction) const;
-
-    /** Legacy AI hook; production is now advanced by facility queues (always returns false). */
-    UFUNCTION(BlueprintCallable, Category = "Production")
-    bool TryProduce(EFactionType Faction);
-
-    /** Destroys cached queue objects and clears Human/Enemy production arrays. */
+    /** Clears workshop item production jobs from all faction bases. */
     UFUNCTION(BlueprintCallable, Category = "Production")
     void ResetProduction();
-
-private:
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Production")
-    TArray<UActiveProductionJob*> HumanProductionQueue;
-
-    UPROPERTY(VisibleAnywhere, Transient, Category = "Production")
-    TArray<UActiveProductionJob*> EnemyProductionQueue;
 };

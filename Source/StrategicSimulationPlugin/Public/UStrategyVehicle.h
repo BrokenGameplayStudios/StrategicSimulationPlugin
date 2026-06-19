@@ -264,19 +264,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar", meta = (ClampMin = "0.1", ClampMax = "4.0"))
     float PingIntervalHours = 0.5f;  // every 30 game minutes by default
 
-    // Deprecated - Radar range is now controlled ONLY by UVehicleDefinition->RadarRangePixels
-    // Use GetRadarRange() to get the current value.
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Radar", meta = (DeprecatedProperty))
-    float PingRadiusPixels = 64.0f;
-
     /** Returns effective radar range from definition and vehicle type minimums. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Radar")
     float GetRadarRange() const;
     
-    /** Convenience wrapper to begin a recon mission toward TargetLocation. */
-    UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
-    void LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget = 3.0f);
-
     /** Main live-simulation tick: movement, combat, salvage, and radar pings. */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void UpdatePositionAndPings(float CurrentGameHours, float DeltaGameHours);

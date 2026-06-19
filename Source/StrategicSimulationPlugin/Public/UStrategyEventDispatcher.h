@@ -22,26 +22,17 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierListChanged, EFactionType
 /** Fires when a soldier's equipment changes (purchase, training loadout, or AI gear assignment). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierLoadoutChanged, EFactionType, Faction, UStrategySoldier*, Soldier);
 
-/** Reserved for soldier dismissal; not yet broadcast anywhere in the plugin. */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoldierDismissed, EFactionType, Faction, UStrategySoldier*, Soldier);
-
-/** Fires when a laboratory research job completes (UStrategyFacility or UProductionManagerSubsystem). */
+/** Fires when a laboratory research job completes (UStrategyFacility). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnResearchCompleted, EFactionType, Faction, UResearchTechDefinition*, Tech);
 
 /** Fires when a hanger vehicle construction job completes and the vehicle is parked. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnVehicleCompleted, EFactionType, Faction, UStrategyVehicle*, Vehicle);
-
-/** Reserved for workshop item output; use OnProductionCompleted instead (not broadcast separately). */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemProduced, EFactionType, Faction, UItemDefinition*, Item);
 
 /** Fires when a facility build completes or the initial Command Center is placed at game start. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnFacilityCompleted, EFactionType, Faction, UStrategyFacility*, Facility);
 
 /** Fires when a workshop item production job completes. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnProductionCompleted, EFactionType, Faction, UItemDefinition*, Item);
-
-/** Reserved for calendar month rollover; not yet broadcast anywhere in the plugin. */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthlyEvent, int32, Month);
 
 /** Fires when UBaseManagerSubsystem::CreateSalvageSite registers a new vehicle wreck on the map. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSalvageSiteCreated, EFactionType, WreckOwnerFaction, const TArray<EFactionType>&, KnownFactions, UStrategySiteDefinition*, Site);
@@ -100,26 +91,17 @@ public:
     /** @see FOnSoldierLoadoutChanged — UEngineeringManagerSubsystem::PurchaseItem, FinishSoldierTraining, AI gear. */
     UPROPERTY(BlueprintAssignable, Category = "Events") FOnSoldierLoadoutChanged OnSoldierLoadoutChanged;
 
-    /** @see FOnSoldierDismissed — reserved, not yet fired. */
-    UPROPERTY(BlueprintAssignable, Category = "Events") FOnSoldierDismissed OnSoldierDismissed;
-
-    /** @see FOnResearchCompleted — UStrategyFacility job completion and UProductionManagerSubsystem. */
+    /** @see FOnResearchCompleted — UStrategyFacility job completion. */
     UPROPERTY(BlueprintAssignable, Category = "Events") FOnResearchCompleted OnResearchCompleted;
 
     /** @see FOnVehicleCompleted — UStrategyFacility hanger job completion. */
     UPROPERTY(BlueprintAssignable, Category = "Events") FOnVehicleCompleted OnVehicleCompleted;
-
-    /** @see FOnItemProduced — reserved alias; OnProductionCompleted is used instead. */
-    UPROPERTY(BlueprintAssignable, Category = "Events") FOnItemProduced OnItemProduced;
 
     /** @see FOnFacilityCompleted — UStrategyFacility self-build and UBaseManagerSubsystem initial Command Center. */
     UPROPERTY(BlueprintAssignable, Category = "Events") FOnFacilityCompleted OnFacilityCompleted;
 
     /** @see FOnProductionCompleted — UStrategyFacility workshop item job completion. */
     UPROPERTY(BlueprintAssignable, Category = "Events") FOnProductionCompleted OnProductionCompleted;
-
-    /** @see FOnMonthlyEvent — reserved, not yet fired. */
-    UPROPERTY(BlueprintAssignable, Category = "Events") FOnMonthlyEvent OnMonthlyEvent;
 
     /** @see FOnSalvageSiteCreated — UBaseManagerSubsystem::CreateSalvageSite. */
     UPROPERTY(BlueprintAssignable, Category = "Events|Sites") FOnSalvageSiteCreated OnSalvageSiteCreated;

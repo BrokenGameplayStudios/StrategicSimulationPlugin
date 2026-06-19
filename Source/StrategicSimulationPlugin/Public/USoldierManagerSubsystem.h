@@ -20,17 +20,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Soldier")
     UStrategySoldier* RecruitSoldier(EFactionType Faction, USoldierClassDefinition* ClassDef, UStrategyBase* TargetBase);
         
-    /** Returns the first roster soldier whose class name contains "Commander", or nullptr. */
-    UFUNCTION(BlueprintCallable, Category = "Soldier")
-    UStrategySoldier* GetCommander(EFactionType Faction) const;
-
     /** Resolves SoldierClassAsset to a class definition and recruits via RecruitSoldier. */
     UFUNCTION(BlueprintCallable, Category = "Soldier")
     void FinishSoldierTraining(UStrategyBase* Base, UObject* SoldierClassAsset, EFactionType Faction);
-
-    /** Removes Soldier from both rosters and notifies listeners for Human and Enemy. */
-    UFUNCTION(BlueprintCallable, Category = "Soldier")
-    void DismissSoldier(UStrategySoldier* Soldier);
 
     /** Returns the active (non-POW, non-KIA) roster for Faction. */
     UFUNCTION(BlueprintCallable, Category = "Soldier")
@@ -52,10 +44,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Soldier")
     void BroadcastSoldierListChanged(EFactionType Faction);
 
-    /** Logs every soldier in the faction roster via PrintInfo. */
-    UFUNCTION(BlueprintCallable, Category = "Debug")
-    void Debug_PrintTeamRoster(EFactionType Faction) const;
-
     /** Returns captured enemy soldiers held by Faction. */
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     const TArray<UStrategySoldier*>& GetPOWRoster(EFactionType Faction) const;
@@ -71,10 +59,6 @@ public:
     /** Removes Soldier from active roster, adds to KIA roster, and clears mission/base state. */
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     void MarkAsKIA(EFactionType Faction, UStrategySoldier* Soldier);
-
-    /** Placeholder release handler; logs only until full POW release logic is implemented. */
-    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void ReleasePOW(UStrategySoldier* POW);
 
     /** Rolls crash deaths; survivors become MIA at the wreck site. */
     UFUNCTION(BlueprintCallable, Category = "POW/KIA|Salvage")

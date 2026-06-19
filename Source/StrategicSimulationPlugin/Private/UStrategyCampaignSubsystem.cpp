@@ -386,13 +386,6 @@ void UStrategyCampaignSubsystem::StopSimulation()
     UE_LOG(LogTemp, Display, TEXT("SIMULATION STOPPED"));
 }
 
-// Returns a simple "Day N" label from the time manager calendar day.
-FString UStrategyCampaignSubsystem::GetFormattedDate() const
-{
-    int32 Day = GetTimeManager()->GetCurrentDay();
-    return FString::Printf(TEXT("Day %d"), Day);
-}
-
 // Forwards to AI subsystem debug planner.
 void UStrategyCampaignSubsystem::Debug_RunAI()
 {
@@ -758,28 +751,10 @@ TArray<UStrategySaveGame*> UStrategyCampaignSubsystem::GetAllSaveMetadata() cons
     return Saves;
 }
 
-// Updates victor-side POW capture and KIA chances with clamped debug values.
-void UStrategyCampaignSubsystem::SetVictoryChances(float NewPOWCaptureChance, float NewKIAChanceOnVictory)
-{
-    POWCaptureChanceOnVictory = FMath::Clamp(NewPOWCaptureChance, 0.0f, 1.0f);
-    KIAChanceOnVictory = FMath::Clamp(NewKIAChanceOnVictory, 0.0f, 1.0f);
-
-    UE_LOG(LogTemp, Display, TEXT("[POW/KIA] Victory chances updated → POW Capture: %.0f%% | KIA on victory: %.0f%%"),
-        POWCaptureChanceOnVictory * 100.0f, KIAChanceOnVictory * 100.0f);
-}
-
-// Updates defender KIA chance on defeat with a clamped debug value.
-void UStrategyCampaignSubsystem::SetDefeatKIAChance(float NewEnemyKIAChanceOnDefeat)
-{
-    EnemyKIAChanceOnDefeat = FMath::Clamp(NewEnemyKIAChanceOnDefeat, 0.0f, 1.0f);
-    UE_LOG(LogTemp, Display, TEXT("[KIA] Defeat KIA chance updated → %.0f%%"), EnemyKIAChanceOnDefeat * 100.0f);
-}
-
 // Orphan debug helper (not a UStrategyCampaignSubsystem member) — logs forced autopsy request.
 UFUNCTION(BlueprintCallable, Category = "POW/KIA|Debug")
 void ForceAutopsy(EFactionType Faction)
 {
     // For instant testing
     UE_LOG(LogTemp, Display, TEXT("[KIA DEBUG] Forcing autopsy on %s KIA bodies"), *UEnum::GetValueAsString(Faction));
-    // The daily tick will handle it next frame, or you can call ProcessAutopsyDaily directly if needed
 }

@@ -149,34 +149,3 @@ void UResearchManagerSubsystem::ResetResearch()
     UE_LOG(LogTemp, Display, TEXT("[RESET] All research jobs cleared from laboratories"));
 }
 
-/** Starts the next available research for this faction if a lab slot is free. */
-bool UResearchManagerSubsystem::TryResearch(EFactionType Faction)
-{
-    // Guard: never start a second research while one is already running
-    if (GetActiveResearch(Faction).Num() > 0)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] %s already has active research — skipping"), *UEnum::GetValueAsString(Faction));
-        return false;
-    }
-
-    // Use the database we just added to the header
-    for (UResearchTechDefinition* Tech : ResearchDatabase)
-    {
-        if (!Tech) continue;
-
-        // Skip if already completed
-        if (HasCompletedResearch(Faction, Tech))
-            continue;
-
-        // Try to start it (this calls your existing StartResearch logic)
-        if (StartResearch(Faction, Tech))
-        {
-            UE_LOG(LogTemp, Display, TEXT("[RESEARCH] %s started research: %s"),
-                *UEnum::GetValueAsString(Faction), *Tech->ProjectName.ToString());
-            return true;
-        }
-    }
-
-    UE_LOG(LogTemp, Verbose, TEXT("[RESEARCH] %s — No new research available or no free lab slots"), *UEnum::GetValueAsString(Faction));
-    return false;
-}

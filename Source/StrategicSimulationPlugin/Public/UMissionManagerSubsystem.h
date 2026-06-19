@@ -106,16 +106,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission|Schedule")
     TArray<UStrategyVehicle*> GatherIdleVehiclesAtBase(UStrategyBase* Base) const;
 
-    /** Advances non-live missions by one day and resolves completed ones. */
+    /** Legacy daily hook; live missions are advanced by UpdateAllLiveVehicles. */
     UFUNCTION(BlueprintCallable, Category = "Mission")
     void SimulateOneDay();
 
     UPROPERTY(BlueprintAssignable, Category = "Mission")
     FOnMissionCompleted OnMissionCompleted;
-
-    /** Launches a mission from a base. Pass VehiclesOverride to launch a specific subset; empty = all parked vehicles. */
-    UFUNCTION(BlueprintCallable, Category = "Mission", meta = (AutoCreateRefTerm = "VehiclesOverride"))
-    UMissionGroup* LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType, const TArray<UStrategyVehicle*>& VehiclesOverride);
 
     UPROPERTY(VisibleAnywhere, Transient, Category = "Missions")
     TArray<UMissionGroup*> ActiveMissions;

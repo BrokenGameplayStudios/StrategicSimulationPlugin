@@ -114,14 +114,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Production")
     int32 GetAvailableProductionSlots() const;    
     
-    /** Grants daily research bonus based on POW count and production slots. */
-    UFUNCTION(BlueprintCallable, Category = "Containment")
-    void ProcessContainmentDaily();
-
-    /** Grants research from KIA bodies and clears stored bodies. */
-    UFUNCTION(BlueprintCallable, Category = "Autopsy")
-    void ProcessAutopsyDaily();
-
     // Construction (kept exactly as before)
     /** Queues facility self-construction as a production job. */
     UFUNCTION(BlueprintCallable, Category = "Construction")
@@ -130,10 +122,6 @@ public:
     /** Alias for AdvanceProductionDay (construction uses the same queue). */
     UFUNCTION(BlueprintCallable, Category = "Construction")
     void AdvanceConstructionDay();
-
-    /** Cancels a construction job and optionally refunds build cost. */
-    UFUNCTION(BlueprintCallable, Category = "Construction")
-    bool CancelConstruction(int32 JobIndex, bool bFullRefund = true);
 
     /** True when this living-quarters facility has a free soldier training slot. */
     bool CanTrainMoreSoldiers() const { return HasFreeProductionSlot() && FacilityDefinition && FacilityDefinition->FacilityType == EFacilityType::LivingQuarters; }

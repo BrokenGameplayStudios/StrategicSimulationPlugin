@@ -51,30 +51,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     int32 GetKIABodyCount() const { return StoredKIABodies.Num(); }
 
-    /** Adds a POW to containment if capacity allows. */
-    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void AddPOW(UStrategySoldier* Soldier);
-
-    /** Adds an enemy KIA body to autopsy storage if capacity allows. */
-    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void AddKIABody(UStrategySoldier* Soldier);
-
-    /** Daily containment hook (bonus logic handled by facility). */
-    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void ProcessContainment();
-
-    /** Daily autopsy hook (body disposal handled by facility). */
-    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void ProcessAutopsy();
-
     // ====================== POW / KIA UI HELPERS ======================
     /** Returns all POWs currently held in this base's Containment */
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")
     TArray<UStrategySoldier*> GetContainedPOWs() const;
-
-    /** Releases a POW back into the regular roster (they become a normal stationed soldier again) */
-    UFUNCTION(BlueprintCallable, Category = "POW/KIA")
-    void ReleasePOW(UStrategySoldier* POW);
 
     /** Processes a KIA body in Autopsy (gives research bonus then removes the body) */
     UFUNCTION(BlueprintCallable, Category = "POW/KIA")

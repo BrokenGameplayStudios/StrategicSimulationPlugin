@@ -104,10 +104,6 @@ public:
     UStrategySiteDefinition* AddDiscoveredSite(EFactionType Faction, UStrategySiteDefinition* Site,
         EDiscoveryReason Reason = EDiscoveryReason::Radar);
 
-    /** Legacy location-based discovery. Prefer AddDiscoveredSite(Faction, Site) — nearest-match can register the wrong site. */
-    UFUNCTION(BlueprintCallable, Category = "Expansion", meta = (DeprecatedFunction, DeprecationMessage = "Use AddDiscoveredSite(Faction, Site)."))
-    UStrategySiteDefinition* AddDiscoveredSiteAtLocation(EFactionType Faction, FVector2D Location, EStrategySiteType Type = EStrategySiteType::PotentialBase, float OptionalScore = 0.0f);
-
     /**
      * Creates an active SalvageSite wreck at Location from a destroyed vehicle.
      * Seeds resources from build cost, sets expiry, registers combat-known factions, and broadcasts creation.
@@ -155,10 +151,6 @@ public:
     /** Restores site lists and discovery state from saved data. */
     UFUNCTION(BlueprintCallable, Category = "Expansion|Save")
     void DeserializeAllSites(const TArray<FStrategySiteSaveData>& SavedSites);
-
-    /** Debug/instant path: builds a base immediately without a guard vehicle. Prefer StartBaseExpansion for gameplay. */
-    UFUNCTION(BlueprintCallable, Category = "Base Expansion", meta = (DeprecatedFunction, DeprecationMessage = "Use StartBaseExpansion for gameplay expansion."))
-    bool TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName);
 
     /** Checks if a faction can build a base on this specific site. */
     UFUNCTION(BlueprintCallable, Category = "Base Expansion")

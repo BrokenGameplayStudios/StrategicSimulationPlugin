@@ -274,7 +274,7 @@ UStrategyFacility* UBaseManagerSubsystem::BuildFacility(EFactionType Faction, UF
     {
         // We should not reach here during normal expansion.
         // Log a warning instead of silently creating a base at the map center.
-        UE_LOG(LogTemp, Warning, TEXT("[BaseManager] Tried to build facility with no bases. Expansion should go through TryBuildBaseOnSite()."));
+        UE_LOG(LogTemp, Warning, TEXT("[BaseManager] Tried to build facility with no bases. Expansion should go through StartBaseExpansion()."));
         return nullptr;
     }
 
@@ -1066,8 +1066,6 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
         return nullptr;
     }
 
-    Site->DiscoveringFaction = Faction;
-
     bool bNewDiscovery = false;
     if (Faction == EFactionType::Human)
     {
@@ -1107,55 +1105,6 @@ UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSite(EFactionType F
     }
 
     return Site;
-}
-
-/** Legacy nearest-match discovery; prefer AddDiscoveredSite(Faction, Site). */
-UStrategySiteDefinition* UBaseManagerSubsystem::AddDiscoveredSiteAtLocation(EFactionType Faction, FVector2D Location, EStrategySiteType Type, float OptionalScore)
-{
-    UStrategySiteDefinition* ExistingSite = nullptr;
-    float BestDist = SiteMatchTolerance;
-
-    for (UStrategySiteDefinition* Site : AllPotentialSites)
-    {
-        if (!Site || Site->Location.IsNearlyZero(10.f))
-        {
-            continue;
-        }
-
-        const float Dist = FVector2D::Distance(Site->Location, Location);
-        if (Dist <= BestDist)
-        {
-            BestDist = Dist;
-            ExistingSite = Site;
-        }
-    }
-
-    if (!ExistingSite)
-    {
-        ExistingSite = NewObject<UStrategySiteDefinition>(this);
-        ExistingSite->SiteId = FGuid::NewGuid();
-        ExistingSite->Location = Location;
-        ExistingSite->SiteType = Type;
-        if (Type != EStrategySiteType::SalvageSite && ExistingSite->CurrentResources.IsEmpty())
-        {
-            SiteGenerationHelpers::PopulateMineableResources(ExistingSite);
-        }
-        AllPotentialSites.Add(ExistingSite);
-    }
-    else if (ExistingSite->SiteType != Type)
-    {
-        static bool bLoggedTypeMismatch = false;
-        if (!bLoggedTypeMismatch)
-        {
-            UE_LOG(LogTemp, Warning,
-                TEXT("[DISCOVERY] WARNING: AddDiscoveredSiteAtLocation matched site type %s but caller requested %s — use AddDiscoveredSite(Faction, Site)"),
-                *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(ExistingSite->SiteType)),
-                *StaticEnum<EStrategySiteType>()->GetNameStringByValue(static_cast<int64>(Type)));
-            bLoggedTypeMismatch = true;
-        }
-    }
-
-    return AddDiscoveredSite(Faction, ExistingSite);
 }
 
 /** Adds combat-known factions to discovery lists for a salvage wreck. */
@@ -1689,26 +1638,6 @@ bool UBaseManagerSubsystem::StartBaseExpansion(EFactionType Faction, UStrategySi
     {
         EventDisp->OnBaseExpansionOrdered.Broadcast(Faction, TargetSite, Vehicle);
     }
-
-    return true;
-}
-
-/** Builds a base on a validated site and marks the site as used. */
-bool UBaseManagerSubsystem::TryBuildBaseOnSite(EFactionType Faction, UStrategySiteDefinition* TargetSite, FText BaseName)
-{
-    if (!CanBuildBaseOnSite(Faction, TargetSite)) return false;
-
-    // Build the base at the site's location
-    UStrategyBase* NewBase = BuildNewBase(Faction, BaseName, TargetSite->Location);
-    if (!NewBase) return false;
-
-    // Link the base to the site
-    NewBase->BuiltOnSite = TargetSite;
-    TargetSite->bHasBeenUsed = true;
-
-    UE_LOG(LogTemp, Display, TEXT("[BASE EXPANSION] %s built new base '%s' on site '%s' at (%.0f, %.0f)"),
-        *UEnum::GetValueAsString(Faction), *BaseName.ToString(), *TargetSite->SiteName,
-        TargetSite->Location.X, TargetSite->Location.Y);
 
     return true;
 }

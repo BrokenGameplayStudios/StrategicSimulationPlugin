@@ -216,51 +216,6 @@ bool UStrategyBase::CanBuildFacilityType(EFacilityType FacilityType) const
     return true;
 }
 
-/** Stores POW in containment if slots available. */
-void UStrategyBase::AddPOW(UStrategySoldier* Soldier)
-{
-    if (!Soldier) return;
-
-    int32 CurrentPOW = ContainedPOWs.Num();
-    int32 MaxSlots = GetTotalContainmentSlots();
-
-    if (CurrentPOW >= MaxSlots)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[POW] Containment FULL at base '%s' (%d/%d) — soldier '%s' could not be stored!"),
-            *BaseName.ToString(), CurrentPOW, MaxSlots, *Soldier->SoldierName);
-        return;   // do not add if full
-    }
-
-    ContainedPOWs.AddUnique(Soldier);
-    Soldier->StationedBase = this;
-    Soldier->bIsPOW = true;
-
-    UE_LOG(LogTemp, Display, TEXT("[POW] %s added to base '%s' Containment (%d/%d)"),
-        *Soldier->SoldierName, *BaseName.ToString(), ContainedPOWs.Num(), MaxSlots);
-}
-
-/** Stores KIA body in autopsy if slots available. */
-void UStrategyBase::AddKIABody(UStrategySoldier* Soldier)
-{
-    if (!Soldier) return;
-
-    int32 CurrentKIA = StoredKIABodies.Num();
-    int32 MaxSlots = GetTotalAutopsySlots();
-
-    if (CurrentKIA >= MaxSlots)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[KIA] Autopsy FULL at base '%s' (%d/%d) — body of '%s' could not be stored!"),
-            *BaseName.ToString(), CurrentKIA, MaxSlots, *Soldier->SoldierName);
-        return;
-    }
-
-    StoredKIABodies.AddUnique(Soldier);
-    Soldier->bIsKIA = true;
-
-    UE_LOG(LogTemp, Display, TEXT("[KIA] Body of %s added to base '%s' Autopsy (%d/%d)"),
-        *Soldier->SoldierName, *BaseName.ToString(), StoredKIABodies.Num(), MaxSlots);
-}
-
 // Helper implementations
 /** Sums containment production slots. */
 int32 UStrategyBase::GetTotalContainmentSlots() const
@@ -286,53 +241,10 @@ int32 UStrategyBase::GetTotalAutopsySlots() const
     return Slots;
 }
 
-/** Daily containment hook (bonus in facility). */
-void UStrategyBase::ProcessContainment()
-{
-    // Called by Containment facility daily
-    if (ContainedPOWs.Num() == 0) return;
-    // Bonus logic moved to facility (we just provide the list)
-}
-
-/** Daily autopsy hook (disposal in facility). */
-void UStrategyBase::ProcessAutopsy()
-{
-    // Called by Autopsy facility daily
-    if (StoredKIABodies.Num() == 0) return;
-    // Bodies will be disposed after processing
-}
-
 /** Returns copy of contained POW array. */
 TArray<UStrategySoldier*> UStrategyBase::GetContainedPOWs() const
 {
     return ContainedPOWs;
-}
-
-/** Releases POW for resource bonus and destroys object. */
-void UStrategyBase::ReleasePOW(UStrategySoldier* POW)
-{
-    if (!POW || !ContainedPOWs.Contains(POW))
-        return;
-
-    ContainedPOWs.Remove(POW);
-
-    // === Give player a resource bonus for releasing the POW ===
-    UResourceManagerSubsystem* ResourceMgr = GetWorld()->GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
-    if (ResourceMgr)
-    {
-        FResourceStockpile Bonus;
-        Bonus.Money = 1200;   // tweak these numbers as you like
-        Bonus.ResearchPoints = 600;
-        // Bonus.Metals     = 200;    // optional
-
-        ResourceMgr->AddResources(OwningFaction, Bonus);
-
-        UE_LOG(LogTemp, Display, TEXT("[POW] Released %s from base '%s' Containment — +1200 Money +600 Research"),
-            *POW->SoldierName, *BaseName.ToString());
-    }
-
-    // POW is now gone (player got the benefit)
-    POW->ConditionalBeginDestroy();
 }
 
 /** Grants research bonus and removes processed KIA body. */

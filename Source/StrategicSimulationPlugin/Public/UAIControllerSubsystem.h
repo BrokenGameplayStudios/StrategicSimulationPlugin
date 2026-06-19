@@ -71,10 +71,6 @@ public:
     /** Executes the full daily AI routine for one faction (build, recruit, missions, expand). */
     void RunAIForFaction(EFactionType Faction, int32 CurrentDay);
 
-    /** Player-callable entry point that runs the same daily AI routine as OnDayPassed. */
-    UFUNCTION(BlueprintCallable, Category = "AI Control|Player Ready")
-    void PerformDailyBuildOrder(EFactionType Faction);
-
     /** AI decision logic when one of its vehicles detects an enemy vehicle */
     void HandleVehicleDetection(UStrategyVehicle* DetectingVehicle, UStrategyVehicle* DetectedVehicle);
 

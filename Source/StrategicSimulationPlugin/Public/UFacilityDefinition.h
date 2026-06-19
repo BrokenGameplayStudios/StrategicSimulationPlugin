@@ -33,10 +33,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Power")
     int32 PowerDraw = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Production")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facility|Production")
     int32 ProductionSlots = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Production")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Facility|Production")
     float ProductionSpeedMultiplier = 1.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unlocks")

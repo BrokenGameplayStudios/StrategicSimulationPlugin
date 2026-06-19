@@ -57,14 +57,6 @@ public:
     UFUNCTION(BlueprintPure, Category = "Intel")
     bool IsStaleIntelEnabled() const;
 
-    /** True when the faction has ever observed this site's location (or stale intel is off). */
-    UFUNCTION(BlueprintPure, Category = "Intel")
-    bool HasKnownSiteLocation(EFactionType Faction, const UStrategySiteDefinition* Site) const;
-
-    /** Copies the stored intel snapshot for a site, if one exists. */
-    UFUNCTION(BlueprintPure, Category = "Intel")
-    bool GetSiteIntelSnapshot(EFactionType Faction, const UStrategySiteDefinition* Site, FSiteIntelSnapshot& OutSnapshot) const;
-
     /** Resources shown to a faction: last-known when stale intel is on, otherwise live site stockpile. */
     UFUNCTION(BlueprintPure, Category = "Intel")
     FResourceStockpile GetDisplayResources(EFactionType ViewerFaction, const UStrategySiteDefinition* Site) const;

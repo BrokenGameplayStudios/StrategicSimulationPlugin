@@ -505,12 +505,6 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
         OutboundTravelTime, SearchTimeAtTarget, ReturnTravelTime);
 }
 
-/** Begins recon mission movement toward target. */
-void UStrategyVehicle::LaunchScoutingMission(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget)
-{
-    BeginMissionMovement(TargetLocation, CurrentGameHours, SearchHoursAtTarget, EMissionType::Recon);
-}
-
 /** Sets phase from outbound/search/return progress. */
 void UStrategyVehicle::UpdatePhaseFromPathProgress(float Progress)
 {

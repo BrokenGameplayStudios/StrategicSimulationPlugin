@@ -51,9 +51,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site")
     EStrategySiteType SiteType = EStrategySiteType::PotentialBase;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Site")
-    EFactionType DiscoveringFaction = EFactionType::Human;
-
     /** Faction that owned the vehicle destroyed at this salvage site (Human = blue, Enemy = red on debug map). */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Site|Salvage")
     EFactionType WreckOwnerFaction = EFactionType::Neutral;

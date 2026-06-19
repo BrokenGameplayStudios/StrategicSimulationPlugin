@@ -132,28 +132,7 @@ void UMissionManagerSubsystem::OnDayPassed(int32 NewDay)
 /** Ticks non-live mission duration and resolves completed missions. */
 void UMissionManagerSubsystem::SimulateOneDay()
 {
-    TArray<UMissionGroup*> ToRemove;
-
-    for (UMissionGroup* Mission : ActiveMissions)
-    {
-        if (!Mission || Mission->Status != EMissionStatus::InProgress) continue;
-
-        if (Mission->bIsLiveMovement)
-            continue;
-
-        Mission->DurationDays--;
-
-        if (Mission->DurationDays <= 0)
-        {
-            ResolveMissionOutcome(Mission);
-            ToRemove.Add(Mission);
-        }
-    }
-
-    for (UMissionGroup* Mission : ToRemove)
-    {
-        ActiveMissions.Remove(Mission);
-    }
+    // All missions use live movement; completion is handled in UpdateAllLiveVehicles.
 }
 
 /** Returns elapsed simulation hours from the time manager. */
@@ -2572,34 +2551,6 @@ void UMissionManagerSubsystem::HandleVehicleDestroyed(UStrategyVehicle* Vehicle,
     }
 
     Vehicle->bWreckSalvageProcessed = true;
-}
-
-/** Launches mission with optional vehicle subset override. */
-UMissionGroup* UMissionManagerSubsystem::LaunchMissionFromBase(UStrategyBase* OriginBase, int32 DurationDays, EMissionType MissionType, const TArray<UStrategyVehicle*>& VehiclesOverride)
-{
-    if (!OriginBase) return nullptr;
-
-    TArray<UStrategyVehicle*> VehiclesToLaunch;
-
-    if (VehiclesOverride.Num() > 0)
-    {
-        VehiclesToLaunch = VehiclesOverride;
-    }
-    else
-    {
-        for (UStrategyFacility* Facility : OriginBase->Facilities)
-        {
-            if (Facility && Facility->bIsOperational && Facility->FacilityDefinition &&
-                Facility->FacilityDefinition->FacilityType == EFacilityType::Hanger)
-            {
-                VehiclesToLaunch.Append(Facility->ParkedVehicles);
-            }
-        }
-    }
-
-    if (VehiclesToLaunch.Num() == 0) return nullptr;
-
-    return StartMission(OriginBase, VehiclesToLaunch, DurationDays, {}, MissionType, OriginBase->OwningFaction);
 }
 
 /** Docks survivors, grants rewards, and completes the mission. */

@@ -84,41 +84,6 @@ void UFactionIntelSubsystem::ObserveSite(EFactionType Faction, UStrategySiteDefi
         Snapshot.bLastKnownHasBase ? TEXT("yes") : TEXT("no"));
 }
 
-/** Checks intel map for bLocationKnown; returns true for all sites when stale intel is disabled. */
-bool UFactionIntelSubsystem::HasKnownSiteLocation(EFactionType Faction, const UStrategySiteDefinition* Site) const
-{
-    if (!Site)
-    {
-        return false;
-    }
-
-    if (!IsStaleIntelEnabled())
-    {
-        return true;
-    }
-
-    const FSiteIntelSnapshot* Snapshot = GetIntelMap(Faction).Find(Site->SiteId);
-    return Snapshot && Snapshot->bLocationKnown;
-}
-
-/** Looks up Site->SiteId in the faction intel map and copies the entry to OutSnapshot. */
-bool UFactionIntelSubsystem::GetSiteIntelSnapshot(EFactionType Faction, const UStrategySiteDefinition* Site,
-    FSiteIntelSnapshot& OutSnapshot) const
-{
-    if (!Site)
-    {
-        return false;
-    }
-
-    if (const FSiteIntelSnapshot* Found = GetIntelMap(Faction).Find(Site->SiteId))
-    {
-        OutSnapshot = *Found;
-        return true;
-    }
-
-    return false;
-}
-
 /** UI/save-facing resource view: last-known stockpile per viewer faction under stale intel rules. */
 FResourceStockpile UFactionIntelSubsystem::GetDisplayResources(EFactionType ViewerFaction,
     const UStrategySiteDefinition* Site) const

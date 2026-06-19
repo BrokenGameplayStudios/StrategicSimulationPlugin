@@ -72,16 +72,6 @@ void UAIControllerSubsystem::OnDayPassed(int32 NewDay)
     UE_LOG(LogTemp, Display, TEXT("[AI TICK] === DAY %d COMPLETE ==="), NewDay);
 }
 
-/** Player-callable wrapper around RunAIForFaction. */
-void UAIControllerSubsystem::PerformDailyBuildOrder(EFactionType Faction)
-{
-    UE_LOG(LogTemp, Display, TEXT("[PLAYER-CALLABLE] Performing daily build order for %s"), *UEnum::GetValueAsString(Faction));
-    if (UTimeManagerSubsystem* TimeMgr = GetGameInstance()->GetSubsystem<UTimeManagerSubsystem>())
-    {
-        RunAIForFaction(Faction, TimeMgr->GetSimulationDayNumber());
-    }
-}
-
 /** Full daily AI: build, recruit, equip, missions, and expansion. */
 void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 CurrentDay)
 {
@@ -97,8 +87,6 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     UBaseManagerSubsystem* BaseMgr = GetGameInstance()->GetSubsystem<UBaseManagerSubsystem>();
     UResourceManagerSubsystem* ResourceMgr = GetGameInstance()->GetSubsystem<UResourceManagerSubsystem>();
     USoldierManagerSubsystem* SoldierMgr = GetGameInstance()->GetSubsystem<USoldierManagerSubsystem>();
-    UResearchManagerSubsystem* ResearchMgr = GetGameInstance()->GetSubsystem<UResearchManagerSubsystem>();
-    UEngineeringManagerSubsystem* EngineeringMgr = GetGameInstance()->GetSubsystem<UEngineeringManagerSubsystem>();
 
     if (!BaseMgr || !ResourceMgr) return;
 
@@ -372,9 +360,8 @@ void UAIControllerSubsystem::RunAIForFaction(EFactionType Faction, int32 Current
     bool bRecruited = (SoldierMgr && TryRecruit(Faction));
     if (bRecruited) UE_LOG(LogTemp, Display, TEXT("[AI] %s recruited soldier"), *UEnum::GetValueAsString(Faction));
 
-    if (ResearchMgr && TryResearch(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s started research"), *UEnum::GetValueAsString(Faction));
+    if (TryResearch(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s started research"), *UEnum::GetValueAsString(Faction));
     if (TryBuyAndEquip(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s purchase/equip action taken"), *UEnum::GetValueAsString(Faction));
-    if (EngineeringMgr && EngineeringMgr->TryProduce(Faction)) UE_LOG(LogTemp, Display, TEXT("[AI] %s production action taken"), *UEnum::GetValueAsString(Faction));
 
     if (BaseMgr && Campaign && Campaign->bVerboseLogging)
     {

@@ -127,16 +127,6 @@ void USoldierManagerSubsystem::FinishSoldierTraining(UStrategyBase* Base, UObjec
     }
 }
 
-/** Removes Soldier from both rosters and notifies listeners for Human and Enemy. */
-void USoldierManagerSubsystem::DismissSoldier(UStrategySoldier* Soldier)
-{
-    if (!Soldier) return;
-    HumanRoster.Remove(Soldier);
-    EnemyRoster.Remove(Soldier);
-    BroadcastSoldierListChanged(EFactionType::Human);
-    BroadcastSoldierListChanged(EFactionType::Enemy);
-}
-
 /** Counts roster soldiers whose StationedBase equals Base. */
 int32 USoldierManagerSubsystem::GetNumSoldiersStationedAt(UStrategyBase* Base, EFactionType Faction) const
 {
@@ -190,16 +180,6 @@ TArray<UStrategySoldier*> USoldierManagerSubsystem::GatherMissionReadySoldiersAt
     return ReadySoldiers;
 }
 
-/** Logs every soldier in the faction roster via PrintInfo. */
-void USoldierManagerSubsystem::Debug_PrintTeamRoster(EFactionType Faction) const
-{
-    UE_LOG(LogTemp, Display, TEXT("=== %s TEAM ROSTER ==="), *UEnum::GetValueAsString(Faction));
-    const TArray<UStrategySoldier*>& Roster = (Faction == EFactionType::Human) ? HumanRoster : EnemyRoster;
-    for (UStrategySoldier* S : Roster)
-        if (S) S->PrintInfo();
-    UE_LOG(LogTemp, Display, TEXT("=== END %s ROSTER ===\n"), *UEnum::GetValueAsString(Faction));
-}
-
 /** Broadcasts OnSoldierListChanged with the current roster for Faction. */
 void USoldierManagerSubsystem::BroadcastSoldierListChanged(EFactionType Faction)
 {
@@ -207,22 +187,6 @@ void USoldierManagerSubsystem::BroadcastSoldierListChanged(EFactionType Faction)
     {
         Disp->OnSoldierListChanged.Broadcast(Faction, Faction == EFactionType::Enemy ? EnemyRoster : HumanRoster);
     }
-}
-
-/** Returns the first roster soldier whose class name contains "Commander", or nullptr. */
-UStrategySoldier* USoldierManagerSubsystem::GetCommander(EFactionType Faction) const
-{
-    const TArray<UStrategySoldier*>& Roster = GetRoster(Faction);
-
-    for (UStrategySoldier* Soldier : Roster)
-    {
-        if (Soldier && Soldier->ClassDefinition &&
-            Soldier->ClassDefinition->ClassName.ToString().Contains("Commander"))
-        {
-            return Soldier;
-        }
-    }
-    return nullptr;
 }
 
 /** Returns captured enemy soldiers held by Faction. */
@@ -288,13 +252,6 @@ void USoldierManagerSubsystem::MarkAsKIA(EFactionType Faction, UStrategySoldier*
     BroadcastSoldierListChanged(Faction);
     UE_LOG(LogTemp, Display, TEXT("[KIA] %s soldier '%s' marked KIA and added to recovery roster"),
         *UEnum::GetValueAsString(Faction), *Soldier->SoldierName);
-}
-
-/** Placeholder release handler; logs only until full POW release logic is implemented. */
-void USoldierManagerSubsystem::ReleasePOW(UStrategySoldier* POW)
-{
-    if (!POW || !POW->bIsPOW) return;
-    UE_LOG(LogTemp, Display, TEXT("[POW] POW '%s' released (placeholder)"), *POW->SoldierName);
 }
 
 /** Removes Soldier from roster, tags as MIA at WreckSite, and registers on the site. */
