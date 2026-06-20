@@ -90,6 +90,23 @@ Manual tick: **`Debug_RunAI`** on campaign or AI subsystem. There is no **`Perfo
 3. Spoke-and-wheel patrol from base
 4. Random patrol within range
 
+## Patrol route patterns (Recon + Defensive)
+
+Recon and Defensive missions no longer fly a straight line to a single point. The mission manager builds a **multi-waypoint patrol route** from the focal target and an intent tag:
+
+| Intent | Selected when | Outbound / return | Loiter |
+|--------|---------------|-------------------|--------|
+| BorderGuard | Inbound entry lane or threat-bearing guard | Flank dogleg (asymmetric return) | Racetrack along threat bearing |
+| SpokeSweep | Spoke-and-wheel patrol | Dogleg along spoke | Racetrack aligned to spoke |
+| SiteSurvey | Survey a discovered site | Direct or mild dogleg | **Stationary** at site |
+| RandomPatrol | Fallback patrol point | Dogleg | Small racetrack |
+
+**Range budgeting** uses total **path length** (outbound legs + loiter travel during search time + return legs), not straight-line distance × 2.
+
+Other mission types (Offensive, Salvage, Interception, Base Expansion) still use the legacy three-point path: base → target → base.
+
+Debug HUD draws the full `CurrentWaypoints` polyline. `PatrolFocalPoint` on the vehicle is used for site reservation and mission target resolution.
+
 ## Combat
 
 Gunship/Heavy engage when:

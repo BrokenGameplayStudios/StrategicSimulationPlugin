@@ -12,6 +12,7 @@
 #include "UStrategyCampaignSubsystem.h"
 #include "UFactionIntelSubsystem.h"
 #include "UExplorationSubsystem.h"
+#include "MissionPatrolRouteBuilder.h"
 #include "UResourceManagerSubsystem.h"
 #include "USoldierManagerSubsystem.h"
 #include "UStrategicSimulationDisplayHelpers.h"
@@ -345,6 +346,11 @@ void UStrategyVehicle::InitializeParkedAtBase()
     ReturningPathLength = 0.0f;
     PlannedRoundTripRange = 0.0f;
     RangeTraveledThisMission = 0.0f;
+    bPatrolRouteActive = false;
+    PatrolFocalPoint = FVector2D::ZeroVector;
+    LoiterWaypointStart = 0;
+    LoiterWaypointEnd = 0;
+    LoiterPathLength = 0.0f;
 }
 
 /** Reparks, refuels, and resets movement state at home. */
@@ -370,6 +376,11 @@ void UStrategyVehicle::DockAtHomeHangar()
     SearchTimeAtTarget = 0.0f;
     PlannedRoundTripRange = 0.0f;
     RangeTraveledThisMission = 0.0f;
+    bPatrolRouteActive = false;
+    PatrolFocalPoint = FVector2D::ZeroVector;
+    LoiterWaypointStart = 0;
+    LoiterWaypointEnd = 0;
+    LoiterPathLength = 0.0f;
 
     CurrentRangeLeft = GetMaxRange();
 
@@ -408,6 +419,12 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
             HomeBase->MapLocation.X, HomeBase->MapLocation.Y, TargetLocation.X, TargetLocation.Y);
         return;
     }
+
+    bPatrolRouteActive = false;
+    PatrolFocalPoint = TargetLocation;
+    LoiterWaypointStart = 0;
+    LoiterWaypointEnd = 0;
+    LoiterPathLength = 0.0f;
 
     CurrentPosition = HomeBase->MapLocation;
     CurrentWaypoints.Empty();
@@ -503,6 +520,73 @@ void UStrategyVehicle::BeginMissionMovement(FVector2D TargetLocation, float Curr
         VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
         *UEnum::GetValueAsString(MissionType),
         OutboundTravelTime, SearchTimeAtTarget, ReturnTravelTime);
+}
+
+/** Sets waypoints and timings for a multi-leg patrol route. */
+void UStrategyVehicle::BeginPatrolMovement(const FMissionPatrolRoute& Route, float CurrentGameHours,
+    float SearchHoursAtTarget, EMissionType MissionType)
+{
+    if (!HomeBase || Route.TravelWaypoints.Num() < 3)
+    {
+        return;
+    }
+
+    bPatrolRouteActive = true;
+    PatrolFocalPoint = Route.FocalPoint;
+    LoiterWaypointStart = Route.LoiterStartIndex;
+    LoiterWaypointEnd = Route.LoiterEndIndex;
+    LoiterPathLength = Route.LoiterPathLength;
+
+    CurrentPosition = HomeBase->MapLocation;
+    CurrentWaypoints = Route.TravelWaypoints;
+
+    LaunchGameTimeHours = CurrentGameHours;
+    LastPingGameTimeHours = CurrentGameHours;
+    LastRadarSweepOrigin = CurrentPosition;
+
+    const float Speed = GetCruiseSpeed();
+    const float OutboundDistance = MissionPatrolRouteBuilder::ComputePolylineLength(
+        CurrentWaypoints, 0, LoiterWaypointStart + 1);
+    const float ReturnDistance = MissionPatrolRouteBuilder::ComputePolylineLength(
+        CurrentWaypoints, LoiterWaypointEnd - 1, CurrentWaypoints.Num());
+
+    PlannedRoundTripRange = Route.TotalTravelDistance;
+    RangeTraveledThisMission = 0.0f;
+    OutboundTravelTime = Speed > 0.0f ? OutboundDistance / Speed : 0.0f;
+    ReturnTravelTime = Speed > 0.0f ? ReturnDistance / Speed : 0.0f;
+    SearchTimeAtTarget = SearchHoursAtTarget;
+    TotalTravelTimeHours = OutboundTravelTime + SearchTimeAtTarget + ReturnTravelTime;
+
+    CurrentPhase = EVehicleMissionPhase::EnRoute;
+    ReturningWaypoints.Empty();
+    ReturningDistanceTraveled = 0.0f;
+    ReturningPathLength = 0.0f;
+    CombatBehaviorStartTime = -1.0f;
+    CurrentTargetVehicle = nullptr;
+    SalvageExtractedThisMission = FResourceStockpile();
+    ActiveSalvageSite = nullptr;
+    ActiveExpansionSite = nullptr;
+    bExpansionGuardActive = false;
+
+    switch (MissionType)
+    {
+    case EMissionType::Recon:
+        CurrentBehavior = EVehicleBehavior::Scouting;
+        break;
+    case EMissionType::Defensive:
+        CurrentBehavior = EVehicleBehavior::Patrolling;
+        break;
+    default:
+        CurrentBehavior = EVehicleBehavior::Patrolling;
+        break;
+    }
+
+    UE_LOG(LogTemp, Verbose, TEXT("[VEHICLE] %s began patrol %s — %d waypoints | out: %.1f hrs | search: %.1f hrs | return: %.1f hrs | path: %.0f px"),
+        VehicleDefinition ? *VehicleDefinition->VehicleName.ToString() : *GetNameSafe(this),
+        *UEnum::GetValueAsString(MissionType),
+        CurrentWaypoints.Num(),
+        OutboundTravelTime, SearchTimeAtTarget, ReturnTravelTime,
+        PlannedRoundTripRange);
 }
 
 /** Sets phase from outbound/search/return progress. */
@@ -1167,31 +1251,140 @@ void UStrategyVehicle::PerformRadarPing()
     LastRadarSweepOrigin = CurrentPosition;
 }
 
+FVector2D UStrategyVehicle::GetPositionAlongPolyline(const TArray<FVector2D>& Points, int32 StartIndex,
+    int32 EndIndexExclusive, float DistanceAlongPath) const
+{
+    if (Points.Num() < 2 || StartIndex < 0 || EndIndexExclusive > Points.Num() || EndIndexExclusive <= StartIndex + 1)
+    {
+        return CurrentPosition;
+    }
+
+    float Remaining = FMath::Max(0.0f, DistanceAlongPath);
+    for (int32 Index = StartIndex; Index < EndIndexExclusive - 1; ++Index)
+    {
+        const float SegmentLength = FVector2D::Distance(Points[Index], Points[Index + 1]);
+        if (SegmentLength <= KINDA_SMALL_NUMBER)
+        {
+            continue;
+        }
+
+        if (Remaining <= SegmentLength)
+        {
+            const float T = Remaining / SegmentLength;
+            return FMath::Lerp(Points[Index], Points[Index + 1], T);
+        }
+
+        Remaining -= SegmentLength;
+    }
+
+    return Points[EndIndexExclusive - 1];
+}
+
+FVector2D UStrategyVehicle::GetPositionOnLoiterLoop(float DistanceAlongLoop) const
+{
+    if (LoiterWaypointEnd - LoiterWaypointStart < 2 || LoiterPathLength <= KINDA_SMALL_NUMBER)
+    {
+        if (CurrentWaypoints.IsValidIndex(LoiterWaypointStart))
+        {
+            return CurrentWaypoints[LoiterWaypointStart];
+        }
+        return CurrentPosition;
+    }
+
+    float WrappedDistance = FMath::Fmod(FMath::Max(0.0f, DistanceAlongLoop), LoiterPathLength);
+    if (WrappedDistance < 0.0f)
+    {
+        WrappedDistance += LoiterPathLength;
+    }
+
+    float Remaining = WrappedDistance;
+    for (int32 Index = LoiterWaypointStart; Index < LoiterWaypointEnd - 1; ++Index)
+    {
+        const float SegmentLength = FVector2D::Distance(CurrentWaypoints[Index], CurrentWaypoints[Index + 1]);
+        if (SegmentLength <= KINDA_SMALL_NUMBER)
+        {
+            continue;
+        }
+
+        if (Remaining <= SegmentLength)
+        {
+            const float T = Remaining / SegmentLength;
+            return FMath::Lerp(CurrentWaypoints[Index], CurrentWaypoints[Index + 1], T);
+        }
+
+        Remaining -= SegmentLength;
+    }
+
+    const float ClosingLength = FVector2D::Distance(CurrentWaypoints[LoiterWaypointEnd - 1], CurrentWaypoints[LoiterWaypointStart]);
+    if (ClosingLength > KINDA_SMALL_NUMBER && Remaining <= ClosingLength)
+    {
+        const float T = Remaining / ClosingLength;
+        return FMath::Lerp(CurrentWaypoints[LoiterWaypointEnd - 1], CurrentWaypoints[LoiterWaypointStart], T);
+    }
+
+    return CurrentWaypoints[LoiterWaypointStart];
+}
+
 /** Interpolates position along mission outbound/search/return path. */
 FVector2D UStrategyVehicle::GetPositionOnPath(float Progress) const
 {
-    if (CurrentWaypoints.Num() < 3) return CurrentPosition;
+    if (CurrentWaypoints.Num() < 2)
+    {
+        return CurrentPosition;
+    }
 
-    float TravelPortion = OutboundTravelTime + ReturnTravelTime;
-    if (TravelPortion <= 0.0f) return CurrentWaypoints[1];
+    if (!bPatrolRouteActive)
+    {
+        if (CurrentWaypoints.Num() < 3)
+        {
+            return CurrentPosition;
+        }
 
-    float MovingTime = Progress * TotalTravelTimeHours;
+        const float TravelPortion = OutboundTravelTime + ReturnTravelTime;
+        if (TravelPortion <= 0.0f)
+        {
+            return CurrentWaypoints[1];
+        }
+
+        const float MovingTime = Progress * TotalTravelTimeHours;
+
+        if (MovingTime <= OutboundTravelTime)
+        {
+            const float t = OutboundTravelTime > 0.0f ? MovingTime / OutboundTravelTime : 1.0f;
+            return FMath::Lerp(CurrentWaypoints[0], CurrentWaypoints[1], t);
+        }
+        if (MovingTime <= OutboundTravelTime + SearchTimeAtTarget)
+        {
+            return CurrentWaypoints[1];
+        }
+
+        const float ReturnElapsed = MovingTime - (OutboundTravelTime + SearchTimeAtTarget);
+        const float t = ReturnTravelTime > 0.0f ? ReturnElapsed / ReturnTravelTime : 1.0f;
+        return FMath::Lerp(CurrentWaypoints[1], CurrentWaypoints[2], t);
+    }
+
+    const float Speed = GetCruiseSpeed();
+    const float MovingTime = Progress * TotalTravelTimeHours;
 
     if (MovingTime <= OutboundTravelTime)
     {
-        float t = OutboundTravelTime > 0.0f ? MovingTime / OutboundTravelTime : 1.0f;
-        return FMath::Lerp(CurrentWaypoints[0], CurrentWaypoints[1], t);
+        return GetPositionAlongPolyline(CurrentWaypoints, 0, LoiterWaypointStart + 1, MovingTime * Speed);
     }
-    else if (MovingTime <= OutboundTravelTime + SearchTimeAtTarget)
+    if (MovingTime <= OutboundTravelTime + SearchTimeAtTarget)
     {
-        return CurrentWaypoints[1];
+        if (LoiterWaypointEnd - LoiterWaypointStart <= 1)
+        {
+            return CurrentWaypoints.IsValidIndex(LoiterWaypointStart)
+                ? CurrentWaypoints[LoiterWaypointStart]
+                : CurrentPosition;
+        }
+
+        const float LoiterElapsed = MovingTime - OutboundTravelTime;
+        return GetPositionOnLoiterLoop(LoiterElapsed * Speed);
     }
-    else
-    {
-        float ReturnElapsed = MovingTime - (OutboundTravelTime + SearchTimeAtTarget);
-        float t = ReturnTravelTime > 0.0f ? ReturnElapsed / ReturnTravelTime : 1.0f;
-        return FMath::Lerp(CurrentWaypoints[1], CurrentWaypoints[2], t);
-    }
+
+    const float ReturnElapsed = MovingTime - (OutboundTravelTime + SearchTimeAtTarget);
+    return GetPositionAlongPolyline(CurrentWaypoints, LoiterWaypointEnd - 1, CurrentWaypoints.Num(), ReturnElapsed * Speed);
 }
 
 /** True when docked with an active mission reference. */

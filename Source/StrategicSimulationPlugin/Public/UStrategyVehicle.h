@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MissionPatrolRouteBuilder.h"
 #include "UObject/NoExportTypes.h"
 #include "UVehicleDefinition.h"
 #include "StrategicSimulationTypes.h"
@@ -94,6 +95,10 @@ public:
     /** Begin live mission movement toward a target */
     UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
     void BeginMissionMovement(FVector2D TargetLocation, float CurrentGameHours, float SearchHoursAtTarget, EMissionType MissionType);
+
+    /** Begin multi-waypoint patrol movement using a pre-built route (recon / defensive). */
+    UFUNCTION(BlueprintCallable, Category = "Vehicle|Live Movement")
+    void BeginPatrolMovement(const FMissionPatrolRoute& Route, float CurrentGameHours, float SearchHoursAtTarget, EMissionType MissionType);
 
     /** Current target vehicle (used when Attacking or Evading) */
     UPROPERTY(VisibleAnywhere, Category = "Vehicle|Behavior")
@@ -219,6 +224,14 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
     float SearchTimeAtTarget = 0.0f;
 
+    /** Patrol focal point (survey site, spoke target, or entry lane center). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    FVector2D PatrolFocalPoint = FVector2D::ZeroVector;
+
+    /** True when CurrentWaypoints uses multi-leg patrol routing instead of the legacy 3-point path. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle|Live Movement")
+    bool bPatrolRouteActive = false;
+
     /** Waypoints used when returning to base (separate from mission waypoints) */
     UPROPERTY(VisibleAnywhere, Category = "Vehicle|Movement")
     TArray<FVector2D> ReturningWaypoints;
@@ -316,6 +329,10 @@ private:
     UPROPERTY(EditAnywhere, Category = "Vehicle|Detection")
     float VehicleDetectionCooldownHours = 2.0f;
 
+    int32 LoiterWaypointStart = 0;
+    int32 LoiterWaypointEnd = 0;
+    float LoiterPathLength = 0.0f;
+
     /** Returns effective cruise speed in pixels per game hour. */
     float GetCruiseSpeed() const;
     /** Accumulates distance flown against the current mission range budget. */
@@ -332,6 +349,11 @@ private:
     float GetReturningPathLength() const;
     /** Interpolates position along the returning path at a given distance. */
     FVector2D GetPositionOnReturningPath(float DistanceAlongPath) const;
+    /** Interpolates position along a polyline sub-range at a given distance. */
+    FVector2D GetPositionAlongPolyline(const TArray<FVector2D>& Points, int32 StartIndex, int32 EndIndexExclusive,
+        float DistanceAlongPath) const;
+    /** Interpolates position along the closed loiter loop at a wrapped distance. */
+    FVector2D GetPositionOnLoiterLoop(float DistanceAlongLoop) const;
     /** Fires radar pings at PingIntervalHours while in flight. */
     void TickRadarPings(float CurrentGameHours);
     /** True when a world position lies within the current radar sweep segment. */

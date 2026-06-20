@@ -1430,6 +1430,22 @@ void UAIControllerSubsystem::HandleVehicleDetection(UStrategyVehicle* DetectingV
 {
     if (!DetectingVehicle || !DetectedVehicle) return;
 
+    if (DetectingVehicle->HomeBase && DetectingVehicle->CurrentMission
+        && DetectingVehicle->CurrentMission->MissionType == EMissionType::Recon)
+    {
+        float CurrentGameHours = 0.0f;
+        if (UMissionManagerSubsystem* MissionMgr = GetGameInstance()->GetSubsystem<UMissionManagerSubsystem>())
+        {
+            CurrentGameHours = MissionMgr->GetCurrentGameHours();
+        }
+
+        if (UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>())
+        {
+            Exploration->NotifyReconContactSeen(DetectingVehicle->HomeBase, DetectedVehicle->CurrentPosition,
+                CurrentGameHours);
+        }
+    }
+
     const bool bCanEngage = ShouldEngageVehicle(DetectingVehicle, DetectedVehicle);
     const bool bInterceptPriority = ShouldPrioritizeEnRouteIntercept(DetectingVehicle, DetectedVehicle);
 

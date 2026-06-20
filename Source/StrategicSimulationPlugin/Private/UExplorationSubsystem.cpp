@@ -1,4 +1,6 @@
 #include "UExplorationSubsystem.h"
+#include "MissionPatrolRouteBuilder.h"
+#include "StrategicSimulationTypes.h"
 #include "UBaseManagerSubsystem.h"
 #include "URadarContactSubsystem.h"
 #include "UStrategyCampaignSubsystem.h"
@@ -7,6 +9,46 @@
 #include "UMissionManagerSubsystem.h"
 #include "UTimeManagerSubsystem.h"
 #include "Engine/Engine.h"
+
+namespace ExplorationPatrolHelpers
+{
+    static float GetVisionRingDistancePixels(UGameInstance* GameInstance)
+    {
+        if (UStrategyCampaignSubsystem* Campaign = GameInstance
+            ? GameInstance->GetSubsystem<UStrategyCampaignSubsystem>()
+            : nullptr)
+        {
+            return Campaign->BaseRadarRangePixels * UExplorationSubsystem::VisionRingOutsideFactor;
+        }
+
+        return 512.0f * UExplorationSubsystem::VisionRingOutsideFactor;
+    }
+
+    static bool ValidatePatrolCandidate(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
+        const FVector2D& Candidate, EPatrolRouteIntent Intent, const FVector2D& BearingDir)
+    {
+        if (!OriginBase || !Vehicle)
+        {
+            return false;
+        }
+
+        const float CruiseSpeed = Vehicle->CruiseSpeedPixelsPerHour > 0.0f ? Vehicle->CruiseSpeedPixelsPerHour : 180.0f;
+        const float SearchHours = MissionPatrolRouteBuilder::GetSearchHoursForPatrolIntent(Intent);
+        const FVector2D Bearing = (Intent == EPatrolRouteIntent::VisionRing)
+            ? FVector2D(-BearingDir.Y, BearingDir.X)
+            : BearingDir;
+
+        if (!MissionPatrolRouteBuilder::CanBuildPatrolRoute(OriginBase, Candidate, Intent, Bearing,
+            Vehicle->CurrentRangeLeft, SearchHours, CruiseSpeed))
+        {
+            return false;
+        }
+
+        const float PathDistance = MissionPatrolRouteBuilder::EstimatePatrolRouteDistance(
+            OriginBase, Candidate, Intent, Vehicle->CurrentRangeLeft, SearchHours, CruiseSpeed, Bearing);
+        return Vehicle->HasEnoughRangeForMission(PathDistance);
+    }
+}
 
 namespace ExplorationHelpers
 {
@@ -116,6 +158,32 @@ bool UExplorationSubsystem::ClampToMap(FVector2D& InOutPoint, float MinX, float 
     return !InOutPoint.Equals(Before, 1.0f);
 }
 
+namespace ExplorationSurveyHelpers
+{
+    static bool IsSiteOccupiedByAnyBase(const UBaseManagerSubsystem* BaseMgr, const UStrategySiteDefinition* Site)
+    {
+        if (!BaseMgr || !Site)
+        {
+            return false;
+        }
+
+        auto HasBaseOnSite = [Site](const TArray<UStrategyBase*>& Bases) -> bool
+        {
+            for (const UStrategyBase* Base : Bases)
+            {
+                if (Base && Base->BuiltOnSite == Site)
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        return HasBaseOnSite(BaseMgr->GetBases(EFactionType::Human))
+            || HasBaseOnSite(BaseMgr->GetBases(EFactionType::Enemy));
+    }
+}
+
 /** Picks nearest in-range discovered site not yet in the faction surveyed set. */
 bool UExplorationSubsystem::FindSurveyTarget(UStrategyVehicle* Vehicle, UStrategySiteDefinition*& OutSite) const
 {
@@ -136,6 +204,8 @@ bool UExplorationSubsystem::FindSurveyTarget(UStrategyVehicle* Vehicle, UStrateg
         (Faction == EFactionType::Human) ? BaseMgr->DiscoveredSitesHuman : BaseMgr->DiscoveredSitesEnemy;
     const TSet<FGuid>& Surveyed = GetSurveyedSet(Faction);
     const FVector2D Origin = Vehicle->HomeBase->MapLocation;
+    const float CruiseSpeed = Vehicle->CruiseSpeedPixelsPerHour > 0.0f ? Vehicle->CruiseSpeedPixelsPerHour : 180.0f;
+    const float SurveySearchHours = MissionPatrolRouteBuilder::GetSearchHoursForPatrolIntent(EPatrolRouteIntent::SiteSurvey);
 
     UStrategySiteDefinition* Best = nullptr;
     float BestDist = MAX_FLT;
@@ -157,9 +227,28 @@ bool UExplorationSubsystem::FindSurveyTarget(UStrategyVehicle* Vehicle, UStrateg
             continue;
         }
 
+        if (ExplorationSurveyHelpers::IsSiteOccupiedByAnyBase(BaseMgr, Site))
+        {
+            continue;
+        }
+
         const float Dist = FVector2D::Distance(Origin, Site->Location);
-        const float RoundTrip = Dist * 2.0f;
-        if (Dist < BestDist && Vehicle->HasEnoughRangeForMission(RoundTrip))
+        if (Dist < SiteMatchTolerance)
+        {
+            continue;
+        }
+
+        const FVector2D Bearing = (Site->Location - Origin).GetSafeNormal();
+        if (!MissionPatrolRouteBuilder::CanBuildPatrolRoute(Vehicle->HomeBase, Site->Location,
+            EPatrolRouteIntent::SiteSurvey, Bearing, Vehicle->CurrentRangeLeft, SurveySearchHours, CruiseSpeed))
+        {
+            continue;
+        }
+
+        const float PathDistance = MissionPatrolRouteBuilder::EstimatePatrolRouteDistance(
+            Vehicle->HomeBase, Site->Location, EPatrolRouteIntent::SiteSurvey, Vehicle->CurrentRangeLeft,
+            SurveySearchHours, CruiseSpeed, Bearing);
+        if (Dist < BestDist && Vehicle->HasEnoughRangeForMission(PathDistance))
         {
             BestDist = Dist;
             Best = Site;
@@ -175,10 +264,70 @@ bool UExplorationSubsystem::FindSurveyTarget(UStrategyVehicle* Vehicle, UStrateg
     return false;
 }
 
-/** Advances spoke-and-wheel patrol; prefers hot spokes after inbound contacts until HotSpokeUntilGameHours. */
-bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget)
+int32 UExplorationSubsystem::SelectExplorationSpoke(const FBaseExplorationState& State)
+{
+    int32 MinDepth = MAX_int32;
+    for (int32 Depth : State.SpokeRingDepths)
+    {
+        MinDepth = FMath::Min(MinDepth, Depth);
+    }
+
+    for (int32 Offset = 0; Offset < NumSpokes; ++Offset)
+    {
+        const int32 SpokeIndex = (State.NextSpokeIndex + Offset) % NumSpokes;
+        if (State.SpokeRingDepths.IsValidIndex(SpokeIndex) && State.SpokeRingDepths[SpokeIndex] == MinDepth)
+        {
+            return SpokeIndex;
+        }
+    }
+
+    return State.NextSpokeIndex % NumSpokes;
+}
+
+bool UExplorationSubsystem::AreAllSpokesInitiallySwept(const FBaseExplorationState& State)
+{
+    for (int32 Depth : State.SpokeRingDepths)
+    {
+        if (Depth < 1)
+        {
+            return false;
+        }
+    }
+
+    return State.SpokeRingDepths.Num() == NumSpokes;
+}
+
+bool UExplorationSubsystem::ShouldScheduleWatchBorder(const FBaseExplorationState& State)
+{
+    if (State.WatchSpokeIndices.Num() == 0)
+    {
+        return false;
+    }
+
+    if (!AreAllSpokesInitiallySwept(State))
+    {
+        return false;
+    }
+
+    return State.MissionsSinceWatchPatrol >= MissionsBetweenWatchPatrol;
+}
+
+void UExplorationSubsystem::MarkWatchSpoke(FBaseExplorationState& State, int32 SpokeIndex, float CurrentGameHours)
+{
+    State.WatchSpokeIndices.AddUnique(SpokeIndex);
+    State.HotSpokeIndices.AddUnique(SpokeIndex);
+    State.HotSpokeUntilGameHours = CurrentGameHours + HotSpokeDurationHours;
+}
+
+/** Sweeps each spoke at the shallowest ring before deepening; ring 0 reaches as far as range allows. */
+bool UExplorationSubsystem::PickSpokeExplorationTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
+    FVector2D& OutTarget, EPatrolRouteIntent& OutIntent, FVector2D& OutPatrolBearing, int32& OutSpokeIndex)
 {
     OutTarget = FVector2D::ZeroVector;
+    OutIntent = EPatrolRouteIntent::SpokeSweep;
+    OutPatrolBearing = FVector2D::ZeroVector;
+    OutSpokeIndex = 0;
+
     if (!OriginBase || !Vehicle)
     {
         return false;
@@ -191,8 +340,6 @@ bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, USt
     }
 
     const FVector2D Origin = OriginBase->MapLocation;
-    const float MaxOutbound = FMath::Max(80.0f, Vehicle->CurrentRangeLeft * 0.45f);
-
     FBaseExplorationState& State = GetOrCreateState(OriginBase);
 
     float CurrentGameHours = 0.0f;
@@ -207,49 +354,133 @@ bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, USt
         State.HotSpokeUntilGameHours = 0.0f;
     }
 
-    int32 SpokeIndex = State.NextSpokeIndex % NumSpokes;
-    if (State.HotSpokeIndices.Num() > 0)
-    {
-        SpokeIndex = State.HotSpokeIndices[State.NextSpokeIndex % State.HotSpokeIndices.Num()];
-    }
+    const int32 SpokeIndex = SelectExplorationSpoke(State);
+    OutSpokeIndex = SpokeIndex;
 
+    const int32 RingDepth = State.SpokeRingDepths.IsValidIndex(SpokeIndex) ? State.SpokeRingDepths[SpokeIndex] : 0;
     const float BearingRad = (static_cast<float>(SpokeIndex) / static_cast<float>(NumSpokes)) * 2.0f * PI;
     const FVector2D BearingDir(FMath::Cos(BearingRad), FMath::Sin(BearingRad));
 
-    const int32 RingDepth = State.SpokeRingDepths.IsValidIndex(SpokeIndex)
-        ? State.SpokeRingDepths[SpokeIndex] + 1
-        : 1;
+    const float VisionRingDist = ExplorationPatrolHelpers::GetVisionRingDistancePixels(GetGameInstance());
+    const float MaxOutbound = FMath::Max(VisionRingDist + static_cast<float>(RingDepth + 1) * SpokeStepPixels,
+        Vehicle->CurrentRangeLeft * 0.45f);
 
-    float Dist = FMath::Min(static_cast<float>(RingDepth) * SpokeStepPixels, MaxOutbound);
-    FVector2D Candidate = Origin + BearingDir * Dist;
-    ClampToMap(Candidate, MinX, MinY, MaxX, MaxY);
+    float Dist = (RingDepth == 0)
+        ? VisionRingDist
+        : FMath::Min(VisionRingDist + static_cast<float>(RingDepth) * SpokeStepPixels, MaxOutbound);
 
-    const float RoundTrip = FVector2D::Distance(Origin, Candidate) * 2.0f;
-    if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
+    OutIntent = (RingDepth == 0) ? EPatrolRouteIntent::VisionRing : EPatrolRouteIntent::SpokeSweep;
+    const float MinDist = FMath::Max(SpokeStepPixels * 2.0f, VisionRingDist * 0.5f);
+    FVector2D Candidate = FVector2D::ZeroVector;
+    bool bFoundRoute = false;
+
+    for (int32 Attempt = 0; Attempt < 12; ++Attempt)
     {
-        Dist = MaxOutbound * 0.65f;
         Candidate = Origin + BearingDir * Dist;
         ClampToMap(Candidate, MinX, MinY, MaxX, MaxY);
 
-        if (!Vehicle->HasEnoughRangeForMission(FVector2D::Distance(Origin, Candidate) * 2.0f))
+        if (ExplorationPatrolHelpers::ValidatePatrolCandidate(OriginBase, Vehicle, Candidate, OutIntent, BearingDir))
         {
-            return false;
+            bFoundRoute = true;
+            break;
+        }
+
+        Dist *= 0.9f;
+        if (Dist < MinDist)
+        {
+            break;
         }
     }
 
-    ClampToMap(Candidate, MinX, MinY, MaxX, MaxY);
-
-    const float FinalRoundTrip = FVector2D::Distance(Origin, Candidate) * 2.0f;
-    if (!Vehicle->HasEnoughRangeForMission(FinalRoundTrip))
+    if (!bFoundRoute)
     {
         return false;
     }
 
     OutTarget = Candidate;
+    OutPatrolBearing = (OutIntent == EPatrolRouteIntent::VisionRing)
+        ? FVector2D(-BearingDir.Y, BearingDir.X)
+        : BearingDir;
 
-    UE_LOG(LogTemp, Display, TEXT("[EXPLORATION] %s spoke %d ring %d → patrol (%.0f, %.0f) from '%s'"),
+    UE_LOG(LogTemp, Display, TEXT("[EXPLORATION] %s spoke %d ring %d (%s) → (%.0f, %.0f) from '%s'"),
         *UEnum::GetValueAsString(OriginBase->OwningFaction),
-        SpokeIndex, RingDepth, OutTarget.X, OutTarget.Y, *OriginBase->BaseName.ToString());
+        SpokeIndex, RingDepth + 1,
+        OutIntent == EPatrolRouteIntent::VisionRing ? TEXT("first sweep") : TEXT("expand"),
+        OutTarget.X, OutTarget.Y, *OriginBase->BaseName.ToString());
+
+    return true;
+}
+
+/** Tangential patrol along the vision ring on a watch-sector spoke after enemy contact was seen there. */
+bool UExplorationSubsystem::PickWatchSectorBorderPatrol(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
+    FVector2D& OutTarget, FVector2D& OutPatrolBearing, int32& OutSpokeIndex) const
+{
+    OutTarget = FVector2D::ZeroVector;
+    OutPatrolBearing = FVector2D::ZeroVector;
+    OutSpokeIndex = 0;
+
+    if (!OriginBase || !Vehicle)
+    {
+        return false;
+    }
+
+    const FBaseExplorationState* StatePtr = ExplorationByBase.Find(OriginBase);
+    if (!StatePtr || !ShouldScheduleWatchBorder(*StatePtr))
+    {
+        return false;
+    }
+
+    const FBaseExplorationState& State = *StatePtr;
+
+    float MinX, MinY, MaxX, MaxY;
+    if (!ComputeMapBounds(OriginBase, MinX, MinY, MaxX, MaxY))
+    {
+        return false;
+    }
+
+    const FVector2D Origin = OriginBase->MapLocation;
+    const int32 WatchListIndex = State.NextWatchSpokeIndex % State.WatchSpokeIndices.Num();
+    const int32 SpokeIndex = State.WatchSpokeIndices[WatchListIndex];
+    OutSpokeIndex = SpokeIndex;
+
+    const float BearingRad = (static_cast<float>(SpokeIndex) / static_cast<float>(NumSpokes)) * 2.0f * PI;
+    const FVector2D BearingDir(FMath::Cos(BearingRad), FMath::Sin(BearingRad));
+
+    float Dist = ExplorationPatrolHelpers::GetVisionRingDistancePixels(GetGameInstance());
+    const float MinDist = FMath::Max(SpokeStepPixels * 2.0f, Dist * 0.55f);
+    FVector2D Candidate = FVector2D::ZeroVector;
+    bool bFoundRoute = false;
+
+    for (int32 Attempt = 0; Attempt < 10; ++Attempt)
+    {
+        Candidate = Origin + BearingDir * Dist;
+        ClampToMap(Candidate, MinX, MinY, MaxX, MaxY);
+
+        if (ExplorationPatrolHelpers::ValidatePatrolCandidate(OriginBase, Vehicle, Candidate,
+            EPatrolRouteIntent::VisionRing, BearingDir))
+        {
+            bFoundRoute = true;
+            break;
+        }
+
+        Dist *= 0.9f;
+        if (Dist < MinDist)
+        {
+            break;
+        }
+    }
+
+    if (!bFoundRoute)
+    {
+        return false;
+    }
+
+    OutTarget = Candidate;
+    OutPatrolBearing = FVector2D(-BearingDir.Y, BearingDir.X);
+
+    UE_LOG(LogTemp, Display, TEXT("[EXPLORATION] %s watch-sector spoke %d → border patrol (%.0f, %.0f) from '%s'"),
+        *UEnum::GetValueAsString(OriginBase->OwningFaction),
+        SpokeIndex, OutTarget.X, OutTarget.Y, *OriginBase->BaseName.ToString());
 
     return true;
 }
@@ -259,7 +490,7 @@ bool UExplorationSubsystem::PickSpokePatrolTarget(UStrategyBase* OriginBase, USt
  * Uses GetContactInterceptPosition for the entry point and offsets along threat velocity for ambush positioning.
  */
 bool UExplorationSubsystem::PickInboundEntryPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
-    FVector2D& OutTarget) const
+    FVector2D& OutTarget, FVector2D* OutPatrolBearing) const
 {
     OutTarget = FVector2D::ZeroVector;
     if (!OriginBase || !Vehicle)
@@ -329,6 +560,11 @@ bool UExplorationSubsystem::PickInboundEntryPatrolTarget(UStrategyBase* OriginBa
     OutTarget = Entry + AmbushDir * AmbushLaneOffsetPixels;
     ClampToMap(OutTarget, MinX, MinY, MaxX, MaxY);
 
+    if (OutPatrolBearing)
+    {
+        *OutPatrolBearing = AmbushDir;
+    }
+
     const float RoundTrip = FVector2D::Distance(Origin, OutTarget) * 2.0f;
     if (!Vehicle->HasEnoughRangeForMission(RoundTrip))
     {
@@ -353,7 +589,7 @@ bool UExplorationSubsystem::PickInboundEntryPatrolTarget(UStrategyBase* OriginBa
 bool UExplorationSubsystem::PickThreatBearingPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle,
     FVector2D& OutTarget) const
 {
-    if (PickInboundEntryPatrolTarget(OriginBase, Vehicle, OutTarget))
+    if (PickInboundEntryPatrolTarget(OriginBase, Vehicle, OutTarget, nullptr))
     {
         return true;
     }
@@ -461,18 +697,39 @@ void UExplorationSubsystem::NotifyInboundThreatContact(UStrategyBase* DetectingB
     const int32 SpokeIndex = ExplorationHelpers::BearingToSpokeIndex(DirFromBase);
 
     FBaseExplorationState& State = GetOrCreateState(DetectingBase);
-    State.HotSpokeIndices.AddUnique(SpokeIndex);
-    State.HotSpokeUntilGameHours = CurrentGameHours + HotSpokeDurationHours;
+    MarkWatchSpoke(State, SpokeIndex, CurrentGameHours);
 
-    UE_LOG(LogTemp, Display, TEXT("[PATROL] %s marked spoke %d hot after inbound %s at entry (%.0f, %.0f)"),
+    UE_LOG(LogTemp, Display, TEXT("[PATROL] %s marked spoke %d hot+watch after inbound %s at entry (%.0f, %.0f)"),
         *UEnum::GetValueAsString(DetectingBase->OwningFaction),
         SpokeIndex,
         *Contact.TrackedVehicleName,
         Entry.X, Entry.Y);
 }
 
-/** Increments ring depth for the current spoke and advances NextSpokeIndex after scheduling recon patrol. */
-void UExplorationSubsystem::NotifyReconPatrolScheduled(UStrategyBase* OriginBase, const FVector2D& PatrolTarget)
+void UExplorationSubsystem::NotifyReconContactSeen(UStrategyBase* OriginBase, FVector2D ContactPosition,
+    float CurrentGameHours)
+{
+    if (!OriginBase || ContactPosition.IsNearlyZero(10.0f))
+    {
+        return;
+    }
+
+    const FVector2D DirFromBase = (ContactPosition - OriginBase->MapLocation).GetSafeNormal();
+    if (DirFromBase.IsNearlyZero())
+    {
+        return;
+    }
+
+    const int32 SpokeIndex = ExplorationHelpers::BearingToSpokeIndex(DirFromBase);
+    FBaseExplorationState& State = GetOrCreateState(OriginBase);
+    MarkWatchSpoke(State, SpokeIndex, CurrentGameHours);
+
+    UE_LOG(LogTemp, Display, TEXT("[EXPLORATION] %s recon saw contact toward spoke %d at (%.0f, %.0f) from '%s'"),
+        *UEnum::GetValueAsString(OriginBase->OwningFaction),
+        SpokeIndex, ContactPosition.X, ContactPosition.Y, *OriginBase->BaseName.ToString());
+}
+
+void UExplorationSubsystem::NotifySpokeExplorationScheduled(UStrategyBase* OriginBase, int32 SpokeIndex)
 {
     if (!OriginBase)
     {
@@ -480,14 +737,29 @@ void UExplorationSubsystem::NotifyReconPatrolScheduled(UStrategyBase* OriginBase
     }
 
     FBaseExplorationState& State = GetOrCreateState(OriginBase);
-    const int32 SpokeIndex = State.NextSpokeIndex % NumSpokes;
     if (State.SpokeRingDepths.IsValidIndex(SpokeIndex))
     {
         State.SpokeRingDepths[SpokeIndex]++;
     }
 
-    State.NextSpokeIndex = (State.NextSpokeIndex + 1) % NumSpokes;
-    (void)PatrolTarget;
+    State.NextSpokeIndex = (SpokeIndex + 1) % NumSpokes;
+    State.MissionsSinceWatchPatrol++;
+}
+
+void UExplorationSubsystem::NotifyWatchBorderPatrolScheduled(UStrategyBase* OriginBase)
+{
+    if (!OriginBase)
+    {
+        return;
+    }
+
+    FBaseExplorationState& State = GetOrCreateState(OriginBase);
+    if (State.WatchSpokeIndices.Num() > 0)
+    {
+        State.NextWatchSpokeIndex = (State.NextWatchSpokeIndex + 1) % State.WatchSpokeIndices.Num();
+    }
+
+    State.MissionsSinceWatchPatrol = 0;
 }
 
 /** Adds Site->SiteId to the faction surveyed set so FindSurveyTarget skips it. */

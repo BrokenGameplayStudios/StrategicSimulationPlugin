@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "MissionPatrolRouteBuilder.h"
 #include "StrategicSimulationTypes.h"
 #include "UExplorationSubsystem.generated.h"
 
@@ -27,6 +28,16 @@ struct FBaseExplorationState
     /** Game hours until hot-spoke bias expires and normal spoke rotation resumes. */
     UPROPERTY()
     float HotSpokeUntilGameHours = 0.0f;
+
+    /** Spokes toward sectors where enemy contact was seen — drives periodic border patrol. */
+    UPROPERTY()
+    TArray<int32> WatchSpokeIndices;
+
+    /** Rotates through WatchSpokeIndices for border patrol missions. */
+    int32 NextWatchSpokeIndex = 0;
+
+    /** Recon missions since the last watch-sector border patrol (interleaved with spoke expansion). */
+    int32 MissionsSinceWatchPatrol = 0;
 };
 
 UCLASS()
@@ -48,10 +59,18 @@ public:
     bool FindSurveyTarget(UStrategyVehicle* Vehicle, UStrategySiteDefinition*& OutSite) const;
 
     /**
-     * Spoke-and-wheel patrol: advances one of NumSpokes bearings outward from OriginBase.
-     * Honors hot-spoke bias after inbound contacts; clamps to map bounds and vehicle range.
+     * Progressive spoke exploration: sweeps each compass direction at ring 1 before deepening any spoke.
+     * Ring 0 = first reach along spoke; deeper rings push outward in 140px steps.
      */
-    bool PickSpokePatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget);
+    bool PickSpokeExplorationTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget,
+        EPatrolRouteIntent& OutIntent, FVector2D& OutPatrolBearing, int32& OutSpokeIndex);
+
+    /**
+     * Tangential border patrol along a watch-sector spoke after enemy contact was seen in that direction.
+     * Only scheduled after all spokes have completed their first sweep.
+     */
+    bool PickWatchSectorBorderPatrol(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget,
+        FVector2D& OutPatrolBearing, int32& OutSpokeIndex) const;
 
     /**
      * Threat-weighted guard patrol: tries PickInboundEntryPatrolTarget first, then falls back
@@ -65,27 +84,40 @@ public:
      * as the entry point, and offsets along estimated threat velocity by AmbushLaneOffsetPixels.
      * Falls back to the raw entry point if the ambush offset exceeds vehicle range.
      */
-    bool PickInboundEntryPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget) const;
+    bool PickInboundEntryPatrolTarget(UStrategyBase* OriginBase, UStrategyVehicle* Vehicle, FVector2D& OutTarget,
+        FVector2D* OutPatrolBearing = nullptr) const;
 
     /** True when the base's faction has active inbound radar tracks relevant to this base. */
     bool HasInboundThreatsNearBase(const UStrategyBase* OriginBase) const;
 
     /**
      * Called when radar first detects an inbound threat at a base.
-     * Marks the spoke toward the contact entry point as "hot" for accelerated re-patrol.
+     * Marks the spoke toward the contact entry point as hot and adds a persistent watch sector.
      */
     void NotifyInboundThreatContact(UStrategyBase* DetectingBase, const FRadarContact& Contact, float CurrentGameHours);
 
-    /** Advances spoke ring depth and NextSpokeIndex after a recon patrol is scheduled. */
-    void NotifyReconPatrolScheduled(UStrategyBase* OriginBase, const FVector2D& PatrolTarget);
+    /** Records enemy contact bearing from a recon vehicle or base radar for watch-sector border patrol. */
+    void NotifyReconContactSeen(UStrategyBase* OriginBase, FVector2D ContactPosition, float CurrentGameHours);
+
+    /** Advances ring depth on the explored spoke and rotates the next exploration spoke. */
+    void NotifySpokeExplorationScheduled(UStrategyBase* OriginBase, int32 SpokeIndex);
+
+    /** Records a watch-sector border patrol without advancing spoke expansion depth. */
+    void NotifyWatchBorderPatrolScheduled(UStrategyBase* OriginBase);
 
     /** Records that a faction has completed on-station survey of a site (fog-of-war fairness). */
     void MarkSiteSurveyed(EFactionType Faction, const UStrategySiteDefinition* Site);
 
     static constexpr int32 NumSpokes = 8;
     static constexpr float SpokeStepPixels = 140.0f;
+    static constexpr float VisionRingOutsideFactor = 1.06f;
     static constexpr float HotSpokeDurationHours = 12.0f;
+    static constexpr float WatchSpokeDurationHours = 48.0f;
+    static constexpr int32 MissionsBetweenWatchPatrol = 2;
     static constexpr float AmbushLaneOffsetPixels = 48.0f;
+
+    /** Reads logical map bounds from campaign settings (with safe defaults). */
+    static bool ComputeMapBounds(const UObject* WorldContext, float& MinX, float& MinY, float& MaxX, float& MaxY);
 
 private:
     TMap<TWeakObjectPtr<UStrategyBase>, FBaseExplorationState> ExplorationByBase;
@@ -102,9 +134,11 @@ private:
     /** Mutable access to the surveyed-site ID set for Human or Enemy. */
     TSet<FGuid>& GetSurveyedSetMutable(EFactionType Faction);
 
-    /** Reads logical map bounds from campaign settings (with safe defaults). */
-    static bool ComputeMapBounds(const UObject* WorldContext, float& MinX, float& MinY, float& MaxX, float& MaxY);
-
     /** Clamps a patrol target inside map padding; returns true if the point was adjusted. */
     static bool ClampToMap(FVector2D& InOutPoint, float MinX, float MinY, float MaxX, float MaxY);
+
+    static int32 SelectExplorationSpoke(const FBaseExplorationState& State);
+    static bool AreAllSpokesInitiallySwept(const FBaseExplorationState& State);
+    static bool ShouldScheduleWatchBorder(const FBaseExplorationState& State);
+    static void MarkWatchSpoke(FBaseExplorationState& State, int32 SpokeIndex, float CurrentGameHours);
 };

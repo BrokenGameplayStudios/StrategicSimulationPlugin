@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MissionPatrolRouteBuilder.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "StrategicSimulationTypes.h"
 #include "UMissionGroup.h"
@@ -207,7 +208,8 @@ private:
 
     /** Selects a mission waypoint target based on type, range, and reservation set. */
     bool TryPickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType, FVector2D& OutTarget,
-        TSet<class UStrategySiteDefinition*>& InOutReservedSites, UStrategyBase** OutTargetBase = nullptr) const;
+        TSet<class UStrategySiteDefinition*>& InOutReservedSites, UStrategyBase** OutTargetBase = nullptr,
+        EPatrolRouteIntent* OutPatrolIntent = nullptr, FVector2D* OutPatrolBearing = nullptr) const;
 
     /** Reads logical map dimensions and border padding from campaign settings. */
     void GetMapBounds(float& OutWidth, float& OutHeight, float& OutPadding) const;

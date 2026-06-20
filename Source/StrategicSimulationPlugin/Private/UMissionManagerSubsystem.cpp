@@ -17,6 +17,7 @@
 #include "URadarContactSubsystem.h"
 #include "UAIControllerSubsystem.h"
 #include "UExplorationSubsystem.h"
+#include "MissionPatrolRouteBuilder.h"
 #include "Engine/Engine.h"
 
 /** Initializes the mission manager subsystem. */
@@ -75,6 +76,8 @@ void UMissionManagerSubsystem::ClearRuntimeMissionStateForSiteMapLoad()
         Vehicle->SearchTimeAtTarget = 0.0f;
         Vehicle->PlannedRoundTripRange = 0.0f;
         Vehicle->RangeTraveledThisMission = 0.0f;
+        Vehicle->bPatrolRouteActive = false;
+        Vehicle->PatrolFocalPoint = FVector2D::ZeroVector;
         Vehicle->ActiveSalvageSite = nullptr;
         Vehicle->ActiveExpansionSite = nullptr;
         Vehicle->bExpansionGuardActive = false;
@@ -236,9 +239,19 @@ void UMissionManagerSubsystem::CollectSitesTargetedByActiveMissions(TSet<UStrate
                 continue;
             }
 
-            if (UStrategySiteDefinition* Site = FindSiteAtLocation(Vehicle->CurrentWaypoints[1]))
+            if (!Vehicle->PatrolFocalPoint.IsNearlyZero(10.0f))
             {
-                OutSites.Add(Site);
+                if (UStrategySiteDefinition* Site = FindSiteAtLocation(Vehicle->PatrolFocalPoint))
+                {
+                    OutSites.Add(Site);
+                }
+            }
+            else if (Vehicle->CurrentWaypoints.Num() >= 2)
+            {
+                if (UStrategySiteDefinition* Site = FindSiteAtLocation(Vehicle->CurrentWaypoints[1]))
+                {
+                    OutSites.Add(Site);
+                }
             }
         }
     }
@@ -832,7 +845,8 @@ bool UMissionManagerSubsystem::HasSalvageTargetInRange(UStrategyVehicle* Vehicle
 
 /** Picks a mission waypoint target based on type, range, intel, and site reservations. */
 bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, EMissionType MissionType, FVector2D& OutTarget,
-    TSet<UStrategySiteDefinition*>& InOutReservedSites, UStrategyBase** OutTargetBase) const
+    TSet<UStrategySiteDefinition*>& InOutReservedSites, UStrategyBase** OutTargetBase,
+    EPatrolRouteIntent* OutPatrolIntent, FVector2D* OutPatrolBearing) const
 {
     float MapWidth, MapHeight, MapPadding;
     GetMapBounds(MapWidth, MapHeight, MapPadding);
@@ -874,22 +888,46 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
     case EMissionType::Recon:
     {
         UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>();
+        const float CruiseSpeed = Vehicle->CruiseSpeedPixelsPerHour > 0.0f ? Vehicle->CruiseSpeedPixelsPerHour : 180.0f;
 
         UStrategySiteDefinition* SurveySite = nullptr;
-        auto ValidateReconTarget = [&](FVector2D& Target) -> bool
+        auto ValidatePatrolTarget = [&](const FVector2D& Target, EPatrolRouteIntent Intent,
+            const FVector2D& Bearing = FVector2D::ZeroVector) -> bool
         {
             if (!IsValidMapLocation(Target, MinX, MinY, MaxX, MaxY))
             {
                 return false;
             }
 
-            const float RoundTrip = FVector2D::Distance(Origin, Target) * 2.0f;
-            return Vehicle->HasEnoughRangeForMission(RoundTrip);
+            const float SearchHours = MissionPatrolRouteBuilder::GetSearchHoursForPatrolIntent(Intent);
+            if (!MissionPatrolRouteBuilder::CanBuildPatrolRoute(Vehicle->HomeBase, Target, Intent, Bearing,
+                Vehicle->CurrentRangeLeft, SearchHours, CruiseSpeed))
+            {
+                return false;
+            }
+
+            const float PathDistance = MissionPatrolRouteBuilder::EstimatePatrolRouteDistance(
+                Vehicle->HomeBase, Target, Intent, Vehicle->CurrentRangeLeft, SearchHours, CruiseSpeed, Bearing);
+            return Vehicle->HasEnoughRangeForMission(PathDistance);
         };
 
-        if (Exploration && Exploration->PickInboundEntryPatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget)
-            && ValidateReconTarget(OutTarget))
+        auto SetPatrolSelection = [&](EPatrolRouteIntent Intent, const FVector2D& Bearing = FVector2D::ZeroVector)
         {
+            if (OutPatrolIntent)
+            {
+                *OutPatrolIntent = Intent;
+            }
+            if (OutPatrolBearing)
+            {
+                *OutPatrolBearing = Bearing;
+            }
+        };
+
+        FVector2D EntryBearing = FVector2D::ZeroVector;
+        if (Exploration && Exploration->PickInboundEntryPatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget, &EntryBearing)
+            && ValidatePatrolTarget(OutTarget, EPatrolRouteIntent::BorderGuard, EntryBearing))
+        {
+            SetPatrolSelection(EPatrolRouteIntent::BorderGuard, EntryBearing);
             return true;
         }
 
@@ -897,9 +935,10 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
             && !InOutReservedSites.Contains(SurveySite))
         {
             OutTarget = SurveySite->Location;
-            if (ValidateReconTarget(OutTarget))
+            if (ValidatePatrolTarget(OutTarget, EPatrolRouteIntent::SiteSurvey, (OutTarget - Origin).GetSafeNormal()))
             {
                 InOutReservedSites.Add(SurveySite);
+                SetPatrolSelection(EPatrolRouteIntent::SiteSurvey, (OutTarget - Origin).GetSafeNormal());
                 UE_LOG(LogTemp, Display, TEXT("[MISSION TARGET] %s → survey discovered site '%s' at (%.0f, %.0f)"),
                     Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
                     *SurveySite->SiteName, OutTarget.X, OutTarget.Y);
@@ -907,21 +946,44 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
             }
         }
 
-        if (Exploration && Exploration->PickSpokePatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget)
-            && ValidateReconTarget(OutTarget))
+        FVector2D WatchBorderBearing = FVector2D::ZeroVector;
+        int32 WatchSpokeIndex = 0;
+        if (Exploration && Exploration->PickWatchSectorBorderPatrol(Vehicle->HomeBase, Vehicle, OutTarget,
+            WatchBorderBearing, WatchSpokeIndex)
+            && ValidatePatrolTarget(OutTarget, EPatrolRouteIntent::VisionRing, WatchBorderBearing))
         {
-            Exploration->NotifyReconPatrolScheduled(Vehicle->HomeBase, OutTarget);
+            Exploration->NotifyWatchBorderPatrolScheduled(Vehicle->HomeBase);
+            SetPatrolSelection(EPatrolRouteIntent::VisionRing, WatchBorderBearing);
+            UE_LOG(LogTemp, Display, TEXT("[MISSION TARGET] %s → watch-sector border patrol spoke %d (%.0f, %.0f)"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                WatchSpokeIndex, OutTarget.X, OutTarget.Y);
+            return true;
+        }
+
+        EPatrolRouteIntent SpokeIntent = EPatrolRouteIntent::SpokeSweep;
+        FVector2D SpokeBearing = FVector2D::ZeroVector;
+        int32 ExplorationSpokeIndex = 0;
+        if (Exploration && Exploration->PickSpokeExplorationTarget(Vehicle->HomeBase, Vehicle, OutTarget,
+            SpokeIntent, SpokeBearing, ExplorationSpokeIndex)
+            && ValidatePatrolTarget(OutTarget, SpokeIntent, SpokeBearing))
+        {
+            Exploration->NotifySpokeExplorationScheduled(Vehicle->HomeBase, ExplorationSpokeIndex);
+            SetPatrolSelection(SpokeIntent, SpokeBearing);
+            UE_LOG(LogTemp, Display, TEXT("[MISSION TARGET] %s → spoke %d exploration (%.0f, %.0f) from '%s'"),
+                Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                ExplorationSpokeIndex, OutTarget.X, OutTarget.Y, *Vehicle->HomeBase->BaseName.ToString());
             return true;
         }
 
         OutTarget = PickPatrolPointWithinRange(Origin, Vehicle->CurrentRangeLeft, MinX, MinY, MaxX, MaxY);
-        if (!ValidateReconTarget(OutTarget))
+        if (!ValidatePatrolTarget(OutTarget, EPatrolRouteIntent::RandomPatrol))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MISSION TARGET] %s — recon spoke patrol out of range"),
+            UE_LOG(LogTemp, Warning, TEXT("[MISSION TARGET] %s — recon patrol out of range"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"));
             return false;
         }
 
+        SetPatrolSelection(EPatrolRouteIntent::RandomPatrol, (OutTarget - Origin).GetSafeNormal());
         UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → fallback patrol (%.0f, %.0f)"),
             Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
             OutTarget.X, OutTarget.Y);
@@ -931,13 +993,54 @@ bool UMissionManagerSubsystem::TryPickMissionTarget(UStrategyVehicle* Vehicle, E
     case EMissionType::Defensive:
     {
         UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>();
-        if (Exploration && Exploration->PickThreatBearingPatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget))
+        const float DefaultSearchHours = 1.5f;
+        const float CruiseSpeed = Vehicle->CruiseSpeedPixelsPerHour > 0.0f ? Vehicle->CruiseSpeedPixelsPerHour : 180.0f;
+
+        auto ValidateDefensiveTarget = [&](const FVector2D& Target, EPatrolRouteIntent Intent,
+            const FVector2D& Bearing = FVector2D::ZeroVector) -> bool
         {
+            if (!IsValidMapLocation(Target, MinX, MinY, MaxX, MaxY))
+            {
+                return false;
+            }
+
+            if (!MissionPatrolRouteBuilder::CanBuildPatrolRoute(Vehicle->HomeBase, Target, Intent, Bearing,
+                Vehicle->CurrentRangeLeft, DefaultSearchHours, CruiseSpeed))
+            {
+                return false;
+            }
+
+            const float PathDistance = MissionPatrolRouteBuilder::EstimatePatrolRouteDistance(
+                Vehicle->HomeBase, Target, Intent, Vehicle->CurrentRangeLeft, DefaultSearchHours, CruiseSpeed, Bearing);
+            return Vehicle->HasEnoughRangeForMission(PathDistance);
+        };
+
+        FVector2D ThreatBearing = FVector2D::ZeroVector;
+        if (Exploration && Exploration->PickInboundEntryPatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget, &ThreatBearing)
+            && ValidateDefensiveTarget(OutTarget, EPatrolRouteIntent::BorderGuard, ThreatBearing))
+        {
+            if (OutPatrolIntent) { *OutPatrolIntent = EPatrolRouteIntent::BorderGuard; }
+            if (OutPatrolBearing) { *OutPatrolBearing = ThreatBearing; }
+            return true;
+        }
+
+        if (Exploration && Exploration->PickThreatBearingPatrolTarget(Vehicle->HomeBase, Vehicle, OutTarget)
+            && ValidateDefensiveTarget(OutTarget, EPatrolRouteIntent::BorderGuard))
+        {
+            if (OutPatrolIntent) { *OutPatrolIntent = EPatrolRouteIntent::BorderGuard; }
+            if (OutPatrolBearing) { *OutPatrolBearing = (OutTarget - Origin).GetSafeNormal(); }
             return true;
         }
 
         const float GuardRoundTrip = FMath::Min(Vehicle->CurrentRangeLeft, 500.0f);
         OutTarget = PickPatrolPointWithinRange(Origin, GuardRoundTrip, MinX, MinY, MaxX, MaxY);
+        if (!ValidateDefensiveTarget(OutTarget, EPatrolRouteIntent::RandomPatrol))
+        {
+            return false;
+        }
+
+        if (OutPatrolIntent) { *OutPatrolIntent = EPatrolRouteIntent::RandomPatrol; }
+        if (OutPatrolBearing) { *OutPatrolBearing = (OutTarget - Origin).GetSafeNormal(); }
 
         UE_LOG(LogTemp, Verbose, TEXT("[MISSION TARGET] %s → guard patrol near '%s' at (%.0f, %.0f)"),
             Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
@@ -1145,7 +1248,10 @@ bool UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
 
         UStrategyBase* TargetEnemyBase = nullptr;
         FVector2D TargetLocation;
-        if (!TryPickMissionTarget(Vehicle, MissionType, TargetLocation, ReservedSites, &TargetEnemyBase))
+        EPatrolRouteIntent PatrolIntent = EPatrolRouteIntent::RandomPatrol;
+        FVector2D PatrolBearing = FVector2D::ZeroVector;
+        if (!TryPickMissionTarget(Vehicle, MissionType, TargetLocation, ReservedSites, &TargetEnemyBase,
+            &PatrolIntent, &PatrolBearing))
         {
             UE_LOG(LogTemp, Warning, TEXT("[LIVE MISSION] %s skipped — no valid in-range target found"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"));
@@ -1194,14 +1300,48 @@ bool UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
         }
 
         const FVector2D OriginLocation = Vehicle->HomeBase->MapLocation;
-        const float OutboundDist = FVector2D::Distance(OriginLocation, TargetLocation);
-        const float RoundTripDist = OutboundDist * 2.0f;
+        const float CruiseSpeed = Vehicle->CruiseSpeedPixelsPerHour > 0.0f ? Vehicle->CruiseSpeedPixelsPerHour : 180.0f;
+        const bool bUsePatrolRoute = (MissionType == EMissionType::Recon || MissionType == EMissionType::Defensive);
 
-        if (!Vehicle->HasEnoughRangeForMission(RoundTripDist))
+        float RequiredDistance = FVector2D::Distance(OriginLocation, TargetLocation) * 2.0f;
+        FMissionPatrolRoute PatrolRoute;
+
+        if (bUsePatrolRoute)
+        {
+            const float PatrolSearchHours = MissionPatrolRouteBuilder::GetSearchHoursForPatrolIntent(PatrolIntent);
+            if (!MissionPatrolRouteBuilder::BuildPatrolRoute(Vehicle->HomeBase, TargetLocation, PatrolIntent,
+                PatrolBearing, Vehicle->CurrentRangeLeft, PatrolSearchHours, CruiseSpeed, PatrolRoute))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[LIVE MISSION] %s skipped — could not build patrol route to (%.0f, %.0f) intent %s (range %.0f)"),
+                    Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
+                    TargetLocation.X, TargetLocation.Y,
+                    *UEnum::GetValueAsString(PatrolIntent), Vehicle->CurrentRangeLeft);
+
+                for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
+                {
+                    if (Soldier)
+                    {
+                        Soldier->CurrentMission = nullptr;
+                    }
+                }
+                Vehicle->CurrentPassengers.Empty();
+                Vehicle->CurrentMission = nullptr;
+                if (Vehicle->HomeHanger)
+                {
+                    Vehicle->CurrentHanger = Vehicle->HomeHanger;
+                    Vehicle->HomeHanger->ParkedVehicles.AddUnique(Vehicle);
+                }
+                continue;
+            }
+
+            RequiredDistance = PatrolRoute.TotalTravelDistance;
+        }
+
+        if (!Vehicle->HasEnoughRangeForMission(RequiredDistance))
         {
             UE_LOG(LogTemp, Warning, TEXT("[LIVE MISSION] %s skipped — insufficient range (need %.0f, have %.0f)"),
                 Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
-                RoundTripDist, Vehicle->CurrentRangeLeft);
+                RequiredDistance, Vehicle->CurrentRangeLeft);
 
             for (UStrategySoldier* Soldier : Vehicle->CurrentPassengers)
             {
@@ -1220,8 +1360,16 @@ bool UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
             continue;
         }
 
-        Vehicle->CurrentRangeLeft = FMath::Max(0.0f, Vehicle->CurrentRangeLeft - RoundTripDist);
-        Vehicle->BeginMissionMovement(TargetLocation, CurrentHours, SearchHours, MissionType);
+        Vehicle->CurrentRangeLeft = FMath::Max(0.0f, Vehicle->CurrentRangeLeft - RequiredDistance);
+        if (bUsePatrolRoute)
+        {
+            const float PatrolSearchHours = MissionPatrolRouteBuilder::GetSearchHoursForPatrolIntent(PatrolIntent);
+            Vehicle->BeginPatrolMovement(PatrolRoute, CurrentHours, PatrolSearchHours, MissionType);
+        }
+        else
+        {
+            Vehicle->BeginMissionMovement(TargetLocation, CurrentHours, SearchHours, MissionType);
+        }
         if (TargetEnemyBase)
         {
             Mission->TargetEnemyBase = TargetEnemyBase;
@@ -1249,11 +1397,11 @@ bool UMissionManagerSubsystem::ActivateLiveMovementForVehicles(UMissionGroup* Mi
         }
         LaunchedVehicles.Add(Vehicle);
 
-        UE_LOG(LogTemp, Verbose, TEXT("[LIVE MISSION] Activated %s for %s from (%.0f,%.0f) → (%.0f,%.0f) round-trip %.0f, range left: %.0f"),
+        UE_LOG(LogTemp, Verbose, TEXT("[LIVE MISSION] Activated %s for %s from (%.0f,%.0f) → (%.0f,%.0f) path %.0f px, range left: %.0f"),
             *UEnum::GetValueAsString(MissionType),
             Vehicle->VehicleDefinition ? *Vehicle->VehicleDefinition->VehicleName.ToString() : TEXT("Vehicle"),
             OriginLocation.X, OriginLocation.Y, TargetLocation.X, TargetLocation.Y,
-            RoundTripDist, Vehicle->CurrentRangeLeft);
+            RequiredDistance, Vehicle->CurrentRangeLeft);
     }
 
     Mission->VehiclesInFleet = LaunchedVehicles;
@@ -2112,6 +2260,14 @@ UStrategySiteDefinition* UMissionManagerSubsystem::GetSalvageTargetSite(const UM
         if (Lead->ActiveSalvageSite)
         {
             return Lead->ActiveSalvageSite;
+        }
+
+        if (!Lead->PatrolFocalPoint.IsNearlyZero(10.0f))
+        {
+            if (UStrategySiteDefinition* Site = FindSiteAtLocation(Lead->PatrolFocalPoint))
+            {
+                return Site;
+            }
         }
 
         if (Lead->CurrentWaypoints.Num() >= 2)

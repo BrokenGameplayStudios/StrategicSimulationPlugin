@@ -15,6 +15,7 @@
 #include "UTimeManagerSubsystem.h"
 #include "UStrategySaveGame.h"
 #include "UStrategicSimulationDisplayHelpers.h"
+#include "UExplorationSubsystem.h"
 
 namespace SiteGenerationHelpers
 {
@@ -81,6 +82,10 @@ UStrategyBase* UBaseManagerSubsystem::BuildNewBase(EFactionType Faction, FText B
     if (Site)
     {
         Site->bHasBeenUsed = true;
+        if (UExplorationSubsystem* Exploration = GetGameInstance()->GetSubsystem<UExplorationSubsystem>())
+        {
+            Exploration->MarkSiteSurveyed(Faction, Site);
+        }
     }
 
     if (Faction == EFactionType::Human)

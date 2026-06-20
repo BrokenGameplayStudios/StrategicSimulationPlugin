@@ -53,10 +53,37 @@ namespace RadarContactHelpers
         }
         else if (Vehicle->CurrentWaypoints.Num() >= 2)
         {
-            Direction = (Vehicle->CurrentWaypoints[1] - Vehicle->CurrentPosition).GetSafeNormal();
+            int32 SegmentStart = 0;
+            int32 SegmentEnd = Vehicle->CurrentWaypoints.Num() - 1;
+            float BestDistSq = MAX_FLT;
+
+            for (int32 Index = 0; Index < Vehicle->CurrentWaypoints.Num() - 1; ++Index)
+            {
+                const FVector2D SegStart = Vehicle->CurrentWaypoints[Index];
+                const FVector2D SegEnd = Vehicle->CurrentWaypoints[Index + 1];
+                const FVector2D SegDir = SegEnd - SegStart;
+                const float SegLenSq = SegDir.SizeSquared();
+                if (SegLenSq <= KINDA_SMALL_NUMBER)
+                {
+                    continue;
+                }
+
+                const float T = FMath::Clamp(
+                    FVector2D::DotProduct(Vehicle->CurrentPosition - SegStart, SegDir) / SegLenSq, 0.0f, 1.0f);
+                const FVector2D Closest = SegStart + SegDir * T;
+                const float DistSq = FVector2D::DistSquared(Vehicle->CurrentPosition, Closest);
+                if (DistSq < BestDistSq)
+                {
+                    BestDistSq = DistSq;
+                    SegmentStart = Index;
+                    SegmentEnd = Index + 1;
+                }
+            }
+
+            Direction = (Vehicle->CurrentWaypoints[SegmentEnd] - Vehicle->CurrentPosition).GetSafeNormal();
             if (Direction.IsNearlyZero())
             {
-                Direction = (Vehicle->CurrentWaypoints[1] - Vehicle->CurrentWaypoints[0]).GetSafeNormal();
+                Direction = (Vehicle->CurrentWaypoints[SegmentEnd] - Vehicle->CurrentWaypoints[SegmentStart]).GetSafeNormal();
             }
         }
 
